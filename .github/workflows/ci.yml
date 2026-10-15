@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The npm that honors package.json "allowScripts"; Node 22 bundles npm 10, which ignores it.
+  NPM_VERSION: 11.19.0
+  # Fail the install if a dependency brings an install script nobody reviewed.
+  npm_config_strict_allow_scripts: "true"
+  # Logs from the helper scripts land here when a step fails, for the artifact upload.
+  OVERNOTE_LOG_DIR: ${{ github.workspace }}/.ci-logs
+
+jobs:
+  verify:
+    name: Verify (macOS arm64)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Pin npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          uname -m
+          node --version
+          npm --version
+          xcode-select -p
+          swift --version
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Check the esbuild native binary
+        # esbuild's approved install script swaps its JS shim for the native binary.
+        run: node_modules/.bin/esbuild --version
+
+      - name: Typecheck extension
+        run: npx tsc --noEmit
+
+      - name: Typecheck editor
+        run: npx tsc --noEmit -p editor
+
+      - name: Typecheck core
+        run: npx tsc --noEmit -p packages/core
+
+      # `ray lint` also validates the author handle against the Store, which fails until the
+      # extension is published, so CI runs the same ESLint and Prettier checks directly.
+      - name: ESLint
+        run: npx eslint src
+
+      - name: Prettier
+        run: npx prettier --check src
+
+      - name: Build editor
+        run: npm run build:editor
+
+      - name: Cache Swift build
+        uses: actions/cache@v4
+        with:
+          path: helper/.build
+          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('helper/Package.swift', 'helper/Package.resolved', 'helper/Sources/**', 'helper/Tests/**', 'helper/Tools/**') }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build helper (universal)
+        run: bash scripts/build-helper.sh
+
+      - name: Unit tests, extension and helper socket
+        run: npm test
+
+      - name: Unit tests, core
+        run: npm test -w packages/core
+
+      - name: Unit tests, editor
+        run: npm test -w editor
+
+      - name: Unit tests, helper
+        run: bash helper/test.sh
+
+      - name: Read Playwright version
+        id: playwright
+        run: echo "version=$(node -p 'require("@playwright/test/package.json").version')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps webkit chromium
+
+      - name: End to end, editor (Playwright, WebKit)
+        run: npm run test:e2e -w editor
+
+      - name: End to end, helper over its socket
+        run: bash scripts/smoke-helper.sh
+
+      # GitHub's macOS runners log in a GUI session, which the panel needs. If a runner image
+      # ever lacks one, set the repository variable OVERNOTE_SKIP_WINDOW_E2E to 1 to skip
+      # this step (and only this step) until it is back.
+      - name: End to end, panel window
+        if: vars.OVERNOTE_SKIP_WINDOW_E2E != '1'
+        run: bash scripts/e2e-window.sh
+
+      - name: Build Raycast extension
+        run: npx ray build -e dist -o "$RUNNER_TEMP/raybuild"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            editor/playwright-report
+            editor/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload helper logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helper-logs
+          path: ${{ env.OVERNOTE_LOG_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14

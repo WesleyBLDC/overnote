@@ -38,8 +38,16 @@ HELPER_PID=""
 PASSED=0
 
 cleanup() {
+  local status=$?
   if [[ -n "$HELPER_PID" ]] && kill -0 "$HELPER_PID" 2>/dev/null; then
     kill -KILL "$HELPER_PID" 2>/dev/null || true
+  fi
+  # On failure, keep the helper's logs where CI uploads them (OVERNOTE_LOG_DIR).
+  if [[ $status -ne 0 && -n "${OVERNOTE_LOG_DIR:-}" ]]; then
+    mkdir -p "$OVERNOTE_LOG_DIR/smoke-helper"
+    for log in "$SUPPORT/helper.log" "$TMP/stdout.log"; do
+      [[ -f "$log" ]] && cp "$log" "$OVERNOTE_LOG_DIR/smoke-helper/"
+    done
   fi
   rm -rf "$TMP"
 }

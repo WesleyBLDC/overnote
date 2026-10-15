@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  NPM_VERSION: 11.19.0
+  npm_config_strict_allow_scripts: "true"
+  OVERNOTE_LOG_DIR: ${{ github.workspace }}/.ci-logs
+
+jobs:
+  release:
+    name: Build and publish the release
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Pin npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Read the version from the tag
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [[ -n "$version" ]] || { echo "Tag $GITHUB_REF_NAME has no version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # A tag with a suffix (v1.2.0-beta.1) is published as a prerelease.
+          if [[ "$version" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build editor
+        run: npm run build:editor
+
+      # A release always builds the helper from scratch: no cache.
+      - name: Build helper (universal)
+        run: bash scripts/build-helper.sh
+
+      - name: Check the helper over its socket
+        run: bash scripts/smoke-helper.sh
+
+      - name: Package
+        run: bash scripts/package-release.sh "${{ steps.version.outputs.version }}" "$RUNNER_TEMP/release"
+
+      # Install from the zip the way a user does, without Raycast: npm ci, then the prebuilt
+      # assets path of prepare-assets.sh, then a production build of the unzipped folder.
+      - name: Check the zip installs without the Xcode tools' build steps
+        run: |
+          check="$RUNNER_TEMP/zip-check"
+          mkdir -p "$check"
+          unzip -q "$RUNNER_TEMP/release/overnote-${{ steps.version.outputs.version }}.zip" -d "$check"
+          cd "$check/overnote"
+          [[ ! -d helper ]] || { echo "the zip should not carry helper sources"; exit 1; }
+          npm run install-extension -- --no-register
+          npx ray build -e dist -o "$RUNNER_TEMP/zip-raybuild"
+          test -x "$RUNNER_TEMP/zip-raybuild/assets/bin/OvernoteHelper"
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          dir="$RUNNER_TEMP/release"
+          files=("$dir/overnote-$VERSION.zip" "$dir/OvernoteHelper-$VERSION.zip" "$dir/OvernoteHelper.sha256" "$dir/SHA256SUMS")
+          flags=()
+          [[ "$PRERELEASE" == "true" ]] && flags+=(--prerelease)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # A rerun of the same tag: refresh the notes and replace the files.
+            gh release edit "$GITHUB_REF_NAME" --notes-file "$dir/release-notes.md"
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --verify-tag \
+              --title "Overnote $VERSION" --notes-file "$dir/release-notes.md" "${flags[@]}"
+          fi
+
+      - name: Upload helper logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helper-logs
+          path: ${{ env.OVERNOTE_LOG_DIR }}
+          if-no-files-found: ignore

@@ -111,9 +111,9 @@
     "vitest": "^5.0.4"
   },
   "scripts": {
-    "prebuild": "npm run build:editor && npm run build:helper",
+    "prebuild": "bash scripts/prepare-assets.sh",
     "build": "ray build",
-    "predev": "npm run build:editor && npm run build:helper",
+    "predev": "bash scripts/prepare-assets.sh",
     "dev": "ray develop",
     "build:editor": "npm run build -w editor",
     "build:helper": "bash scripts/build-helper.sh",
@@ -121,9 +121,12 @@
     "fix-lint": "ray lint --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "verify": "bash scripts/verify.sh",
+    "install-extension": "bash scripts/install-extension.sh",
     "publish": "npx @raycast/api@latest publish"
   },
   "allowScripts": {
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": false
   }
 }

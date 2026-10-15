@@ -9,3 +9,4 @@ raycast-env.d.ts
 *.log
 assets/bin/
 assets/editor/
+assets/prebuilt.json
