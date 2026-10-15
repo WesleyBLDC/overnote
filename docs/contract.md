@@ -39,7 +39,10 @@ BetterNotesHelper --support-dir <dir> --socket <path> --pid-file <path> --editor
 - Request: `{"id": <int|string>, "method": "<name>", "params": {...}}`.
 - Response: `{"id": ..., "result": ...}` or `{"id": ..., "error": {"code": <int>, "message": "<text>"}}`.
 - Many requests may be in flight on one connection; responses can arrive out of order and are matched by `id`.
-- Error codes: `-32601` unknown method, `-32602` bad params, `404` note not found, `409` conflict, `500` internal.
+- Error codes: `-32700` unparseable JSON (with `id: null`), `-32601` unknown method (also bridge-only methods on the socket), `-32602` bad params, `404` note not found, `409` invalid state (for example pin or move on a trashed or unpinned note), `500` internal.
+- `touchAccessed` on a missing id is a silent no-op; `permanentlyDelete` on a missing id is 404; `window.show {noteId}` is 404 for a missing note and persists it as current.
+- `notes.update` sets `updatedAt` to max(now, old + 1) so same-millisecond edits still change it.
+- The helper also accepts `--headless` (no window) for smoke tests and CI.
 - Clients must time out after 3 s (10 s for `system.shutdown`).
 
 ## 3. Bridge protocol (editor ⇄ helper)
@@ -103,7 +106,7 @@ interface Settings {
   windowAutoSize: boolean;         // default true: height follows content; false keeps the user's height
   showFormatBar: boolean;          // default false
   countMode: "characters" | "words"; // default "characters"
-  panelFrame: { x: number; y: number; width: number; height?: number } | null;
+  panelFrame: { x: number; y: number; width: number; height?: number } | null; // y is the panel's TOP edge in AppKit global coordinates
 }
 ```
 
@@ -164,6 +167,8 @@ interface WindowData {
 Purge rule: on startup, and every 24 h while running, notes with `deletedAt` strictly older than now minus 60 days are removed permanently.
 
 **Editor-owned behavior (no helper state):**
+- Zoom is applied by the editor in CSS; `window.resize.contentHeight` is in points (CSS px times zoom), measured from the content wrapper (never `documentElement.scrollHeight`).
+- The helper overlays an invisible 12 pt drag strip along the panel's top edge; the editor keeps about 12 pt of non-interactive top padding.
 - Back/forward history is two in-memory stacks in the editor (cap 100). Switching notes pushes the old current note on the back stack (skipping duplicates of the top) and clears forward. When a stack is empty, back goes to `previousNoteId` and forward to `nextNoteId`. Deleted ids are removed from both stacks.
 - Every switch calls `notes.touchAccessed` and `notes.setCurrentNote` after flushing pending edits (a failed flush cancels the switch).
 - ⌘N on a note whose text is blank only shows a "You already have an empty note" notice.
@@ -252,6 +257,8 @@ Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows t
 This lets deeplinks and quicklinks open a specific note or create one with text.
 
 ## Changelog
+
+- v2.5 (2026-10-14): from the helper build, panelFrame.y is the top edge, error code details, update timestamp rule, `--headless`, editor-owned zoom and contentHeight measurement, 12 pt drag strip.
 
 - v2.4 (2026-10-14): exact fold rule shared by TS and Swift, charCount in code points, source-bound cursors, displayTitle skips empty lines, light `@better-notes/core/text` entry point.
 
