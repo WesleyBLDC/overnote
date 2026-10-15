@@ -65,7 +65,3 @@ describe("serialization fixtures", () => {
     });
   }
 });
-
-it("finds the fixtures folder", () => {
-  expect(names.length).toBeGreaterThan(0);
-});

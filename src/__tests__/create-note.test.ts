@@ -25,9 +25,7 @@ describe("Create Note text source order", () => {
       source: "selection",
     });
     await expect(resolveCaptureText({ getSelectedText: noSelection })).resolves.toEqual({ text: "", source: "empty" });
-  });
-
-  it("does not read the selection when an earlier source has text", async () => {
+    // The selection is read only when no earlier source has text.
     const read = vi.fn(selection("never"));
     await resolveCaptureText({ argument: "given", getSelectedText: read });
     expect(read).not.toHaveBeenCalled();

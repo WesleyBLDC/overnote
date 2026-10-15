@@ -17,12 +17,6 @@ export function displayTitle(note: { title: string; text: string }): string {
   return note.title.trim() || firstLine(note.text.trimStart()) || UNTITLED;
 }
 
-/** First 200 characters of the text with newlines collapsed to single spaces. */
-export function derivePreview(text: string): string {
-  const collapsed = text.replace(/\s*\n\s*/g, " ").trim();
-  return Array.from(collapsed).slice(0, 200).join("");
-}
-
 export { fold } from "./fold";
 export { highlightMarkdownMatches } from "./highlight";
 

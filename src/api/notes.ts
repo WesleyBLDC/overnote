@@ -26,7 +26,7 @@ async function read<T>(viaHelper: () => Promise<T>, viaDb: (db: ReadOnlyNotesDb)
 
 /**
  * One page of live notes in Search Notes order, optionally filtered. Title matches move to the
- * front of each page, as the contract asks of the client.
+ * front of each page, as docs/architecture.md asks of the client.
  */
 export async function listNotesPage(filter?: string, cursor?: string, limit = LIST_LIMIT): Promise<Page<NoteSummary>> {
   const normalized = normalizeFilter(filter);

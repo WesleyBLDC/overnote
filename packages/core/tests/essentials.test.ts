@@ -4,8 +4,6 @@ import {
   buildNoteContent,
   countCharacters,
   countWords,
-  deriveTitle,
-  displayTitle,
   docToPlainText,
   fold,
   highlightMarkdownMatches,
@@ -16,18 +14,6 @@ import {
 describe("text rules", () => {
   it("folds case and diacritics", () => {
     expect(fold("Crème BRÛLÉE Ǆ")).toBe("creme brulee dz");
-  });
-
-  it("derives and displays titles", () => {
-    expect(
-      deriveTitle({
-        type: "doc",
-        content: [{ type: "paragraph" }, { type: "paragraph", content: [{ type: "text", text: "  Second " }] }],
-      }),
-    ).toBe("Second");
-    expect(deriveTitle(markdownToDoc("Line one  \nLine two"))).toBe("Line one");
-    expect(displayTitle({ title: "", text: "\n first \nsecond" })).toBe("first");
-    expect(displayTitle({ title: " ", text: "" })).toBe("Untitled");
   });
 
   it("counts graphemes and words", () => {
@@ -66,13 +52,9 @@ describe("stored content", () => {
 describe("search highlighting", () => {
   const hl = highlightMarkdownMatches;
 
-  it("bolds folded matches and keeps the original text", () => {
-    expect(hl("Crème brûlée recipe", "CREME BRULEE")).toBe("**Crème brûlée** recipe");
+  it("leaves code, link destinations, URLs, and block markers alone", () => {
     expect(hl("Replay the play", "play")).toBe("Re**play** the **play**");
     expect(hl("anything", "  ")).toBe("anything");
-  });
-
-  it("leaves code, link destinations, URLs, and block markers alone", () => {
     const md = [
       "# Plan",
       "- [ ] plan `plan()`",

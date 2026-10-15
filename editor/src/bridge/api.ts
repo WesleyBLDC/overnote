@@ -1,4 +1,4 @@
-/** Typed wrappers for every contract method, on top of BridgeClient.call. */
+/** Typed wrappers for every protocol method (docs/architecture.md), on top of BridgeClient.call. */
 import { rpc } from "@overnote/core";
 import type { BridgeClient } from "./client";
 

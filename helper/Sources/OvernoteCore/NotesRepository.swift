@@ -176,7 +176,7 @@ public final class NotesRepository: @unchecked Sendable {
         try locked { try requireNote(id) }
     }
 
-    /// Applies a partial update (contract `notes.update`).
+    /// Applies a partial update (protocol `notes.update`).
     ///
     /// - A patch with content fields writes them and sets `updatedAt` to now, even when the
     ///   content is identical. Within the same millisecond it steps 1 ms past the old value

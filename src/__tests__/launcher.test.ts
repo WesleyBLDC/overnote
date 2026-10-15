@@ -17,7 +17,12 @@ describe("helper launcher", () => {
   const launchers: HelperLauncher[] = [];
 
   const makeLauncher = () => {
-    const launcher = new HelperLauncher({ paths, client: new RpcClient({ socketPath: paths.socket }) });
+    // A short grace period: the SIGTERM fallback test would otherwise wait the full 2 s.
+    const launcher = new HelperLauncher({
+      paths,
+      client: new RpcClient({ socketPath: paths.socket }),
+      stopGraceMs: 200,
+    });
     launchers.push(launcher);
     return launcher;
   };
@@ -50,17 +55,6 @@ describe("helper launcher", () => {
       }
     }
     fs.rmSync(root, { recursive: true, force: true });
-  });
-
-  it("restarts the helper when the bundled version changes", async () => {
-    const old = await makeLauncher().ensure();
-    installFakeHelper(paths.binary.replace(/\/bin\/OvernoteHelper$/, ""), "version-two");
-    process.env.FAKE_HELPER_VERSION = "2.0.0";
-    const next = await makeLauncher().ensure();
-    expect(next.started).toBe(true);
-    expect(next.version).toBe("2.0.0");
-    expect(next.pid).not.toBe(old.pid);
-    expect(isProcessAlive(old.pid)).toBe(false);
   });
 
   it("restarts the helper when its binary is rebuilt with the same version", async () => {

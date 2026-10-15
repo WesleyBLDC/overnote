@@ -358,7 +358,8 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   }
   for (const [method, params] of [["notes.get", {}], ["notes.get", { id: 5 }], ["notes.get", { id: "" }],
     ["notes.create", { text: "no raw content" }], ["notes.list", { limit: 0 }], ["notes.list", { limit: "ten" }],
-    ["notes.update", { id: "x", caretPosition: 1.5 }], ["notes.setCurrentNote", {}], ["notes.get", []]]) {
+    ["notes.update", { id: "x", caretPosition: 1.5 }], ["notes.setCurrentNote", {}], ["notes.get", []],
+    ["notes.list", { cursor: "garbage" }], ["notes.browse", { cursor: "garbage" }]]) {
     await expectError(-32602, method, params);
   }
   await expectError(404, "notes.get", { id: "missing" });

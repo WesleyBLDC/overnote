@@ -36,6 +36,8 @@ export interface EnsureResult {
 
 export interface LauncherConfig {
   paths: HelperPaths;
+  /** How long a helper gets to exit after `system.shutdown` before SIGTERM (default 2000 ms). */
+  stopGraceMs?: number;
   /** Development only: pass `--watch-editor`, so the panel reloads on every new editor build. */
   watchEditor?: boolean;
   /** How long to wait for a freshly spawned helper to answer `system.ping`. */
@@ -87,12 +89,14 @@ export class HelperLauncher {
   private readonly versionCache: string;
   private readonly launchRecord: string;
   private readonly watchEditor: boolean;
+  private readonly stopGraceMs: number;
 
   constructor(config: LauncherConfig) {
     this.paths = config.paths;
     this.client = config.client ?? sharedClient(config.paths.socket);
     this.readyTimeoutMs = config.readyTimeoutMs ?? 3000;
     this.watchEditor = config.watchEditor ?? false;
+    this.stopGraceMs = config.stopGraceMs ?? 2000;
     this.versionCache = path.join(config.paths.runtimeDir, "helper-version.json");
     this.launchRecord = path.join(config.paths.runtimeDir, "helper-launch.json");
   }
@@ -177,7 +181,7 @@ export class HelperLauncher {
       // Fall through to signals.
     }
     this.client.close();
-    if (!(await waitForExit(pid, 2000))) {
+    if (!(await waitForExit(pid, this.stopGraceMs))) {
       if (!(await terminate(pid))) throw new HelperLaunchError(`Could not stop the old helper (pid ${pid}).`);
     }
     await fs.rm(this.paths.pidFile, { force: true });

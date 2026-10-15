@@ -6,7 +6,7 @@ import path from "node:path";
  * A short temporary directory under /tmp, since Unix socket paths are limited to 104 bytes on
  * macOS and the default temp dir is long.
  */
-export function shortTempDir(prefix = "bnt-"): string {
+export function shortTempDir(prefix = "ont-"): string {
   return fs.mkdtempSync(path.join("/tmp", prefix));
 }
 

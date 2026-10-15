@@ -51,7 +51,7 @@ describe("extension domain layer against the real helper", () => {
     (await ensure()).client.call(method, params);
 
   beforeAll(() => {
-    root = shortTempDir("bne2e-");
+    root = shortTempDir("one2e-");
     process.env.OVERNOTE_BACKUP_DIR = path.join(root, "backups");
     const assets = path.join(root, "assets");
     fs.mkdirSync(path.join(assets, "bin"), { recursive: true });
@@ -163,8 +163,24 @@ describe("extension domain layer against the real helper", () => {
   });
 
   it("serves the same rows from the read-only database after shutdown", async () => {
+    // Enough variety for every read path Search Notes takes without the helper: pins, LIKE
+    // wildcards in the text, folded filters, and trash order.
+    const wildcard = (await call("notes.create", contentFromMarkdown("Progress\n\n100% done_now"))).id;
+    const pinned = (await call("notes.create", contentFromMarkdown("Pinned groceries"))).id;
+    await call("notes.pin", { id: pinned });
+    await call("notes.pin", { id: second });
+    for (const markdown of ["Old trash", "New trash"]) {
+      const { id } = await call("notes.create", contentFromMarkdown(markdown));
+      await sleep(5);
+      await call("notes.delete", { id });
+    }
+    const filters = ["GROCER", "cafe", "CAFÉ", "%", "_", "0% d", "   ", "nothing matches"];
     const live = await call("notes.list", {});
-    const filtered = await call("notes.list", { filter: "café" });
+    const liveFiltered = await Promise.all(filters.map((filter) => call("notes.list", { filter })));
+    const liveDeleted = await call("notes.listDeleted", {});
+    expect(ids(live.items).slice(0, 2)).toEqual([pinned, second]);
+    expect(ids(liveFiltered[3]?.items ?? [])).toEqual([wildcard]);
+    expect(liveDeleted.items.map((note) => note.title)).toEqual(["New trash", "Old trash"]);
     const { pid } = await ensure();
     await launcher.stop(pid);
     expect(await waitForExit(pid, 3000)).toBe(true);
@@ -175,8 +191,20 @@ describe("extension domain layer against the real helper", () => {
     expect(db).not.toBeNull();
     try {
       expect(db?.list().items).toEqual(live.items);
-      expect(ids(db?.list({ filter: "CAFE" }).items ?? [])).toEqual(ids(filtered.items));
-      expect(db?.listDeleted()).toEqual([]);
+      filters.forEach((filter, index) => {
+        expect(ids(db?.list({ filter }).items ?? []), `filter ${JSON.stringify(filter)}`).toEqual(
+          ids(liveFiltered[index]?.items ?? []),
+        );
+      });
+      const paged: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = db?.list({ limit: 3, cursor });
+        paged.push(...ids(page?.items ?? []));
+        cursor = page?.nextCursor ?? undefined;
+      } while (cursor);
+      expect(paged).toEqual(ids(live.items));
+      expect(db?.listDeleted()).toEqual(liveDeleted.items);
       expect(db?.get(cafe)?.title).toBe("Café list");
     } finally {
       db?.close();
@@ -210,6 +238,7 @@ describe("extension domain layer against the real helper", () => {
     expect(result).toMatchObject({ started: true, version: realVersion });
     expect(result.pid).not.toBe(oldPid);
     expect(await waitForExit(oldPid, 3000)).toBe(true);
-    expect((await call("notes.count", {})).count).toBe(2);
+    // The notes from the steps above survived the replacement: cafe, second, and two from the read-only step.
+    expect((await call("notes.count", {})).count).toBe(4);
   });
 });

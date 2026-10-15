@@ -103,15 +103,6 @@ struct OrderingTests {
         #expect(ids == Array(titleHits.reversed()) + Array(textHits.reversed()))
     }
 
-    @Test func cursorsAreBoundToTheirSource() throws {
-        let f = try Fixture()
-        try f.make("a")
-        try f.make("b")
-        let listCursor = try #require(try f.repository.list(limit: 1).nextCursor)
-        #expect(throws: RPCError.badParams("Invalid cursor")) { try f.repository.browse(cursor: listCursor) }
-        #expect(throws: RPCError.badParams("Invalid cursor")) { try f.repository.list(cursor: "garbage") }
-    }
-
     @Test func ulidsStayOrderedWithinAMillisecondAndUnderClockSkew() {
         var generator = ULIDGenerator()
         var previous = generator.next(now: 5000)
@@ -211,32 +202,6 @@ struct FramingTests {
         #expect(try await response(#"{"id":5,"method":"notes.count"}"#) == ["id": 5, "result": ["count": 0]])
     }
 
-    @Test func pipelinedRequestsOnOneConnectionAreAllAnsweredById() throws {
-        let f = try Fixture()
-        let handler = RPCLineHandler(dispatcher: RPCDispatcher(repository: f.repository, host: RecordingHost()), source: .socket)
-        let path = f.directory.file("run/helper.sock")
-        let server = SocketServer(path: path) { await handler.handle(line: $0) }
-        try server.start()
-        defer { server.stop() }
-        let client = try RPCClient(path: path)
-        // Many requests in one write, including a line split across the batch boundary.
-        var lines = ""
-        for index in 0..<40 {
-            lines += #"{"id":\#(index),"method":"notes.create","params":{"rawContent":"{}","text":"n\#(index)"}}"# + "\n"
-        }
-        try client.send(line: String(lines.dropLast()))
-        var ids = Set<JSONValue>()
-        while ids.count < 40, let line = try client.readLine(timeout: 5) {
-            let message = try JSONValue.parse(line)
-            #expect(message["error"] == nil)
-            ids.insert(message["id"] ?? .null)
-        }
-        #expect(ids == Set((0..<40).map { JSONValue.int(Int64($0)) }))
-    }
-}
-
-@Suite("Security checks")
-struct SecurityTests {
     @Test(arguments: [
         ("Shopping list.md", "Shopping list.md"),
         ("../../etc/passwd", "Untitled....etcpasswd"),

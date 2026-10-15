@@ -224,8 +224,3 @@ export function sharedClient(socketPath: string): RpcClient {
   }
   return client;
 }
-
-export function closeSharedClients(): void {
-  for (const client of sharedClients.values()) client.close();
-  sharedClients.clear();
-}

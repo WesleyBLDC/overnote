@@ -284,7 +284,6 @@ export function noteContentFromMarkdown(markdown: string): NoteContent;
 export function loadDoc(rawContent: string | null, text: string): JSONContent; // stored doc if valid (placeholders preserved), else rebuild from text with a hard break per newline
 export function toStoredDoc(doc: JSONContent): JSONContent;               // inverse of loadDoc's placeholder mapping
 export function docToClipboard(docOrSlice: JSONContent): { text: string; html: string };   // ⌘C/⌘X format: plain text plus semantic HTML
-export function derivePreview(text: string): string;                     // first 200 chars, newlines collapsed to spaces
 export function parsePastedText(plain: string, html?: string): JSONContent;
 export function looksLikeMarkdown(plain: string, html?: string): boolean;
 export function normalizeLinkHref(input: string): string | null;
@@ -292,7 +291,7 @@ export function countCharacters(text: string): number;                   // grap
 export function countWords(text: string): number;                        // Intl.Segmenter word segments
 export type { Note, NoteSummary, NoteContent, Settings, WindowData, NoteId } from "./types";
 export * as rpc from "./rpc";
-// Light entry point `@overnote/core/text` exports types, rpc, displayTitle, derivePreview, countCharacters, countWords and fold, with no Tiptap import (for list commands and the menu bar)   // method name constants and param/result types from section 5
+// Light entry point `@overnote/core/text` exports types, rpc, displayTitle, countCharacters, countWords, fold, highlightMarkdownMatches and UNTITLED, with no Tiptap import (for list commands and the menu bar)
 ```
 
 ## 8. Extension commands (package.json)

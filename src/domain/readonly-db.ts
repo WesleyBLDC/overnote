@@ -89,7 +89,7 @@ export class ReadOnlyNotesDb {
     return { items, nextCursor: rows.length > limit ? String(offset + limit) : null };
   }
 
-  /** Every trashed note with its markdown and stored document, most recently deleted first (contract `notes.listDeleted`). */
+  /** Every trashed note with its markdown and stored document, most recently deleted first (protocol `notes.listDeleted`). */
   listDeleted(): DeletedNoteSummary[] {
     const rows = this.db
       .prepare(

@@ -379,9 +379,4 @@ export class MockStore {
     this.changed([id]);
     return { ...note };
   }
-
-  externalDelete(id: NoteId): void {
-    this.handlers["notes.delete"]({ id });
-    this.changed([id]);
-  }
 }

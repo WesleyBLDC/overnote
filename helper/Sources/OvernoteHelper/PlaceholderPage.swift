@@ -1,6 +1,6 @@
-/// A tiny stand in editor served when `--editor-dir` has no `index.html`, so the helper can
-/// be exercised end to end before the real editor is built. It implements the bridge
-/// contract: `system.ready`, autosave through `notes.update`, `window.resize`, and Esc.
+/// A tiny stand in editor served when `--editor-dir` has no `index.html`. The window end to end
+/// checks run on it on purpose, because it reports its height once and then stays quiet. It
+/// implements the bridge protocol: `system.ready`, autosave through `notes.update`, `window.resize`, and Esc.
 enum PlaceholderPage {
     static let html = #"""
         <!doctype html>

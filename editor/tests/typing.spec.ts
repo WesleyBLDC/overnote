@@ -89,8 +89,13 @@ test("inline rules, links, autolinks, and typography", async ({ page }) => {
   expect(text).toContain("[bad](javascript:alert)");
   expect(text).toContain("— … “hi” don’t → ©");
   // Typing right after a link does not extend it.
-  await page.keyboard.press("Meta+ArrowRight");
-  expect(links?.length).toBe(2);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("[Doc](docs.dev)after");
+  const last = (await docJSON(page)).content?.at(-1)?.content ?? [];
+  expect(last.map((n) => [n.text, n.marks?.some((m) => m.type === "link") ?? false])).toEqual([
+    ["Doc", true],
+    ["after", false],
+  ]);
 });
 
 test("rules do not fire inside code", async ({ page }) => {

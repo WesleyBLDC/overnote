@@ -93,8 +93,6 @@ export async function lastSave(page: Page): Promise<Record<string, unknown>> {
   return saves[saves.length - 1]?.params ?? {};
 }
 
-export const isMac = process.platform === "darwin";
-
 /**
  * Freezes the fake clock (installed with `page.clock.install()` before `openHarness`), so timers
  * fire only through `page.clock.runFor`. CSS animations and transitions still run in real time, so

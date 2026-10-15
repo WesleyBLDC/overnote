@@ -29,7 +29,7 @@ final class TempDirectory {
     let path: String
 
     init() {
-        let name = "bn-test-" + String(UUID().uuidString.prefix(8))
+        let name = "overnote-test-" + String(UUID().uuidString.prefix(8))
         path = "/tmp/" + name
         try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
     }

@@ -52,7 +52,7 @@ mkdir -p "$PKG"
 # Copies paths relative to the root, keeping their layout, skipping development artifacts.
 copy() {
   rsync -a --relative \
-    --exclude node_modules --exclude .DS_Store --exclude __tests__ --exclude __mocks__ \
+    --exclude node_modules --exclude .DS_Store --exclude __tests__ \
     --exclude tests --exclude unit --exclude test-results --exclude playwright-report \
     --exclude '*.test.ts' --exclude '*.log' \
     "$@" "$PKG/"
