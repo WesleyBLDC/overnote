@@ -87,6 +87,7 @@ export class NoteSession {
   private caretDirty = false;
   private lastEditAt = Number.NEGATIVE_INFINITY;
   private loading = false;
+  private paused = false;
   private chain: Promise<boolean> = Promise.resolve(true);
   private transition = 0;
 
@@ -152,7 +153,7 @@ export class NoteSession {
 
   /** The user changed the document. */
   contentChanged(): void {
-    if (this.loading) return;
+    if (this.loading || this.paused) return;
     this.editVersion++;
     this.lastEditAt = this.now();
     this.schedule();
@@ -160,7 +161,7 @@ export class NoteSession {
 
   /** The selection moved. */
   selectionChanged(): void {
-    if (this.loading) return;
+    if (this.loading || this.paused) return;
     const caret = this.editor.getCaret();
     if (caret === this.savedCaret) return;
     this.caretDirty = true;
@@ -241,10 +242,38 @@ export class NoteSession {
     return true;
   }
 
+  // ---- read-only previews ----
+
+  /**
+   * Saves pending edits, then stops tracking the editor so it can show something else
+   * (a deleted note preview). Resolves false when the save failed.
+   */
+  async pause(): Promise<boolean> {
+    if (!(await this.flush())) {
+      this.notify("Could not save note. Try again.", "error");
+      return false;
+    }
+    this.paused = true;
+    return true;
+  }
+
+  /** Puts the current note back into the editor and resumes saving. */
+  resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    const current = this.state.current;
+    if (current) this.loadNote(current, current.caretPosition);
+  }
+
+  get isPaused(): boolean {
+    return this.paused;
+  }
+
   // ---- loading notes into the editor ----
 
   private apply(windowData: WindowData, reload: boolean): void {
     const current = windowData.current;
+    if (reload) this.paused = false;
     if (reload && current) this.loadNote(current, current.caretPosition);
     this.setState({
       current,
@@ -272,6 +301,7 @@ export class NoteSession {
    * A newer switch cancels an older one that is still waiting.
    */
   private async switchTo(id: NoteId, commit: HistoryCommit | null): Promise<boolean> {
+    this.paused = false;
     const token = ++this.transition;
     if (!(await this.flush())) {
       if (token === this.transition) this.notify("Could not save note. Try again.", "error");
@@ -454,7 +484,7 @@ export class NoteSession {
    */
   async refresh(): Promise<void> {
     const current = this.state.current;
-    if (!current) return;
+    if (!current || this.paused) return;
     const token = this.transition;
     const windowData = await this.api.notes.windowData({ noteId: current.id });
     if (token !== this.transition || this.state.current?.id !== current.id) return;

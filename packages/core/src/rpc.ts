@@ -28,6 +28,7 @@ export const Method = {
   WindowResignFocus: "window.resignFocus",
   ClipboardCopy: "clipboard.copy",
   FileSaveAs: "file.saveAs",
+  AppOpenURL: "app.openURL",
   NotesCreate: "notes.create",
   NotesGet: "notes.get",
   NotesUpdate: "notes.update",
@@ -60,6 +61,7 @@ export const BRIDGE_ONLY_METHODS: readonly MethodName[] = [
   Method.WindowResignFocus,
   Method.ClipboardCopy,
   Method.FileSaveAs,
+  Method.AppOpenURL,
 ];
 
 type Empty = Record<string, never>;
@@ -81,6 +83,7 @@ export interface ListResult {
 
 export interface DeletedItem extends NoteSummary {
   markdown: string;
+  rawContent: string;
 }
 
 export type UpdateParams = { id: NoteId; expectedUpdatedAt?: Millis } & Partial<NoteContent> & {
@@ -97,9 +100,10 @@ export interface Methods {
   "window.toggle": { params: Empty; result: { visible: boolean } };
   "window.show": { params: { noteId?: NoteId }; result: { visible: true } };
   "window.hide": { params: Empty; result: { visible: false } };
-  "window.resize": { params: { contentHeight: number }; result: Empty };
+  "window.resize": { params: { contentHeight: number; temporary?: boolean }; result: Empty };
   "window.resignFocus": { params: Empty; result: Empty };
   "clipboard.copy": { params: { text: string; html?: string }; result: Empty };
+  "app.openURL": { params: { url: string }; result: Empty };
   "file.saveAs": { params: { suggestedName: string; content: string }; result: { saved: boolean; path?: string } };
   "notes.create": { params: NoteContent & { show?: boolean }; result: Note };
   "notes.get": { params: { id: NoteId }; result: Note };

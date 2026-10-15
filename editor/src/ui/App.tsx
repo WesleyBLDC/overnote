@@ -8,8 +8,10 @@ import {
   docToHTML,
   docToMarkdown,
   docToPlainText,
+  loadDoc,
   type JSONContent,
   type NoteId,
+  type rpc,
 } from "@better-notes/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { AnyExtension, Editor } from "@tiptap/core";
@@ -48,6 +50,14 @@ function clampCaret(editor: Editor, caret: number | null): void {
   editor.view.dispatch(editor.state.tr.setSelection(selection).setMeta("addToHistory", false));
 }
 
+/** Replaces the document without an undo step and starts a fresh undo history. */
+function loadIntoEditor(editor: Editor, doc: JSONContent, caret: number | null): void {
+  editor.commands.setContent(doc, { emitUpdate: false });
+  const { state } = editor;
+  editor.view.updateState(EditorState.create({ doc: state.doc, plugins: state.plugins }));
+  clampCaret(editor, caret);
+}
+
 function sliceJSON(editor: Editor): JSONContent | null {
   const { selection } = editor.state;
   if (selection.empty) return null;
@@ -75,6 +85,7 @@ export function App({ api }: { api: Api }) {
   const [slashDismissed, setSlashDismissed] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
   const [formatMenuOpen, setFormatMenuOpen] = useState(false);
+  const [preview, setPreview] = useState<rpc.DeletedItem | null>(null);
   const sessionRef = useRef<NoteSession | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const plainPasteFlag = useMemo(() => ({ next: false }), []);
@@ -90,10 +101,12 @@ export function App({ api }: { api: Api }) {
       ),
     [api, notify],
   );
-  const openUrl = useCallback((href: string) => {
-    const opened = window.open(href, "_blank", "noopener,noreferrer");
-    if (opened === null && !/^https?:/i.test(href)) notify("Failed to open link", "error");
-  }, [notify]);
+  const openUrl = useCallback(
+    (href: string) => {
+      api.app.openURL(href).catch(() => notify("Failed to open link", "error"));
+    },
+    [api, notify],
+  );
 
   const openLinkRef = useRef<() => void>(() => undefined);
   const lowlight = useMemo(() => createNoteLowlight(), []);
@@ -148,18 +161,58 @@ export function App({ api }: { api: Api }) {
       isComposing: () => editorRef.current?.view.composing ?? false,
       load: (doc, caret) => {
         const current = editorRef.current;
-        if (!current) return;
-        current.commands.setContent(doc, { emitUpdate: false });
-        // A freshly loaded note starts with an empty undo history.
-        const { state } = current;
-        current.view.updateState(EditorState.create({ doc: state.doc, plugins: state.plugins }));
-        clampCaret(current, caret);
+        if (current) loadIntoEditor(current, doc, caret);
       },
     };
     return new NoteSession({ api, editor: port, notice: (message, kind) => notify(message, kind) });
   }, [api, notify, editorRef]);
   sessionRef.current = session;
   const state = useSyncExternalStore(session.subscribe, session.getState);
+
+  // ---- read-only preview of a deleted note (spec/keymap.md 2.5) ----
+
+  const startPreview = useCallback(
+    async (note: rpc.DeletedItem) => {
+      const current = editorRef.current;
+      if (!current || !(await session.pause())) return;
+      setFind(null);
+      setLinkTarget(null);
+      current.setEditable(false, false);
+      loadIntoEditor(current, loadDoc(note.rawContent || null, note.preview), 0);
+      setPreview(note);
+    },
+    [session],
+  );
+
+  const exitPreview = useCallback(() => {
+    editorRef.current?.setEditable(true, false);
+    session.resume();
+    setPreview(null);
+    editorRef.current?.view.focus();
+  }, [session]);
+
+  const restorePreview = useCallback(
+    async (note: rpc.DeletedItem) => {
+      try {
+        await api.notes.recover(note.id);
+      } catch {
+        notify("Could not restore the note", "error");
+        return;
+      }
+      editorRef.current?.setEditable(true, false);
+      await session.open(note.id);
+      notify("Note restored");
+    },
+    [api, session, notify],
+  );
+
+  // Any switch, create, or delete reloads a note, which ends the preview.
+  useEffect(() => {
+    if (preview && !session.isPaused) {
+      editorRef.current?.setEditable(true, false);
+      setPreview(null);
+    }
+  });
 
   // ---- boot and native events ----
 
@@ -217,7 +270,6 @@ export function App({ api }: { api: Api }) {
   useEffect(() => {
     document.documentElement.style.setProperty("--zoom", String(settings.zoom));
   }, [settings.zoom]);
-  useResizeReporter(wrapperRef, api, settings.windowAutoSize);
 
   // ---- derived UI state ----
 
@@ -231,6 +283,8 @@ export function App({ api }: { api: Api }) {
   const slashItems = slash && slash.from !== slashDismissed ? filterSlashItems(slash.query) : [];
   const emojiQuery = editor && editor.isFocused ? emojiQueryAt(editor.state) : null;
   const showEmoji = emojiQuery !== null && emojiQuery.from !== emojiDismissed;
+  const overlayRem = panel || confirm ? 34 : slashItems.length || showEmoji || linkTarget || formatMenuOpen ? 16 : null;
+  useResizeReporter(wrapperRef, api, { autoSize: settings.windowAutoSize, overlayRem });
 
   // ---- actions ----
 
@@ -322,8 +376,12 @@ export function App({ api }: { api: Api }) {
     return {
       root: [
         { id: "new", title: "New Note", shortcut: "⌘N", section: "notes", enabled: !blank, run: () => void session.newNote() },
-        { id: "duplicate", title: "Duplicate Note", shortcut: "⌘D", section: "notes", enabled: !blank, run: () => void session.duplicate() },
-        { id: "pin", title: pinned ? "Unpin Note" : "Pin Note", shortcut: "⇧⌘P", section: "notes", run: () => void session.togglePin() },
+        ...(preview
+          ? []
+          : [
+              { id: "duplicate", title: "Duplicate Note", shortcut: "⌘D", section: "notes", enabled: !blank, run: () => void session.duplicate() },
+              { id: "pin", title: pinned ? "Unpin Note" : "Pin Note", shortcut: "⇧⌘P", section: "notes", run: () => void session.togglePin() },
+            ]),
         { id: "browse", title: "Browse Notes", shortcut: "⌘P", section: "notes", push: "browse" },
         { id: "back", title: "Go Back", shortcut: "⌘[", section: "notes", enabled: state.canGoBack, run: () => void session.back() },
         { id: "forward", title: "Go Forward", shortcut: "⌘]", section: "notes", enabled: state.canGoForward, run: () => void session.forward() },
@@ -389,11 +447,11 @@ export function App({ api }: { api: Api }) {
         run: () => void exportAs(f),
       })),
     };
-  }, [editor, blank, pinned, state, settings, session, copyText, notify, updateSettings, setZoom, deleteAll, format, openLink, copyAs, exportAs, moveItem, tick]);
+  }, [editor, blank, pinned, state, settings, session, copyText, notify, updateSettings, setZoom, deleteAll, format, openLink, copyAs, exportAs, moveItem, preview, tick]);
 
   // ---- window level shortcuts ----
 
-  const handlers = useLatest({ lists, session, state, settings, panel, find, linkTarget, confirm, slashItems, showEmoji, hide, deleteAll, setZoom, openLink });
+  const handlers = useLatest({ lists, session, state, settings, panel, find, linkTarget, confirm, slashItems, showEmoji, hide, deleteAll, setZoom, openLink, preview, exitPreview });
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const h = handlers.current;
@@ -426,8 +484,8 @@ export function App({ api }: { api: Api }) {
       if (matches(event, { code: "KeyN", meta: true })) return run(() => void h.session.newNote());
       if (matches(event, { code: "KeyX", ctrl: true })) return run(() => void h.session.deleteCurrent());
       if (matches(event, { code: "KeyX", ctrl: true, shift: true })) return run(h.deleteAll);
-      if (matches(event, { code: "KeyP", meta: true, shift: true })) return run(() => void h.session.togglePin());
-      if (matches(event, { code: "KeyD", meta: true })) return run(() => void h.session.duplicate());
+      if (matches(event, { code: "KeyP", meta: true, shift: true })) return run(() => !h.preview && void h.session.togglePin());
+      if (matches(event, { code: "KeyD", meta: true })) return run(() => !h.preview && void h.session.duplicate());
       if (matches(event, { code: "KeyD", meta: true, shift: true })) {
         return run(() => h.lists.root.find((a) => a.id === "deeplink")?.run?.());
       }
@@ -469,6 +527,7 @@ export function App({ api }: { api: Api }) {
         });
       }
       if (event.key === "Escape" && !event.defaultPrevented) {
+        if (h.preview) return run(h.exitPreview);
         if (h.linkTarget || h.find || h.slashItems.length || h.showEmoji) return;
         if (document.activeElement?.closest(".note-editor") || document.activeElement === document.body) return run(h.hide);
       }
@@ -492,26 +551,50 @@ export function App({ api }: { api: Api }) {
 
   const closePanel = () => {
     setPanel(null);
-    if (!find) editorRef.current?.commands.focus();
+    // view.focus is synchronous; Tiptap's focus command waits a frame and could steal focus from a panel opened right after.
+    if (!find) editorRef.current?.view.focus();
   };
 
   return (
-    <div className={`app${panel || confirm ? " has-overlay" : slashItems.length || showEmoji || linkTarget || formatMenuOpen ? " has-popup" : ""}`} ref={wrapperRef} data-testid="app" data-ready={state.ready ? "true" : "false"} data-note-id={currentId ?? ""}>
-      <Toolbar title={title} onActions={() => setPanel(panel ? null : "root")} onBrowse={() => setPanel("browse")} onNew={() => void session.newNote()} />
+    <div className="app" ref={wrapperRef} data-testid="app" data-ready={state.ready ? "true" : "false"} data-note-id={currentId ?? ""}>
+      <Toolbar title={title} onClose={() => {
+        void session.flush();
+        void api.window.hide().catch(() => undefined);
+      }} onActions={() => setPanel(panel ? null : "root")} onBrowse={() => setPanel("browse")} onNew={() => void session.newNote()} />
       {find && editor ? <FindBar ref={findRef} editor={editor} initialTerm={find.term} onClose={() => setFind(null)} /> : null}
+      {preview ? (
+        <div className="preview-banner" data-testid="preview-banner" role="status">
+          <span>This note is in Recently Deleted.</span>
+          <button type="button" className="text-button is-primary" onClick={() => void restorePreview(preview)}>
+            Restore
+          </button>
+        </div>
+      ) : null}
       <main className="content" onMouseDown={(event) => {
+        if (preview) {
+          event.preventDefault();
+          setConfirm({
+            title: "Restore Note?",
+            message: "This note is in Recently Deleted. Restore it to edit it.",
+            confirm: "Restore",
+            onConfirm: () => void restorePreview(preview),
+          });
+          return;
+        }
         if (event.target === event.currentTarget) {
           event.preventDefault();
           editor?.commands.focus("end");
         }
       }}>
-        <EditorContent editor={editor} />
+        <div className="content-inner">
+          <EditorContent editor={editor} />
+        </div>
       </main>
       <Footer
         editor={editor}
         counts={counts}
         countMode={settings.countMode}
-        showFormatBar={settings.showFormatBar}
+        showFormatBar={settings.showFormatBar && !preview}
         onToggleCount={() => updateSettings({ countMode: settings.countMode === "words" ? "characters" : "words" })}
         onToggleFormatBar={() => updateSettings({ showFormatBar: !settings.showFormatBar })}
         openLink={openLink}
@@ -581,6 +664,7 @@ export function App({ api }: { api: Api }) {
             notify("Note restored");
             await session.refresh();
           }}
+          onPreview={(note) => void startPreview(note)}
           onPermanentlyDelete={(id) =>
             setConfirm({
               title: "Permanently Delete Note?",

@@ -12,22 +12,31 @@ html {
 }
 
 html,
+body,
+#root {
+  height: 100%;
+}
+
+html,
 body {
   margin: 0;
   padding: 0;
+  overflow: hidden;
   color: var(--text);
   font-family: var(--font-ui);
   line-height: var(--line-height);
   -webkit-font-smoothing: antialiased;
 }
 
+/* The dev harness draws a panel; the mock bridge sets its height from window.resize. */
 html[data-harness] body {
-  min-height: 100vh;
   background: var(--harness-backdrop);
+  overflow: auto;
 }
 
 html[data-harness] #root {
   max-width: 34rem;
+  height: 9.65rem;
   margin: 2rem auto;
   border-radius: var(--radius-l);
   background: var(--surface-raised);
@@ -53,37 +62,66 @@ kbd {
   flex: none;
 }
 
+/* The app fills the panel; the editor area takes the rest and scrolls past the maximum height. */
 .app {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  height: 100%;
 }
 
-/* While a popup is open the window grows so the popup is never clipped by the panel edge. */
-.app.has-overlay {
-  min-height: var(--overlay-min-height);
+/* Chrome shows only while the pointer is over the panel (spec/window.md 7). */
+.chrome {
+  transition: opacity 140ms ease;
 }
 
-.app.has-popup {
-  min-height: var(--popup-min-height);
+.app:not(:hover) .chrome {
+  opacity: 0;
+  pointer-events: none;
 }
 
-.app.has-overlay .content,
-.app.has-popup .content {
-  flex: 1;
+.app:not(:hover) .toolbar-title,
+.app:not(:hover) .format-bar {
+  opacity: 0.3;
+}
+
+.toolbar-title,
+.format-bar {
+  transition: opacity 140ms ease;
+}
+
+.close-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--close);
+  color: transparent;
+}
+
+.close-button .icon {
+  width: 0.6rem;
+  height: 0.6rem;
+}
+
+.close-button:hover {
+  color: rgba(0, 0, 0, 0.6);
 }
 
 /* The helper's invisible drag strip covers the top 12 points; keep it free of controls. */
 .toolbar {
-  position: sticky;
-  top: 0;
+  flex: none;
   z-index: 5;
   display: grid;
   grid-template-columns: 1fr minmax(0, auto) 1fr;
   align-items: center;
   gap: 0.5rem;
-  padding: calc(var(--drag-strip) + 0.1rem) 0.6rem 0.3rem;
+  min-height: var(--toolbar-height);
+  padding: var(--drag-strip) 0.6rem 0;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -97,6 +135,12 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+}
+
+.toolbar-leading {
+  display: flex;
+  align-items: center;
+  padding-left: 0.45rem;
 }
 
 .toolbar-actions {
@@ -129,6 +173,8 @@ kbd {
 }
 
 .icon-button.round {
+  width: 2.3rem;
+  height: 2.3rem;
   border-radius: 999px;
 }
 
@@ -150,18 +196,21 @@ kbd {
 }
 
 .content {
-  padding: 0.1rem var(--content-x) 0.4rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--content-top) var(--content-x) var(--content-bottom);
   cursor: text;
 }
 
 .footer {
-  position: sticky;
-  bottom: 0;
+  flex: none;
   z-index: 5;
   display: grid;
-  grid-template-columns: 1.7rem 1fr 1.7rem;
+  grid-template-columns: 2.3rem 1fr 2.3rem;
   align-items: center;
-  padding: 0.25rem 0.6rem 0.45rem;
+  min-height: var(--footer-height);
+  padding: 0 0.6rem 0.4rem;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -360,8 +409,7 @@ kbd {
 }
 
 .find-bar {
-  position: sticky;
-  top: calc(var(--drag-strip) + 2.3rem);
+  flex: none;
   z-index: 4;
   display: flex;
   flex-direction: column;
@@ -405,11 +453,9 @@ kbd {
   position: absolute;
   inset: 0;
   z-index: 40;
-  min-height: 100%;
 }
 
 .dialog-backdrop {
-  position: fixed;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -550,7 +596,7 @@ kbd {
 }
 
 .notices {
-  position: fixed;
+  position: absolute;
   left: 50%;
   bottom: 2.6rem;
   z-index: 50;
@@ -684,4 +730,23 @@ kbd {
 
 .emoji-category:hover {
   background: var(--surface-hover);
+}
+
+.preview-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0 0.6rem 0.4rem;
+  padding: 0.35rem 0.4rem 0.35rem 0.7rem;
+  border-radius: var(--radius-m);
+  background: var(--accent-soft);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.text-button.is-primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: white;
 }

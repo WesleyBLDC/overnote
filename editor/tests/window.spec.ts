@@ -2,25 +2,60 @@
 import { expect, test } from "@playwright/test";
 import { calls, editor, openHarness } from "./harness";
 
-test("resize reports follow content and zoom", async ({ page }) => {
+test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await openHarness(page);
-  const heights = async () => (await calls(page, "window.resize")).map((c) => Number(c.params.contentHeight));
-  await expect.poll(async () => (await heights()).length).toBeGreaterThan(0);
-  const start = (await heights()).at(-1) ?? 0;
-  const appHeight = await page.getByTestId("app").evaluate((el) => Math.ceil(el.getBoundingClientRect().height));
-  expect(start).toBe(appHeight);
+  const reports = async () => (await calls(page, "window.resize")).map((c) => c.params as { contentHeight: number; temporary?: boolean });
+  const last = async () => (await reports()).at(-1);
+  await expect.poll(async () => (await reports()).length).toBeGreaterThan(0);
+  // A one-line note is about 135 points, with the footer pinned to the bottom of the panel.
+  const start = (await last())?.contentHeight ?? 0;
+  expect(start).toBeGreaterThanOrEqual(130);
+  expect(start).toBeLessThanOrEqual(140);
+  const footerGap = await page.getByTestId("footer").evaluate((el) => el.closest(".app")!.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom);
+  expect(footerGap).toBeLessThanOrEqual(1);
+
   for (let i = 0; i < 5; i++) await page.keyboard.press("Enter");
-  await expect.poll(async () => (await heights()).at(-1) ?? 0).toBeGreaterThan(start);
-  const tall = (await heights()).at(-1) ?? 0;
+  await expect.poll(async () => (await last())?.contentHeight ?? 0).toBeGreaterThan(start + 100);
+  const tall = (await last())?.contentHeight ?? 0;
   await page.keyboard.press("Meta+Equal");
   await page.keyboard.press("Meta+Equal");
-  await expect.poll(async () => (await heights()).at(-1) ?? 0).toBeGreaterThan(tall);
+  await expect.poll(async () => (await last())?.contentHeight ?? 0).toBeGreaterThan(tall);
   for (let i = 0; i < 5; i++) await page.keyboard.press("Backspace");
   await page.keyboard.press("Meta+0");
-  await expect.poll(async () => (await heights()).at(-1) ?? 0).toBe(start);
+  await expect.poll(async () => (await last())?.contentHeight ?? 0).toBe(start);
+
+  // ⌘K grows the panel temporarily and closing restores it.
+  await page.keyboard.press("Meta+k");
+  await expect.poll(last).toMatchObject({ temporary: true });
+  expect((await last())?.contentHeight ?? 0).toBeGreaterThan(400);
+  await page.keyboard.press("Escape");
+  await expect.poll(last).toEqual({ contentHeight: start });
+
+  // With auto-sizing off, content changes are not reported but temporary growth still is.
+  await page.keyboard.press("Meta+Shift+Slash");
+  const count = (await reports()).length;
+  for (let i = 0; i < 3; i++) await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  expect((await reports()).length).toBe(count);
+  await page.keyboard.press("Meta+p");
+  await expect.poll(last).toMatchObject({ temporary: true });
+  await page.keyboard.press("Escape");
+  await expect.poll(async () => (await last())?.temporary).toBeUndefined();
+
   // The top 12 points stay free of controls for the native drag strip.
+  await page.mouse.move(300, 120);
   const buttonTop = await page.getByTestId("new-note").evaluate((el) => el.getBoundingClientRect().top - el.closest(".app")!.getBoundingClientRect().top);
   expect(buttonTop).toBeGreaterThanOrEqual(12);
+});
+
+test("hover chrome and the Close control", async ({ page }) => {
+  await openHarness(page, ["Text"]);
+  await page.mouse.move(5, 5);
+  await expect(page.getByTestId("close")).toHaveCSS("opacity", "0");
+  await page.getByTestId("title").hover();
+  await expect(page.getByTestId("close")).toHaveCSS("opacity", "1");
+  await page.getByTestId("close").click();
+  await expect.poll(async () => (await calls(page, "window.hide")).length).toBe(1);
 });
 
 test("counter switches between characters and words; format bar replaces it", async ({ page }) => {
@@ -69,6 +104,13 @@ test("slash menu and link popover", async ({ page }) => {
   await popover.getByRole("textbox").fill("raycast.com");
   await page.keyboard.press("Enter");
   await expect(editor(page).locator("a")).toHaveAttribute("href", "https://raycast.com");
+  await editor(page).locator("a").click({ modifiers: ["Meta"] });
+  await expect.poll(async () => (await calls(page, "app.openURL")).at(-1)?.params).toEqual({ url: "https://raycast.com" });
+  await expect(popover).toHaveCount(0);
+  await editor(page).locator("a").click();
+  await expect(popover).toHaveAttribute("data-mode", "view");
+  await popover.getByRole("button", { name: "Open Link" }).click();
+  await expect.poll(async () => (await calls(page, "app.openURL")).length).toBe(2);
   await editor(page).locator("a").click();
   await expect(popover).toHaveAttribute("data-mode", "view");
   await popover.getByRole("button", { name: "Unlink" }).click();

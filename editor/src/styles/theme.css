@@ -9,7 +9,7 @@
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
   --font-size: 14px;
-  --line-height: 1.55;
+  --line-height: 1.7;
 
   --accent: #0d8c7d;
   --accent-soft: rgba(13, 140, 125, 0.14);
@@ -43,8 +43,12 @@
   --code-attr: #9a5b00;
 
   --drag-strip: 12px;
-  --overlay-min-height: 34rem;
-  --popup-min-height: 16rem;
+  /* One line note: 52 + 7 + 24 + 4 + 48 = 135 points at 100% (spec/visual.md 2). */
+  --toolbar-height: 3.715rem;
+  --content-top: 0.5rem;
+  --content-bottom: 0.3rem;
+  --footer-height: 3.43rem;
+  --close: #ec5f59;
   --quote-border: rgba(13, 140, 125, 0.45);
   --radius-s: 0.3rem;
   --radius-m: 0.5rem;

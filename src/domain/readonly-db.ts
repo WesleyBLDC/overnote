@@ -89,18 +89,22 @@ export class ReadOnlyNotesDb {
     return { items, nextCursor: rows.length > limit ? String(offset + limit) : null };
   }
 
-  /** Every trashed note with its markdown, most recently deleted first (contract `notes.listDeleted`). */
+  /** Every trashed note with its markdown and stored document, most recently deleted first (contract `notes.listDeleted`). */
   listDeleted(): DeletedNoteSummary[] {
     const rows = this.db
       .prepare(
-        `SELECT id, title, substr(text, 1, 200) AS preview, length(text) AS char_count, markdown, pinned,
+        `SELECT id, title, substr(text, 1, 200) AS preview, length(text) AS char_count, markdown, raw_content, pinned,
                 created_at, updated_at, deleted_at, last_accessed_at
            FROM notes
           WHERE deleted_at IS NOT NULL
           ORDER BY deleted_at DESC, id ASC`,
       )
       .all() as Row[];
-    return rows.map((row) => ({ ...toSummary(row), markdown: String(row.markdown ?? "") }));
+    return rows.map((row) => ({
+      ...toSummary(row),
+      markdown: String(row.markdown ?? ""),
+      rawContent: String(row.raw_content ?? ""),
+    }));
   }
 
   get(id: string): Note | null {

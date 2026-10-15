@@ -38,34 +38,83 @@ export function useSettings(api: Api) {
   return { settings, setSettings, update };
 }
 
+export interface ResizeOptions {
+  autoSize: boolean;
+  /** Room an open panel, dialog, or popup needs, in rem; null when none is open. */
+  overlayRem: number | null;
+}
+
+/** The content height of the window: every bar plus the editor's natural height, ignoring the stretch. */
+export function measureContentHeight(app: HTMLElement): number {
+  let total = 0;
+  for (const child of Array.from(app.children) as HTMLElement[]) {
+    const style = getComputedStyle(child);
+    if (style.position === "absolute" || style.position === "fixed" || style.display === "none") continue;
+    const margins = parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+    if (child.classList.contains("content")) {
+      const inner = child.firstElementChild as HTMLElement | null;
+      total += (inner?.offsetHeight ?? 0) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) + margins;
+    } else {
+      total += child.offsetHeight + margins;
+    }
+  }
+  return Math.ceil(total);
+}
+
 /**
- * Reports the wrapper's height to the helper, throttled to one call per animation frame and only
- * when it changed. Heights are CSS pixels, which already include zoom because zoom scales the root
- * font size, so they equal points in the panel.
+ * Reports the content height to the helper. Heights are CSS pixels, which already include zoom
+ * because zoom scales the root font size, so they equal points in the panel.
+ * Measuring happens right in the ResizeObserver callback (not in requestAnimationFrame, which hidden
+ * WebKit windows pause), coalesced to one report per microtask.
+ * While an overlay is open the report is temporary and at least as tall as the overlay needs; it is
+ * sent even with auto-sizing off, and a normal report follows when the overlay closes.
  */
-export function useResizeReporter(ref: RefObject<HTMLElement | null>, api: Api, enabled: boolean) {
+export function useResizeReporter(ref: RefObject<HTMLElement | null>, api: Api, options: ResizeOptions) {
+  const last = useRef<{ height: number; temporary: boolean } | null>(null);
+  const { autoSize, overlayRem } = options;
   useEffect(() => {
-    const element = ref.current;
-    if (!element || !enabled) return;
-    let frame = 0;
-    let last = -1;
+    const app = ref.current;
+    if (!app) return;
+    let scheduled = false;
     const report = () => {
-      frame = 0;
-      const height = Math.ceil(element.getBoundingClientRect().height);
-      if (height === last || height <= 0) return;
-      last = height;
-      void api.window.resize(height).catch(() => undefined);
+      scheduled = false;
+      const natural = measureContentHeight(app);
+      const temporary = overlayRem !== null;
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 14;
+      const height = temporary ? Math.max(natural, Math.ceil(overlayRem * rem)) : natural;
+      const previous = last.current;
+      if (height <= 0) return;
+      if (previous && previous.height === height && previous.temporary === temporary) return;
+      if (!temporary && !autoSize && !previous?.temporary) return;
+      last.current = { height, temporary };
+      void api.window.resize(height, temporary).catch(() => undefined);
     };
-    const observer = new ResizeObserver(() => {
-      if (!frame) frame = requestAnimationFrame(report);
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(report);
+    };
+    const observer = new ResizeObserver(schedule);
+    const observeAll = () => {
+      observer.disconnect();
+      observer.observe(app);
+      for (const child of Array.from(app.children)) {
+        observer.observe(child);
+        if (child.classList.contains("content") && child.firstElementChild) observer.observe(child.firstElementChild);
+      }
+    };
+    observeAll();
+    const mutations = new MutationObserver(() => {
+      observeAll();
+      schedule();
     });
-    observer.observe(element);
-    frame = requestAnimationFrame(report);
+    mutations.observe(app, { childList: true });
+    schedule();
     return () => {
       observer.disconnect();
-      if (frame) cancelAnimationFrame(frame);
+      mutations.disconnect();
     };
-  }, [ref, api, enabled]);
+  }, [ref, api, autoSize, overlayRem]);
 }
 
 /** Keeps a ref pointing at the latest value, for callbacks created once. */

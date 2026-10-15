@@ -1,6 +1,6 @@
 /** The ⌘K action panel with pushed views: Format, Copy As, Export, Browse, Recently Deleted (spec/keymap.md 2). */
-import { displayTitle, type NoteId, type NoteSummary } from "@better-notes/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { displayTitle, type NoteId, type NoteSummary, type rpc } from "@better-notes/core";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
 import { fuzzyScore } from "../editor/slash";
 import { characterLabel, relativeTime } from "../lib/relativeTime";
@@ -31,6 +31,7 @@ interface CommandPanelProps {
   onDeleteNote: (id: NoteId) => Promise<void>;
   onRecover: (id: NoteId) => Promise<void>;
   onPermanentlyDelete: (id: NoteId) => void;
+  onPreview: (note: rpc.DeletedItem) => void;
 }
 
 const PLACEHOLDERS: Record<PanelViewName, string> = {
@@ -62,13 +63,14 @@ export function CommandPanel(props: CommandPanelProps) {
     cursor: null,
     loading: false,
   });
-  const [deleted, setDeleted] = useState<NoteSummary[]>([]);
+  const [deleted, setDeleted] = useState<rpc.DeletedItem[]>([]);
   const [version, setVersion] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const view = stack[stack.length - 1] ?? "root";
 
-  useEffect(() => inputRef.current?.focus(), [view]);
+  // Focus in the same commit that shows the panel, so keys typed right after ⌘K land in the search field.
+  useLayoutEffect(() => inputRef.current?.focus(), [view]);
 
   const loadBrowse = useCallback(
     async (cursor: string | null, filter: string) => {
@@ -147,7 +149,13 @@ export function CommandPanel(props: CommandPanelProps) {
       if (view === "browse" && selectedNote) {
         props.onClose();
         props.onOpenNote(selectedNote.id);
-      } else if (view !== "deleted") runAction(actions[selected]);
+      } else if (view === "deleted") {
+        const note = deletedRows[selected];
+        if (note) {
+          props.onClose();
+          props.onPreview(note);
+        }
+      } else runAction(actions[selected]);
     } else if (event.key === "Escape") {
       if (query) setQuery("");
       else pop();
@@ -258,7 +266,12 @@ export function CommandPanel(props: CommandPanelProps) {
                   role="option"
                   aria-selected={i === selected}
                   className={`panel-row${i === selected ? " is-selected" : ""}`}
+                  data-testid="deleted-row"
                   onMouseEnter={() => setIndex(i)}
+                  onClick={() => {
+                    props.onClose();
+                    props.onPreview(note);
+                  }}
                 >
                   <div className="panel-row-text">
                     <span className="panel-row-title">{displayTitle({ title: note.title, text: note.preview })}</span>
@@ -271,7 +284,10 @@ export function CommandPanel(props: CommandPanelProps) {
                         className="icon-button"
                         title="Restore"
                         aria-label="Restore"
-                        onClick={() => void props.onRecover(note.id).then(() => setVersion((v) => v + 1))}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void props.onRecover(note.id).then(() => setVersion((v) => v + 1));
+                        }}
                       >
                         <Icon name="restore" />
                       </button>
@@ -280,7 +296,8 @@ export function CommandPanel(props: CommandPanelProps) {
                         className="icon-button"
                         title="Delete Permanently"
                         aria-label="Delete Permanently"
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           props.onPermanentlyDelete(note.id);
                           setTimeout(() => setVersion((v) => v + 1), 300);
                         }}

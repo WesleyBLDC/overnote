@@ -2,21 +2,26 @@ import { Icon } from "./icons";
 
 interface ToolbarProps {
   title: string;
+  onClose: () => void;
   onActions: () => void;
   onBrowse: () => void;
   onNew: () => void;
 }
 
 /** Top bar: the live title in the middle and three buttons on the right (spec/keymap.md section 9). */
-export function Toolbar({ title, onActions, onBrowse, onNew }: ToolbarProps) {
+export function Toolbar({ title, onClose, onActions, onBrowse, onNew }: ToolbarProps) {
   const keep = (event: React.MouseEvent) => event.preventDefault();
   return (
     <header className="toolbar" data-testid="toolbar">
-      <div className="toolbar-spacer" />
+      <div className="toolbar-leading">
+        <button type="button" className="close-button chrome" title="Close" aria-label="Close" data-testid="close" onMouseDown={keep} onClick={onClose} tabIndex={-1}>
+          <Icon name="close" />
+        </button>
+      </div>
       <h1 className="toolbar-title" data-testid="title" title={title}>
         {title}
       </h1>
-      <div className="toolbar-actions">
+      <div className="toolbar-actions chrome">
         <button type="button" className="icon-button" title="Actions (⌘K)" aria-label="Actions" onMouseDown={keep} onClick={onActions} tabIndex={-1}>
           <Icon name="command" />
         </button>

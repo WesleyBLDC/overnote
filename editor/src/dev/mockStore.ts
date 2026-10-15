@@ -181,6 +181,7 @@ export class MockStore {
     "window.resize": () => ({}),
     "window.resignFocus": () => ({}),
     "clipboard.copy": () => ({}),
+    "app.openURL": () => ({}),
     "file.saveAs": (params) => ({ saved: true, path: `/tmp/${params.suggestedName}` }),
     "notes.create": (params) => {
       const at = this.now();
@@ -319,7 +320,7 @@ export class MockStore {
       items: [...this.notes.values()]
         .filter((n) => n.deletedAt !== null)
         .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0))
-        .map((n) => ({ ...this.summary(n), markdown: n.markdown })),
+        .map((n) => ({ ...this.summary(n), markdown: n.markdown, rawContent: n.rawContent })),
     }),
     "notes.count": () => ({ count: this.live().length }),
     "notes.setCurrentNote": (params) => {

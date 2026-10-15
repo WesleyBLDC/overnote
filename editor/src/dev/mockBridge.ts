@@ -49,6 +49,21 @@ function seedFromUrl(control: MockControl, search: string): void {
 }
 
 export function installMockBridge(target: MockWindow & Window): MockControl {
+  // Emulates the helper's panel sizing: clamp to 128 to 860 points times zoom; temporary heights
+  // apply even with auto-sizing off and the next normal report restores the panel.
+  let restingHeight: number | null = null;
+  const applyPanelHeight = ({ contentHeight, temporary }: { contentHeight: number; temporary?: boolean }) => {
+    const root = target.document.getElementById("root");
+    if (!root) return;
+    const zoom = control.store.settings.zoom;
+    const clamp = (value: number) => Math.min(860 * zoom, Math.max(128 * zoom, value));
+    if (temporary) {
+      root.style.height = `${clamp(contentHeight)}px`;
+      return;
+    }
+    if (control.store.settings.windowAutoSize || restingHeight === null) restingHeight = clamp(contentHeight);
+    root.style.height = `${restingHeight}px`;
+  };
   const receiver = (): BridgeReceiver | undefined => target.betterNotesBridge;
   const control: MockControl = {
     store: new MockStore({
@@ -81,6 +96,7 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
               return;
             }
             try {
+              if (message.method === "window.resize") applyPanelHeight(params as { contentHeight: number; temporary?: boolean });
               receiver()?.resolve(message.id, control.store.dispatch(message.method, params));
             } catch (error) {
               const code = error instanceof MockRpcError ? error.code : rpc.ErrorCode.Internal;

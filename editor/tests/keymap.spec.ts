@@ -56,6 +56,36 @@ test("⌘P browses, pins work with ⇧⌘P and ⌘1, ⌃X deletes", async ({ pag
   await expect(page.getByTestId("notices")).toContainText("Note deleted");
   expect((await storedNotes(page)).find((n) => n.title === "One")?.deletedAt).not.toBeNull();
   await expect(title(page)).not.toHaveText("One");
+  const currentTitle = await title(page).textContent();
+
+  // Recently Deleted: a read-only preview with a Restore banner.
+  const openDeleted = async () => {
+    await page.keyboard.press("Meta+k");
+    await page.keyboard.type("recently deleted");
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("deleted-row")).toHaveCount(1);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("preview-banner")).toBeVisible();
+    await expect(title(page)).toHaveText("One");
+  };
+  await openDeleted();
+  await expect(editor(page)).toHaveAttribute("contenteditable", "false");
+  await page.keyboard.type("typed");
+  await expect(editor(page)).toHaveText("One");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("preview-banner")).toHaveCount(0);
+  await expect(title(page)).toHaveText(currentTitle ?? "");
+  expect((await calls(page, "window.hide")).length).toBe(0);
+
+  await openDeleted();
+  await editor(page).click();
+  await page.getByTestId("confirm-dialog").getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByTestId("preview-banner")).toHaveCount(0);
+  await expect(title(page)).toHaveText("One");
+  await expect(editor(page)).toHaveAttribute("contenteditable", "true");
+  expect((await storedNotes(page)).find((n) => n.title === "One")?.deletedAt).toBeNull();
+  await page.keyboard.press("Meta+BracketLeft");
+  await expect(title(page)).toHaveText(currentTitle ?? "");
 
   await page.keyboard.press("Control+Shift+x");
   const dialog = page.getByTestId("confirm-dialog");

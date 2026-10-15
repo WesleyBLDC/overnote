@@ -17,11 +17,15 @@ export function createApi(client: BridgeClient) {
       toggle: () => call(M.WindowToggle, {}),
       show: (params: P<"window.show"> = {}) => call(M.WindowShow, params),
       hide: () => call(M.WindowHide, {}),
-      resize: (contentHeight: number) => call(M.WindowResize, { contentHeight }),
+      resize: (contentHeight: number, temporary = false) =>
+        call(M.WindowResize, temporary ? { contentHeight, temporary } : { contentHeight }),
       resignFocus: () => call(M.WindowResignFocus, {}),
     },
     clipboard: {
       copy: (params: P<"clipboard.copy">) => call(M.ClipboardCopy, params),
+    },
+    app: {
+      openURL: (url: string) => call(M.AppOpenURL, { url }),
     },
     file: {
       saveAs: (params: P<"file.saveAs">) => call(M.FileSaveAs, params),

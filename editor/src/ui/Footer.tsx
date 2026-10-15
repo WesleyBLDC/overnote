@@ -39,7 +39,7 @@ export function Footer(props: FooterProps) {
       </div>
       <button
         type="button"
-        className={`icon-button round${props.showFormatBar ? " is-active" : ""}`}
+        className={`icon-button round chrome${props.showFormatBar ? " is-active" : ""}`}
         title={props.showFormatBar ? "Hide Format Buttons (⌥⌘,)" : "Show Format Buttons (⌥⌘,)"}
         aria-label={props.showFormatBar ? "Hide Format Buttons" : "Show Format Buttons"}
         data-testid="format-toggle"
