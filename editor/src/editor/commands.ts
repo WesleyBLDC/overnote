@@ -96,7 +96,8 @@ export function isFormatActive(editor: Editor, id: FormatId): boolean {
 export function activeListKind(editor: Editor): ListKind | null {
   const { selection, doc } = editor.state;
   // A whole document selection starts at depth 0; look at its first text position instead.
-  const $from = selection.$from.depth === 0 ? doc.resolve(Math.min(selection.from + 1, doc.content.size)) : selection.$from;
+  const $from =
+    selection.$from.depth === 0 ? doc.resolve(Math.min(selection.from + 1, doc.content.size)) : selection.$from;
   for (let depth = $from.depth; depth > 0; depth--) {
     const node = $from.node(depth);
     if (node.type.name === "list") return node.attrs.kind as ListKind;

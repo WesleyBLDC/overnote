@@ -24,7 +24,7 @@ export function emojiQueryAt(state: EditorState): EmojiQuery | null {
   if (!parent.isTextblock || parent.type.spec.code) return null;
   if ($from.marks().some((mark) => mark.type.name === "code")) return null;
   const before = parent.textBetween(0, $from.parentOffset, "\n", "￼");
-  const match = /(?:^|[  ])(:([^\s:]*))$/.exec(before);
+  const match = /(?:^|[ \u00a0])(:([^\s:]*))$/.exec(before);
   if (!match || match[1] === undefined) return null;
   const start = before.length - match[1].length;
   return { from: $from.start() + start, to: $from.pos, query: normalizeEmojiQuery(match[2] ?? "") };

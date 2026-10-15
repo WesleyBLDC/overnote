@@ -1,0 +1,13 @@
+# Generated output and test artifacts
+dist/
+assets/
+helper/.build/
+raycast-env.d.ts
+**/test-results/
+**/playwright-report/
+
+# Serialization fixtures are exact expected bytes, never reformatted
+packages/core/tests/fixtures/
+
+# Markdown docs keep one sentence per line and are not formatted by Prettier
+*.md

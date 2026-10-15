@@ -41,8 +41,9 @@ step() {
 step "Typecheck: extension" npx tsc --noEmit
 step "Typecheck: editor" npx tsc --noEmit -p editor
 step "Typecheck: core" npx tsc --noEmit -p packages/core
-step "Lint: ESLint" npx eslint src
-step "Lint: Prettier" npx prettier --check src
+step "Lint: ESLint, extension" npx eslint src
+step "Lint: ESLint, editor and core" npx eslint --max-warnings 0 editor packages/core
+step "Lint: Prettier" npx prettier --check src editor packages/core
 step "Build: editor" npm run build:editor
 step "Build: helper" bash scripts/build-helper.sh
 step "Unit: extension and helper socket" npm test

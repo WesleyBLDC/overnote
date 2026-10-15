@@ -107,7 +107,9 @@ export class BridgeClient implements BridgeReceiver {
 
   reject(id: number | string, error: RpcErrorPayload): void {
     const entry = this.take(id);
-    entry?.reject(new BridgeError(error?.code ?? rpc.ErrorCode.Internal, error?.message ?? "Unknown error", entry.method));
+    entry?.reject(
+      new BridgeError(error?.code ?? rpc.ErrorCode.Internal, error?.message ?? "Unknown error", entry.method),
+    );
   }
 
   emit(event: string, payload: unknown): void {

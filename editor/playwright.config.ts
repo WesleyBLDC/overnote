@@ -19,7 +19,11 @@ export default defineConfig({
   // Chromium only runs the build smoke test, as a second engine check of the shipped bundle.
   projects: [
     { name: "webkit", use: { ...devices["Desktop Safari"], viewport: { width: 640, height: 720 } } },
-    { name: "chromium", testMatch: /build\.spec\.ts/, use: { ...devices["Desktop Chrome"], viewport: { width: 640, height: 720 } } },
+    {
+      name: "chromium",
+      testMatch: /build\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 640, height: 720 } },
+    },
   ],
   webServer: [
     {

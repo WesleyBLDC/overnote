@@ -19,7 +19,9 @@ export function plainTextToDoc(plain: string): JSONContent {
   const lines = plain.replace(/\r\n?/g, "\n").split("\n");
   return {
     type: "doc",
-    content: lines.map((line) => (line ? { type: "paragraph", content: [{ type: "text", text: line }] } : { type: "paragraph" })),
+    content: lines.map((line) =>
+      line ? { type: "paragraph", content: [{ type: "text", text: line }] } : { type: "paragraph" },
+    ),
   };
 }
 

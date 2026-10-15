@@ -12,7 +12,10 @@ test("⌘K runs actions, ⌘N refuses a blank note, history goes back and forwar
   await page.keyboard.type("new");
   await page.keyboard.press("Enter");
   await expect(panel).toHaveCount(0);
-  await expect(page.getByTestId("app")).not.toHaveAttribute("data-note-id", (await storedNotes(page)).find((n) => n.title === "Alpha")?.id ?? "");
+  await expect(page.getByTestId("app")).not.toHaveAttribute(
+    "data-note-id",
+    (await storedNotes(page)).find((n) => n.title === "Alpha")?.id ?? "",
+  );
   await expect(title(page)).toHaveText("Untitled");
 
   await page.keyboard.press("Meta+n");
@@ -58,6 +61,34 @@ test("⌘P browses, pins work with ⇧⌘P and ⌘1, ⌃X deletes", async ({ pag
   await expect(title(page)).not.toHaveText("One");
   const currentTitle = await title(page).textContent();
 
+  // A failed read of Recently Deleted shows an error with a retry, never the empty state.
+  await page.evaluate(() => {
+    (window as unknown as { __overnoteMock: { failNext: Record<string, number> } }).__overnoteMock.failNext[
+      "notes.listDeleted"
+    ] = 500;
+  });
+  await page.keyboard.press("Meta+k");
+  await page.keyboard.type("recently deleted");
+  await page.keyboard.press("Enter");
+  const failure = page.getByTestId("panel-error");
+  await expect(failure).toBeVisible();
+  await expect(failure).toHaveAttribute("role", "alert");
+  await expect(failure).toContainText("Could Not Load Deleted Notes");
+  await expect(page.getByTestId("panel-empty")).toHaveCount(0);
+  await expect(page.getByTestId("deleted-row")).toHaveCount(0);
+  await failure.getByRole("button", { name: "Try Again" }).click();
+  await expect(page.getByTestId("deleted-row")).toHaveCount(1);
+  await expect(page.getByTestId("panel-error")).toHaveCount(0);
+  expect((await calls(page, "notes.listDeleted")).length).toBe(2);
+  // Searching filters the loaded list without asking the helper again.
+  await page.keyboard.type("on");
+  await expect(page.getByTestId("deleted-row")).toHaveCount(1);
+  expect((await calls(page, "notes.listDeleted")).length).toBe(2);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("command-panel")).toHaveCount(0);
+
   // Recently Deleted: a read-only preview with a Restore banner.
   const openDeleted = async () => {
     await page.keyboard.press("Meta+k");
@@ -76,6 +107,15 @@ test("⌘P browses, pins work with ⇧⌘P and ⌘1, ⌃X deletes", async ({ pag
   await expect(page.getByTestId("preview-banner")).toHaveCount(0);
   await expect(title(page)).toHaveText(currentTitle ?? "");
   expect((await calls(page, "window.hide")).length).toBe(0);
+
+  // Switching notes while previewing ends the preview and makes the editor editable again.
+  await openDeleted();
+  await page.keyboard.press("Meta+BracketLeft");
+  await expect(page.getByTestId("preview-banner")).toHaveCount(0);
+  await expect(editor(page)).toHaveAttribute("contenteditable", "true");
+  await expect(title(page)).not.toHaveText("One");
+  await page.keyboard.press("Meta+BracketRight");
+  await expect(title(page)).toHaveText(currentTitle ?? "");
 
   await openDeleted();
   await editor(page).click();
@@ -103,7 +143,9 @@ test("copy as, export, and zoom", async ({ page }) => {
   await page.keyboard.press("Meta+Shift+c");
   await page.keyboard.type("markdown");
   await page.keyboard.press("Enter");
-  await expect.poll(async () => (await calls(page, "clipboard.copy")).at(-1)?.params.text).toBe("# Report\n\nBody **text**");
+  await expect
+    .poll(async () => (await calls(page, "clipboard.copy")).at(-1)?.params.text)
+    .toBe("# Report\n\nBody **text**");
 
   await editor(page).getByText("Body").click();
   await page.keyboard.press("Alt+Shift+ArrowLeft");
@@ -116,11 +158,12 @@ test("copy as, export, and zoom", async ({ page }) => {
   await expect(page.getByTestId("command-panel")).toHaveAttribute("data-view", "export");
   await page.keyboard.type("html");
   await page.keyboard.press("Enter");
-  await expect.poll(async () => (await calls(page, "file.saveAs")).at(-1)?.params).toEqual({
-    suggestedName: "Report.html",
-    content: "<h1>Report</h1><p>Body <strong>text</strong></p>",
-  });
-
+  await expect
+    .poll(async () => (await calls(page, "file.saveAs")).at(-1)?.params)
+    .toEqual({
+      suggestedName: "Report.html",
+      content: "<h1>Report</h1><p>Body <strong>text</strong></p>",
+    });
 
   const size = async () => page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
   const base = await size();
@@ -137,7 +180,9 @@ test("Esc hides the panel window, or resigns focus with the setting on", async (
   await page.keyboard.press("Escape");
   await expect.poll(async () => (await calls(page, "window.hide")).length).toBe(1);
   await page.evaluate(() =>
-    (window as unknown as { __overnoteMock: { store: { handlers: Record<string, (p: unknown) => unknown> } } }).__overnoteMock.store.handlers["settings.set"]?.({ escapeLosesFocus: true }),
+    (
+      window as unknown as { __overnoteMock: { store: { handlers: Record<string, (p: unknown) => unknown> } } }
+    ).__overnoteMock.store.handlers["settings.set"]?.({ escapeLosesFocus: true }),
   );
   await editor(page).focus();
   await page.keyboard.press("Escape");
@@ -155,7 +200,8 @@ test("⌘K and ⌘P open inside a roomy window without resizing it and scroll wi
       const panel = document.querySelector("[data-testid=command-panel]")!.getBoundingClientRect();
       const list = document.querySelector("[data-testid=command-panel] .panel-list") as HTMLElement;
       return {
-        inside: panel.top >= app.top && panel.bottom <= app.bottom && panel.left >= app.left && panel.right <= app.right,
+        inside:
+          panel.top >= app.top && panel.bottom <= app.bottom && panel.left >= app.left && panel.right <= app.right,
         appHeight: app.height,
         scrolls: getComputedStyle(list).overflowY === "auto",
         overflowing: list.scrollHeight > list.clientHeight,
@@ -267,7 +313,9 @@ test("⌘, opens Settings: controls write through settings.set and follow settin
   await expect(page.getByTestId("count-words")).toHaveAttribute("aria-checked", "true");
 
   // A change from elsewhere (settings.changed) shows up in the open view.
-  const current = await page.evaluate(() => (window as unknown as { __overnoteMock: { store: { settings: object } } }).__overnoteMock.store.settings);
+  const current = await page.evaluate(
+    () => (window as unknown as { __overnoteMock: { store: { settings: object } } }).__overnoteMock.store.settings,
+  );
   await page.keyboard.press("Meta+a");
   await page.keyboard.press("Backspace");
   await emit(page, "settings.changed", { ...current, windowAutoSize: true, zoom: 1.5, countMode: "characters" });

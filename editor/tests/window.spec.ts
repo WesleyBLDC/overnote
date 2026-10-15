@@ -1,10 +1,11 @@
 /** Window height and resize churn, zoom, note text size, the plain first line, motion, toolbar layout and drag regions, the accent, the counter, and the format bar. */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { calls, editor, lastSave, openHarness } from "./harness";
 
 test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await openHarness(page);
-  const reports = async () => (await calls(page, "window.resize")).map((c) => c.params as { contentHeight: number; temporary?: boolean });
+  const reports = async () =>
+    (await calls(page, "window.resize")).map((c) => c.params as { contentHeight: number; temporary?: boolean });
   const last = async () => (await reports()).at(-1);
   const appHeight = () => page.getByTestId("app").evaluate((el) => el.getBoundingClientRect().height);
 
@@ -20,7 +21,9 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   expect(start).toBeGreaterThanOrEqual(134);
   expect(start).toBeLessThanOrEqual(142);
   await expect.poll(appHeight).toBe(start);
-  const footerGap = await page.getByTestId("footer").evaluate((el) => el.closest(".app")!.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom);
+  const footerGap = await page
+    .getByTestId("footer")
+    .evaluate((el) => el.closest(".app")!.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom);
   expect(footerGap).toBeLessThanOrEqual(1);
 
   // Each new line adds one line pitch (16.8 px at 1.65, plus the block gap).
@@ -54,7 +57,9 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
 
   // The top 12 points stay free of controls for the native drag strip.
   await page.mouse.move(300, 120);
-  const buttonTop = await page.getByTestId("new-note").evaluate((el) => el.getBoundingClientRect().top - el.closest(".app")!.getBoundingClientRect().top);
+  const buttonTop = await page
+    .getByTestId("new-note")
+    .evaluate((el) => el.getBoundingClientRect().top - el.closest(".app")!.getBoundingClientRect().top);
   expect(buttonTop).toBeGreaterThanOrEqual(12);
 });
 
@@ -63,7 +68,12 @@ test("note text is 120% of the UI base and zoom scales it", async ({ page }) => 
   const sizes = () =>
     page.evaluate(() => {
       const px = (selector: string) => parseFloat(getComputedStyle(document.querySelector(selector)!).fontSize);
-      return { root: px("html"), body: px(".note-editor > p:nth-child(2)"), code: px(".note-editor code"), item: px(".note-editor [data-list-kind] p") };
+      return {
+        root: px("html"),
+        body: px(".note-editor > p:nth-child(2)"),
+        code: px(".note-editor code"),
+        item: px(".note-editor [data-list-kind] p"),
+      };
     });
   const base = await sizes();
   // The UI base is 14 px; the note is 120% of it, 16.8 px at 100%, with a 1.65 line pitch.
@@ -71,14 +81,18 @@ test("note text is 120% of the UI base and zoom scales it", async ({ page }) => 
   expect(base.body).toBeCloseTo(16.8, 2);
   expect(base.item).toBeCloseTo(16.8, 2);
   expect(base.code).toBeCloseTo(16.8 * 0.88, 1);
-  const pitch = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector(".note-editor > p:nth-child(2)")!).lineHeight));
+  const pitch = await page.evaluate(() =>
+    parseFloat(getComputedStyle(document.querySelector(".note-editor > p:nth-child(2)")!).lineHeight),
+  );
   expect(pitch).toBeCloseTo(16.8 * 1.65, 1);
   // The task checkbox and the list gutter follow the note text.
   await page.keyboard.press("Meta+ArrowDown");
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
   await page.keyboard.type("[] task");
-  const box = await editor(page).locator("[data-list-kind=task] input").evaluate((el) => el.getBoundingClientRect().width);
+  const box = await editor(page)
+    .locator("[data-list-kind=task] input")
+    .evaluate((el) => el.getBoundingClientRect().width);
   expect(box).toBeCloseTo(16.8 * 0.88, 0);
   await page.keyboard.press("Meta+Equal");
   await page.keyboard.press("Meta+Equal");
@@ -88,7 +102,9 @@ test("note text is 120% of the UI base and zoom scales it", async ({ page }) => 
 });
 
 test("blocks keep one balanced gap while list items stay tight", async ({ page }) => {
-  await openHarness(page, ["Spacing\n\nIntro paragraph.\n\n- one\n- two\n  - nested\n\nBetween lists.\n\n1. first\n\nThen tasks:\n\n- [ ] task\n- [x] done\n\nNext paragraph.\n\n## Heading\n\nUnder the heading.\n\n```\ncode\n```\n\nAfter code."]);
+  await openHarness(page, [
+    "Spacing\n\nIntro paragraph.\n\n- one\n- two\n  - nested\n\nBetween lists.\n\n1. first\n\nThen tasks:\n\n- [ ] task\n- [x] done\n\nNext paragraph.\n\n## Heading\n\nUnder the heading.\n\n```\ncode\n```\n\nAfter code.",
+  ]);
   const layout = await page.evaluate(() => {
     const children = Array.from(document.querySelectorAll<HTMLElement>(".note-editor > *"));
     const label = (el: HTMLElement) => ((el.querySelector("pre") ?? el).textContent ?? "").trim().slice(0, 12);
@@ -101,7 +117,8 @@ test("blocks keep one balanced gap while list items stay tight", async ({ page }
     const parent = nested.previousElementSibling as HTMLElement;
     return { gaps, nested: nested.getBoundingClientRect().top - parent.getBoundingClientRect().bottom };
   });
-  const gap = (from: string, to: string) => layout.gaps.find((g) => g.from.startsWith(from) && g.to.startsWith(to))?.gap;
+  const gap = (from: string, to: string) =>
+    layout.gaps.find((g) => g.from.startsWith(from) && g.to.startsWith(to))?.gap;
   // 120% note text is 16.8 px: blocks are 0.6em apart (10.08 px), list items 0.2em (3.36 px), headings get 1.15em above.
   const block = 16.8 * 0.6;
   const item = 16.8 * 0.2;
@@ -126,7 +143,11 @@ test("blocks keep one balanced gap while list items stay tight", async ({ page }
   await page.keyboard.press("Meta+Equal");
   await page.keyboard.press("Meta+Equal");
   await expect
-    .poll(() => page.evaluate(() => parseFloat(getComputedStyle(document.querySelector(".note-editor > .prosemirror-flat-list")!).marginTop)))
+    .poll(() =>
+      page.evaluate(() =>
+        parseFloat(getComputedStyle(document.querySelector(".note-editor > .prosemirror-flat-list")!).marginTop),
+      ),
+    )
     .toBeCloseTo(block * 1.1, 1);
 });
 
@@ -149,7 +170,9 @@ test("the first line renders exactly like body text and still names the note", a
   await expect(editor(page).locator(".note-title, .is-blank-note")).toHaveCount(0);
   // The same gap follows the first line as any other block.
   const gaps = await page.evaluate(() => {
-    const [a, b, c] = [...document.querySelectorAll<HTMLElement>(".note-editor > p")].map((el) => el.getBoundingClientRect());
+    const [a, b, c] = [...document.querySelectorAll<HTMLElement>(".note-editor > p")].map((el) =>
+      el.getBoundingClientRect(),
+    );
     return [b!.top - a!.bottom, c!.top - b!.bottom];
   });
   expect(gaps[0]).toBeCloseTo(gaps[1]!, 1);
@@ -180,7 +203,14 @@ test("decorations, chrome, and panels never churn window.resize reports", async 
   // Typing on the first line reports no more than typing the same text on another line (none: no line wraps).
   const typeOn = async (line: number) => {
     await page.evaluate((index) => {
-      const editorApi = (window as unknown as { __bnEditor: { state: { doc: { child(i: number): { nodeSize: number } } }; commands: { setTextSelection(pos: number): void } } }).__bnEditor;
+      const editorApi = (
+        window as unknown as {
+          __bnEditor: {
+            state: { doc: { child(i: number): { nodeSize: number } } };
+            commands: { setTextSelection(pos: number): void };
+          };
+        }
+      ).__bnEditor;
       let pos = 1;
       for (let i = 0; i < index; i++) pos += editorApi.state.doc.child(i).nodeSize;
       editorApi.commands.setTextSelection(pos + 2);
@@ -229,6 +259,40 @@ test("decorations, chrome, and panels never churn window.resize reports", async 
   expect(await count()).toBe(roomy);
 });
 
+/** Records when the first element matching `selector` appears, when it gains `attribute`, and when it is removed. */
+async function recordLifetime(page: Page, selector: string, attribute?: string): Promise<void> {
+  await page.evaluate(
+    ([sel, attr]) => {
+      const times: { added?: number; marked?: number; removed?: number } = {};
+      (window as unknown as { __lifetime: typeof times }).__lifetime = times;
+      let tracked: Element | null = null;
+      const observer = new MutationObserver(() => {
+        const now = performance.now();
+        const found = document.querySelector(sel as string);
+        if (!tracked && found) {
+          tracked = found;
+          times.added = now;
+        }
+        if (tracked && attr && times.marked === undefined && tracked.hasAttribute(attr)) times.marked = now;
+        if (tracked && !tracked.isConnected) {
+          times.removed = now;
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.querySelector("[data-testid=app]")!, {
+        childList: true,
+        subtree: true,
+        attributes: Boolean(attr),
+      });
+    },
+    [selector, attribute ?? ""] as const,
+  );
+}
+
+async function lifetime(page: Page): Promise<{ added?: number; marked?: number; removed?: number }> {
+  return page.evaluate(() => (window as unknown as { __lifetime: Record<string, number> }).__lifetime);
+}
+
 test("motion: short ease-out transitions, a fading panel exit, and none with reduced motion", async ({ page }) => {
   await openHarness(page, ["Motion"]);
   const timing = () =>
@@ -236,7 +300,9 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
       const css = (sel: string) => getComputedStyle(document.querySelector(sel)!);
       return {
         chrome: `${css(".toolbar-actions").transitionDuration} ${css(".toolbar-actions").transitionTimingFunction}`,
-        panel: document.querySelector("[data-testid=command-panel]") ? `${css("[data-testid=command-panel]").animationName} ${css("[data-testid=command-panel]").animationDuration}` : "",
+        panel: document.querySelector("[data-testid=command-panel]")
+          ? `${css("[data-testid=command-panel]").animationName} ${css("[data-testid=command-panel]").animationDuration}`
+          : "",
       };
     });
   await page.keyboard.press("Meta+k");
@@ -244,14 +310,45 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   expect(normal.chrome).toMatch(/^0\.15s cubic-bezier/);
   expect(normal.panel).toBe("pop-in 0.18s");
   // Closing leaves an inert copy that fades out, then disappears; the live panel is gone at once.
+  await recordLifetime(page, ".panel-ghost");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
   const ghost = page.locator(".panel-ghost");
   await expect(ghost).toHaveCount(1);
   await expect(ghost).toHaveAttribute("aria-hidden", "true");
   expect(await ghost.locator("[data-testid]").count()).toBe(0);
+  expect(await ghost.locator(".panel").evaluate((el) => getComputedStyle(el).animationDuration)).toBe("0.12s");
   await expect(ghost).toHaveCount(0);
   await expect(editor(page)).toBeFocused();
+  // The copy lives as long as its exit animation (--motion-fast), not a fixed time.
+  let times = await lifetime(page);
+  expect(times.removed! - times.added!).toBeGreaterThanOrEqual(100);
+  expect(times.removed! - times.added!).toBeLessThan(500);
+  await page.evaluate(() => document.documentElement.style.setProperty("--motion-fast", "450ms"));
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-panel")).toBeVisible();
+  await recordLifetime(page, ".panel-ghost");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".panel-ghost")).toHaveCount(1);
+  await expect(page.locator(".panel-ghost")).toHaveCount(0);
+  times = await lifetime(page);
+  expect(times.removed! - times.added!).toBeGreaterThanOrEqual(420);
+  expect(times.removed! - times.added!).toBeLessThan(900);
+  await page.evaluate(() => document.documentElement.style.removeProperty("--motion-fast"));
+
+  // A notice stays for NOTICE_MS, is marked as leaving, and is removed when its fade (--motion-slow) ends.
+  await recordLifetime(page, ".notice", "data-leaving");
+  await page.keyboard.press("Meta+Shift+d");
+  const notice = page.locator(".notice");
+  await expect(notice).toHaveText("Copied deeplink");
+  expect(await notice.evaluate((el) => getComputedStyle(el).animationDelay)).toBe("0s");
+  expect(await notice.evaluate((el) => getComputedStyle(el).transitionDuration)).toBe("0.18s, 0.18s");
+  await expect(notice).toHaveCount(0, { timeout: 4000 });
+  times = await lifetime(page);
+  expect(times.marked! - times.added!).toBeGreaterThanOrEqual(1950);
+  expect(times.marked! - times.added!).toBeLessThan(2600);
+  expect(times.removed! - times.marked!).toBeGreaterThanOrEqual(150);
+  expect(times.removed! - times.marked!).toBeLessThan(600);
 
   // Checking a task plays its check animation once; the next edit clears it, and a loaded note has none.
   await page.keyboard.press("Meta+ArrowDown");
@@ -260,7 +357,11 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   await expect(editor(page).locator(".just-checked")).toHaveCount(0);
   await editor(page).locator("[data-list-kind=task] input").click();
   await expect(editor(page).locator(".just-checked[data-list-checked]")).toHaveCount(1);
-  expect(await editor(page).locator(".just-checked input").evaluate((el) => getComputedStyle(el, "::after").animationName)).toBe("check-in");
+  expect(
+    await editor(page)
+      .locator(".just-checked input")
+      .evaluate((el) => getComputedStyle(el, "::after").animationName),
+  ).toBe("check-in");
   await page.keyboard.type("!");
   await expect(editor(page).locator(".just-checked")).toHaveCount(0);
 
@@ -269,12 +370,25 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   const reduced = await timing();
   expect(reduced.chrome).toMatch(/^0s /);
   expect(reduced.panel).toBe("pop-in 0s");
+  // With reduced motion no copy is made at all, and a leaving notice goes at once.
+  await recordLifetime(page, ".panel-ghost");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
-  await expect(page.locator(".panel-ghost")).toHaveCount(0);
+  await page.waitForTimeout(200);
+  expect((await lifetime(page)).added).toBeUndefined();
+
+  await recordLifetime(page, ".notice", "data-leaving");
+  await page.keyboard.press("Meta+Shift+d");
+  await expect(page.locator(".notice")).toHaveText("Copied deeplink");
+  await expect(page.locator(".notice")).toHaveCount(0, { timeout: 4000 });
+  times = await lifetime(page);
+  expect(times.removed! - times.added!).toBeGreaterThanOrEqual(1950);
+  expect(times.removed! - times.added!).toBeLessThan(2150);
 });
 
-test("opening a note never flashes: hidden until ready, caret and scroll restored in the first frame", async ({ page }) => {
+test("opening a note never flashes: hidden until ready, caret and scroll restored in the first frame", async ({
+  page,
+}) => {
   const long = ["Long", ...Array.from({ length: 60 }, (_, i) => `Line ${i + 1}`), "Last line"].join("\n\n");
   // Sample every animation frame from the very first one.
   await page.addInitScript(() => {
@@ -299,7 +413,11 @@ test("opening a note never flashes: hidden until ready, caret and scroll restore
   const seed = encodeURIComponent(JSON.stringify(["Short note", long]));
   await page.goto(`/?seed=${seed}`);
   await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
-  const frames = () => page.evaluate(() => (window as unknown as { __frames: { ready: string; visible: boolean; text: string; top: number }[] }).__frames);
+  const frames = () =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __frames: { ready: string; visible: boolean; text: string; top: number }[] }).__frames,
+    );
   // Before the note is in place nothing of the editor is visible (no placeholder flash).
   const boot = await frames();
   expect(boot.length).toBeGreaterThan(0);
@@ -312,7 +430,11 @@ test("opening a note never flashes: hidden until ready, caret and scroll restore
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("title")).toHaveText("Short note");
   await page.evaluate(() => {
-    const mock = (window as unknown as { __overnoteMock: { store: { notes: Map<string, { title: string; caretPosition: number }> } } }).__overnoteMock;
+    const mock = (
+      window as unknown as {
+        __overnoteMock: { store: { notes: Map<string, { title: string; caretPosition: number }> } };
+      }
+    ).__overnoteMock;
     for (const note of mock.store.notes.values()) if (note.title === "Long") note.caretPosition = 100000;
   });
   await page.evaluate(() => ((window as unknown as { __frames: unknown[] }).__frames.length = 0));
@@ -335,7 +457,11 @@ test("select all paints the list gutter like the rest of the selection", async (
   await expect(editor(page).locator(".prosemirror-flat-list.in-selection")).toHaveCount(6);
   // Sample the gutter beside each bullet and number and the content column on the same row.
   const points = await page.evaluate(() => {
-    const rows = [...document.querySelectorAll<HTMLElement>(".note-editor .prosemirror-flat-list:is([data-list-kind=bullet], [data-list-kind=ordered]) > .list-content > p")];
+    const rows = [
+      ...document.querySelectorAll<HTMLElement>(
+        ".note-editor .prosemirror-flat-list:is([data-list-kind=bullet], [data-list-kind=ordered]) > .list-content > p",
+      ),
+    ];
     return rows.map((p) => {
       const list = p.closest(".prosemirror-flat-list")!.getBoundingClientRect();
       const r = p.getBoundingClientRect();
@@ -356,13 +482,16 @@ test("select all paints the list gutter like the rest of the selection", async (
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0);
       const scale = img.width / window.innerWidth;
-      const at = (p: { x: number; y: number }) => [...ctx.getImageData(Math.round(p.x * scale), Math.round(p.y * scale), 1, 1).data.slice(0, 3)];
+      const at = (p: { x: number; y: number }) => [
+        ...ctx.getImageData(Math.round(p.x * scale), Math.round(p.y * scale), 1, 1).data.slice(0, 3),
+      ];
       return pts.map((p) => ({ gutter: at(p.gutter), content: at(p.content) }));
     },
     { b64: shot, pts: points },
   );
   for (const { gutter, content } of pixels) {
-    for (let i = 0; i < 3; i++) expect(Math.abs(gutter[i]! - content[i]!), `gutter ${gutter} vs content ${content}`).toBeLessThanOrEqual(3);
+    for (let i = 0; i < 3; i++)
+      expect(Math.abs(gutter[i]! - content[i]!), `gutter ${gutter} vs content ${content}`).toBeLessThanOrEqual(3);
   }
   // Collapsing the selection removes the decoration.
   await page.keyboard.press("ArrowRight");
@@ -409,8 +538,12 @@ test("Close, title, and icons share one line; icons are 20% larger", async ({ pa
       const top = r.top - app.top;
       const right = app.right - r.right;
       const bottom = app.bottom - r.bottom;
-      const inCorner = (Math.min(left, right) < 16 && Math.min(top, bottom) < 16);
-      return { name: el.getAttribute("aria-label") ?? el.textContent, edge: Math.min(left, top, right, bottom), inCorner };
+      const inCorner = Math.min(left, right) < 16 && Math.min(top, bottom) < 16;
+      return {
+        name: el.getAttribute("aria-label") ?? el.textContent,
+        edge: Math.min(left, top, right, bottom),
+        inCorner,
+      };
     });
   });
   for (const c of clearance) {
@@ -420,7 +553,11 @@ test("Close, title, and icons share one line; icons are 20% larger", async ({ pa
   expect(m.closeLeft).toBeGreaterThanOrEqual(16);
 
   await page.keyboard.press("Alt+Meta+Comma");
-  const formatIcon = await page.getByTestId("format-bar").locator(".format-button .icon").first().evaluate((el) => el.getBoundingClientRect().width);
+  const formatIcon = await page
+    .getByTestId("format-bar")
+    .locator(".format-button .icon")
+    .first()
+    .evaluate((el) => el.getBoundingClientRect().width);
   expect(formatIcon).toBeCloseTo(16.8, 1);
 });
 
@@ -442,14 +579,18 @@ test("toolbar drag regions cover the empty toolbar and exclude every button", as
         buttons: [...document.querySelectorAll("[data-testid=toolbar] button")].map(rel),
       };
     });
-    const inside = (r: Rect, x: number, y: number, pad = 0) => x >= r.x - pad && x <= r.x + r.width + pad && y >= r.y - pad && y <= r.y + r.height + pad;
+    const inside = (r: Rect, x: number, y: number, pad = 0) =>
+      x >= r.x - pad && x <= r.x + r.width + pad && y >= r.y - pad && y <= r.y + r.height + pad;
     expect(layout.buttons).toHaveLength(4);
     // No region overlaps a button.
     for (const b of layout.buttons) {
       for (const r of rects) {
         const overlapX = Math.min(r.x + r.width, b.x + b.width) - Math.max(r.x, b.x);
         const overlapY = Math.min(r.y + r.height, b.y + b.height) - Math.max(r.y, b.y);
-        expect(overlapX > 0.5 && overlapY > 0.5, `region ${JSON.stringify(r)} overlaps button ${JSON.stringify(b)}`).toBe(false);
+        expect(
+          overlapX > 0.5 && overlapY > 0.5,
+          `region ${JSON.stringify(r)} overlaps button ${JSON.stringify(b)}`,
+        ).toBe(false);
       }
     }
     // Every other point of the toolbar drags, including the title and the top strip.
@@ -457,10 +598,15 @@ test("toolbar drag regions cover the empty toolbar and exclude every button", as
     for (let x = t.x + 2; x < t.x + t.width; x += 9) {
       for (let y = t.y + 2; y < t.y + t.height; y += 5) {
         if (layout.buttons.some((b) => inside(b, x, y, 1.5))) continue;
-        expect(rects.some((r) => inside(r, x, y)), `point ${x},${y} should drag`).toBe(true);
+        expect(
+          rects.some((r) => inside(r, x, y)),
+          `point ${x},${y} should drag`,
+        ).toBe(true);
       }
     }
-    expect(rects.some((r) => inside(r, layout.title.x + layout.title.width / 2, layout.title.y + layout.title.height / 2))).toBe(true);
+    expect(
+      rects.some((r) => inside(r, layout.title.x + layout.title.width / 2, layout.title.y + layout.title.height / 2)),
+    ).toBe(true);
     for (const r of rects) expect(inside(t, r.x, r.y, 1) && inside(t, r.x + r.width, r.y + r.height, 1)).toBe(true);
     return rects;
   };
@@ -471,7 +617,9 @@ test("toolbar drag regions cover the empty toolbar and exclude every button", as
   await page.keyboard.press("Meta+Equal");
   await page.keyboard.press("Meta+Equal");
   await expect.poll(async () => JSON.stringify(await lastRects())).not.toBe(JSON.stringify(first));
-  await expect.poll(async () => Math.max(...(await lastRects()).map((r) => r.y + r.height))).toBeGreaterThan(Math.max(...first.map((r) => r.y + r.height)));
+  await expect
+    .poll(async () => Math.max(...(await lastRects()).map((r) => r.y + r.height)))
+    .toBeGreaterThan(Math.max(...first.map((r) => r.y + r.height)));
   await verify();
 
   // A narrower panel moves the right group, and the regions follow.
@@ -505,9 +653,14 @@ test("the accent is neutral: no cyan anywhere in the key elements", async ({ pag
       link: css(".note-editor a", "color", "text-decoration-line", "text-decoration-color"),
       text: css(".note-editor", "color"),
       ordered: css(".note-editor [data-list-kind=ordered]", "--accent"),
-      orderedMarker: [getComputedStyle(document.querySelector(".note-editor [data-list-kind=ordered]")!, "::before").color],
+      orderedMarker: [
+        getComputedStyle(document.querySelector(".note-editor [data-list-kind=ordered]")!, "::before").color,
+      ],
       checkbox: css(".note-editor [data-list-kind=task] input", "border-top-color"),
-      checked: [getComputedStyle(document.querySelector(".note-editor [data-list-kind=task] input")!, "::after").backgroundColor],
+      checked: [
+        getComputedStyle(document.querySelector(".note-editor [data-list-kind=task] input")!, "::after")
+          .backgroundColor,
+      ],
       activeFormat: css(".format-button.is-active", "color", "background-color"),
       toggle: css("[data-testid=format-toggle]", "color"),
       selection: css(".note-editor", "--selection", "--accent", "--accent-soft", "--focus-ring", "--surface-selected"),
@@ -517,14 +670,24 @@ test("the accent is neutral: no cyan anywhere in the key elements", async ({ pag
   expect(colors.link[1]).toBe("underline");
   const all = Object.values(colors).flat().join(" ");
   const channels = [...all.matchAll(/rgba?\(([^)]+)\)|#([0-9a-f]{6})/gi)].map((m) =>
-    m[1] ? m[1].split(/[ ,/]+/).filter(Boolean).slice(0, 3).map(Number) : [0, 2, 4].map((i) => parseInt(m[2]!.slice(i, i + 2), 16)),
+    m[1]
+      ? m[1]
+          .split(/[ ,/]+/)
+          .filter(Boolean)
+          .slice(0, 3)
+          .map(Number)
+      : [0, 2, 4].map((i) => parseInt(m[2]!.slice(i, i + 2), 16)),
   );
   expect(channels.length).toBeGreaterThan(10);
-  for (const [r, g, b] of channels) expect(Math.max(r!, g!, b!) - Math.min(r!, g!, b!), `color ${r},${g},${b} in ${all}`).toBeLessThanOrEqual(12);
+  for (const [r, g, b] of channels)
+    expect(Math.max(r!, g!, b!) - Math.min(r!, g!, b!), `color ${r},${g},${b} in ${all}`).toBeLessThanOrEqual(12);
 
   // The link popover's focus ring is neutral too.
   await page.keyboard.press("Meta+l");
-  const ring = await page.getByTestId("link-popover").getByRole("textbox").evaluate((el) => `${getComputedStyle(el).borderColor} ${getComputedStyle(el).boxShadow}`);
+  const ring = await page
+    .getByTestId("link-popover")
+    .getByRole("textbox")
+    .evaluate((el) => `${getComputedStyle(el).borderColor} ${getComputedStyle(el).boxShadow}`);
   for (const m of ring.matchAll(/rgba?\(([^)]+)\)/g)) {
     const [r, g, b] = m[1]!.split(/[ ,/]+/).map(Number);
     expect(Math.max(r!, g!, b!) - Math.min(r!, g!, b!)).toBeLessThanOrEqual(12);
@@ -569,8 +732,19 @@ test("slash menu and link popover", async ({ page }) => {
   await page.keyboard.type("/");
   const menu = page.getByTestId("slash-menu");
   await expect(menu.getByRole("option")).toHaveText([
-    "Heading 1⌥⌘1", "Heading 2⌥⌘2", "Heading 3⌥⌘3", "Bold⌘B", "Italic⌘I", "Strikethrough⇧⌘S", "Underline⌘U",
-    "Code⌘E", "Code Block⌥⌘C", "Blockquote⇧⌘B", "Ordered List⇧⌘7", "Bullet List⇧⌘8", "Task List⇧⌘9",
+    "Heading 1⌥⌘1",
+    "Heading 2⌥⌘2",
+    "Heading 3⌥⌘3",
+    "Bold⌘B",
+    "Italic⌘I",
+    "Strikethrough⇧⌘S",
+    "Underline⌘U",
+    "Code⌘E",
+    "Code Block⌥⌘C",
+    "Blockquote⇧⌘B",
+    "Ordered List⇧⌘7",
+    "Bullet List⇧⌘8",
+    "Task List⇧⌘9",
   ]);
   await page.keyboard.type("todo");
   await expect(menu.getByRole("option").first()).toContainText("Task List");
@@ -587,8 +761,12 @@ test("slash menu and link popover", async ({ page }) => {
   await popover.getByRole("textbox").fill("raycast.com");
   await page.keyboard.press("Enter");
   await expect(editor(page).locator("a")).toHaveAttribute("href", "https://raycast.com");
-  await editor(page).locator("a").click({ modifiers: ["Meta"] });
-  await expect.poll(async () => (await calls(page, "app.openURL")).at(-1)?.params).toEqual({ url: "https://raycast.com" });
+  await editor(page)
+    .locator("a")
+    .click({ modifiers: ["Meta"] });
+  await expect
+    .poll(async () => (await calls(page, "app.openURL")).at(-1)?.params)
+    .toEqual({ url: "https://raycast.com" });
   await expect(popover).toHaveCount(0);
   await editor(page).locator("a").click();
   await expect(popover).toHaveAttribute("data-mode", "view");

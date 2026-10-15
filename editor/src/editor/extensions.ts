@@ -1,7 +1,7 @@
 /** The editor's extension list: core's headless extensions plus DOM-only behavior. */
 import { createHeadlessExtensions } from "@overnote/core";
-import { Extension, type AnyExtension } from "@tiptap/core";
-import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
+import { Extension, type AnyExtension, type Editor } from "@tiptap/core";
+import { CodeBlock } from "@tiptap/extension-code-block";
 import { Dropcursor, Gapcursor, Placeholder } from "@tiptap/extensions";
 import { createCodeBlockView, type CodeBlockViewOptions } from "./codeBlockView";
 import { NoteDomBehavior, linkRangeAt, type DomOptions } from "./domExtensions";
@@ -12,7 +12,7 @@ import type { NoteLowlight } from "./lowlight";
 export interface EditorExtensionOptions extends DomOptions, CodeBlockViewOptions {
   lowlight: NoteLowlight;
   /** ⌘L: open the link popover. */
-  onLinkShortcut: () => void;
+  onLinkShortcut: (editor: Editor) => void;
 }
 
 function editorKeymap(options: EditorExtensionOptions) {
@@ -22,7 +22,7 @@ function editorKeymap(options: EditorExtensionOptions) {
     addKeyboardShortcuts() {
       return {
         "Mod-l": () => {
-          options.onLinkShortcut();
+          options.onLinkShortcut(this.editor);
           return true;
         },
         // ⌘↩ on a link opens it, after task toggling and code block exit had their chance.
@@ -42,22 +42,27 @@ function editorKeymap(options: EditorExtensionOptions) {
   });
 }
 
+/**
+ * Code block syntax highlighting. The stock lowlight highlighter re-runs on every keystroke inside a
+ * code block; this one waits for a pause (highlight.ts).
+ */
+function codeBlockHighlight(name: string, lowlight: NoteLowlight) {
+  return Extension.create({
+    name: "codeBlockHighlight",
+    addProseMirrorPlugins() {
+      return [debouncedHighlightPlugin({ name, lowlight })];
+    },
+  });
+}
+
 export function createEditorExtensions(options: EditorExtensionOptions): AnyExtension[] {
-  const codeBlock = CodeBlockLowlight.extend({
+  // The stock code block (the same node and schema CodeBlockLowlight extends) with our chrome. Highlighting
+  // comes from a separate extension, so no inherited highlighter has to be found and removed.
+  const codeBlock = CodeBlock.extend({
     addNodeView() {
       return createCodeBlockView(options);
     },
-    /*
-     * The stock highlighter re-runs on every keystroke inside a code block; ours waits for a pause.
-     * Tiptap can resolve this.parent back to this same function when the node is extended again
-     * (core's extendCodeBlock), so highlighters from any level are dropped before ours is added once.
-     */
-    addProseMirrorPlugins() {
-      const isHighlighter = (plugin: unknown) => /^(lowlight|noteHighlight)\$/.test((plugin as { key: string }).key);
-      const inherited = (this.parent?.() ?? []).filter((plugin) => !isHighlighter(plugin));
-      return [...inherited, debouncedHighlightPlugin({ name: this.name, lowlight: options.lowlight })];
-    },
-  }).configure({ lowlight: options.lowlight, defaultLanguage: null });
+  });
   return [
     ...createHeadlessExtensions({ codeBlock }),
     Placeholder.configure({
@@ -73,6 +78,7 @@ export function createEditorExtensions(options: EditorExtensionOptions): AnyExte
     }),
     Dropcursor.configure({ width: 2, class: "drop-cursor" }),
     Gapcursor,
+    codeBlockHighlight(codeBlock.name, options.lowlight),
     FindHighlight,
     NoteDomBehavior.configure(options),
     editorKeymap(options),

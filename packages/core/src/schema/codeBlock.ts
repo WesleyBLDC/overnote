@@ -32,7 +32,8 @@ export function extendCodeBlock<O extends CodeBlockOptions, S>(base: Node<O, S>)
             const text = $from.parent.textContent;
             const lineStart = text.lastIndexOf("\n", $from.parentOffset - 1) + 1;
             const removable = /^(\t| {1,2})/.exec(text.slice(lineStart))?.[0].length ?? 0;
-            if (removable > 0) view.dispatch(state.tr.delete($from.start() + lineStart, $from.start() + lineStart + removable));
+            if (removable > 0)
+              view.dispatch(state.tr.delete($from.start() + lineStart, $from.start() + lineStart + removable));
             return true;
           },
           "Mod-a": () => {

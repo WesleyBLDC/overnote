@@ -26,7 +26,11 @@ function isIPv4(host: string): boolean {
 
 function isDomain(host: string): boolean {
   const labels = host.split(".");
-  return labels.length >= 2 && labels.every((label) => HOST_LABEL.test(label)) && /^[a-z]{2,63}$/i.test(labels[labels.length - 1] ?? "");
+  return (
+    labels.length >= 2 &&
+    labels.every((label) => HOST_LABEL.test(label)) &&
+    /^[a-z]{2,63}$/i.test(labels[labels.length - 1] ?? "")
+  );
 }
 
 function isBareHost(input: string): boolean {

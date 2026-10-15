@@ -64,11 +64,15 @@ jobs:
 
       # `ray lint` also validates the author handle against the Store, which fails until the
       # extension is published, so CI runs the same ESLint and Prettier checks directly.
-      - name: ESLint
+      - name: ESLint, extension
         run: npx eslint src
 
+      # The editor and @overnote/core: typescript-eslint and the React hooks rules (eslint.config.js).
+      - name: ESLint, editor and core
+        run: npx eslint --max-warnings 0 editor packages/core
+
       - name: Prettier
-        run: npx prettier --check src
+        run: npx prettier --check src editor packages/core
 
       - name: Build editor
         run: npm run build:editor

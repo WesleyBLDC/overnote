@@ -12,18 +12,64 @@ export type SettingRow =
   | { id: "zoom"; kind: "stepper"; title: string; subtitle: string; section: string; keywords?: string[] };
 
 export const SETTING_ROWS: readonly SettingRow[] = [
-  { id: "escapeLosesFocus", kind: "switch", section: "Window", title: "Escape Key Loses Focus", subtitle: "Escape returns to the previous app", keywords: ["esc", "hide"] },
-  { id: "windowAutoSize", kind: "switch", section: "Window", title: "Auto-Size Window to Content", subtitle: "Window height follows the note", keywords: ["height", "resize"] },
-  { id: "hideWhileScreenSharing", kind: "switch", section: "Window", title: "Hide While Screen Sharing", subtitle: "Hidden from shares and recordings", keywords: ["privacy", "record"] },
-  { id: "zoom", kind: "stepper", section: "Display", title: "Zoom", subtitle: "⌘=  ⌘-  ⌘0", keywords: ["size", "scale", "text"] },
-  { id: "countMode", kind: "segment", section: "Display", title: "Counter", subtitle: "Shown in the bottom bar", keywords: ["characters", "words", "count"] },
-  { id: "showFormatBar", kind: "switch", section: "Display", title: "Show Format Bar", subtitle: "Buttons in place of the counter", keywords: ["toolbar", "buttons"] },
+  {
+    id: "escapeLosesFocus",
+    kind: "switch",
+    section: "Window",
+    title: "Escape Key Loses Focus",
+    subtitle: "Escape returns to the previous app",
+    keywords: ["esc", "hide"],
+  },
+  {
+    id: "windowAutoSize",
+    kind: "switch",
+    section: "Window",
+    title: "Auto-Size Window to Content",
+    subtitle: "Window height follows the note",
+    keywords: ["height", "resize"],
+  },
+  {
+    id: "hideWhileScreenSharing",
+    kind: "switch",
+    section: "Window",
+    title: "Hide While Screen Sharing",
+    subtitle: "Hidden from shares and recordings",
+    keywords: ["privacy", "record"],
+  },
+  {
+    id: "zoom",
+    kind: "stepper",
+    section: "Display",
+    title: "Zoom",
+    subtitle: "⌘=  ⌘-  ⌘0",
+    keywords: ["size", "scale", "text"],
+  },
+  {
+    id: "countMode",
+    kind: "segment",
+    section: "Display",
+    title: "Counter",
+    subtitle: "Shown in the bottom bar",
+    keywords: ["characters", "words", "count"],
+  },
+  {
+    id: "showFormatBar",
+    kind: "switch",
+    section: "Display",
+    title: "Show Format Bar",
+    subtitle: "Buttons in place of the counter",
+    keywords: ["toolbar", "buttons"],
+  },
 ];
 
 export function filterSettings(query: string): SettingRow[] {
   const q = query.trim();
   if (!q) return [...SETTING_ROWS];
-  return SETTING_ROWS.filter((row) => Math.max(...[row.title, ...(row.keywords ?? [])].map((text) => fuzzyScore(q, text))) >= Math.max(2, q.length * 1.5));
+  return SETTING_ROWS.filter(
+    (row) =>
+      Math.max(...[row.title, ...(row.keywords ?? [])].map((text) => fuzzyScore(q, text))) >=
+      Math.max(2, q.length * 1.5),
+  );
 }
 
 /**
@@ -58,12 +104,10 @@ interface SettingsListProps {
 const keepFocus = (event: React.MouseEvent) => event.preventDefault();
 
 export function SettingsList({ rows, settings, selected, grouped, onHover, onChange }: SettingsListProps) {
-  let lastSection: string | null = null;
   return (
     <>
       {rows.map((row, i) => {
-        const header = grouped && row.section !== lastSection ? row.section : null;
-        lastSection = row.section;
+        const header = grouped && row.section !== rows[i - 1]?.section ? row.section : null;
         return (
           <div key={row.id}>
             {header ? <div className="menu-section">{header}</div> : null}
@@ -94,7 +138,15 @@ export function SettingsList({ rows, settings, selected, grouped, onHover, onCha
   );
 }
 
-function SettingControl({ row, settings, onChange }: { row: SettingRow; settings: Settings; onChange: (patch: Partial<Settings>) => void }) {
+function SettingControl({
+  row,
+  settings,
+  onChange,
+}: {
+  row: SettingRow;
+  settings: Settings;
+  onChange: (patch: Partial<Settings>) => void;
+}) {
   if (row.kind === "switch") {
     const on = settings[row.id];
     return <span role="switch" aria-checked={on} aria-label={row.title} className={`switch${on ? " is-on" : ""}`} />;
@@ -130,13 +182,31 @@ function SettingControl({ row, settings, onChange }: { row: SettingRow; settings
   };
   return (
     <span className="stepper">
-      <button type="button" tabIndex={-1} className="icon-button" aria-label="Zoom Out" data-testid="zoom-out" disabled={settings.zoom <= ZOOM.min} onMouseDown={keepFocus} onClick={step(-1)}>
+      <button
+        type="button"
+        tabIndex={-1}
+        className="icon-button"
+        aria-label="Zoom Out"
+        data-testid="zoom-out"
+        disabled={settings.zoom <= ZOOM.min}
+        onMouseDown={keepFocus}
+        onClick={step(-1)}
+      >
         <Icon name="minus" />
       </button>
       <span className="stepper-value" data-testid="zoom-value">
         {zoomLabel(settings.zoom)}
       </span>
-      <button type="button" tabIndex={-1} className="icon-button" aria-label="Zoom In" data-testid="zoom-in" disabled={settings.zoom >= ZOOM.max} onMouseDown={keepFocus} onClick={step(1)}>
+      <button
+        type="button"
+        tabIndex={-1}
+        className="icon-button"
+        aria-label="Zoom In"
+        data-testid="zoom-in"
+        disabled={settings.zoom >= ZOOM.max}
+        onMouseDown={keepFocus}
+        onClick={step(1)}
+      >
         <Icon name="plus" />
       </button>
       <button

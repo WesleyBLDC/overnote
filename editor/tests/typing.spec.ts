@@ -73,7 +73,8 @@ test("inline rules, links, autolinks, and typography", async ({ page }) => {
   await page.keyboard.type("**bold** *it* ~~gone~~ `x` [Site](raycast.com) [bad](javascript:alert) example.com ");
   await page.keyboard.type('-- ... "hi" don\'t -> (c) ++u++');
   const paragraph = (await docJSON(page)).content?.[0];
-  const marked = (type: string) => paragraph?.content?.filter((n) => n.marks?.some((m) => m.type === type)).map((n) => n.text);
+  const marked = (type: string) =>
+    paragraph?.content?.filter((n) => n.marks?.some((m) => m.type === type)).map((n) => n.text);
   expect(marked("bold")).toEqual(["bold"]);
   expect(marked("italic")).toEqual(["it"]);
   expect(marked("strike")).toEqual(["gone"]);

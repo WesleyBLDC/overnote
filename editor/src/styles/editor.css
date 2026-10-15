@@ -188,7 +188,9 @@
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="ordered"]:first-child[data-list-order],
-.note-editor :not(.prosemirror-flat-list[data-list-kind="ordered"]) + .prosemirror-flat-list[data-list-kind="ordered"][data-list-order] {
+.note-editor
+  :not(.prosemirror-flat-list[data-list-kind="ordered"])
+  + .prosemirror-flat-list[data-list-kind="ordered"][data-list-order] {
   counter-set: bn-ordered var(--prosemirror-flat-list-order);
 }
 
@@ -314,7 +316,11 @@
   color: var(--text-dimmed);
 }
 
-.note-editor .prosemirror-flat-list[data-list-kind="task"][data-list-checked] > .list-content > :is(p, h1, h2, h3) :is(a, code) {
+.note-editor
+  .prosemirror-flat-list[data-list-kind="task"][data-list-checked]
+  > .list-content
+  > :is(p, h1, h2, h3)
+  :is(a, code) {
   opacity: 0.7;
 }
 

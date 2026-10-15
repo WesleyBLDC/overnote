@@ -20,18 +20,18 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
   const [replacement, setReplacement] = useState("");
   const [showReplace, setShowReplace] = useState(false);
   const [active, setActive] = useState(0);
-  const [version, setVersion] = useState(0);
+  const [doc, setDoc] = useState(editor.state.doc);
   const findRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const bump = () => setVersion((v) => v + 1);
-    editor.on("update", bump);
+    const track = () => setDoc(editor.state.doc);
+    editor.on("update", track);
     return () => {
-      editor.off("update", bump);
+      editor.off("update", track);
     };
   }, [editor]);
 
-  const matches = useMemo(() => findMatches(editor.state.doc, term), [editor, term, version]);
+  const matches = useMemo(() => findMatches(doc, term), [doc, term]);
   const index = matches.length ? Math.min(active, matches.length - 1) : -1;
 
   useEffect(() => {
@@ -141,10 +141,24 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
         <span className="find-count" data-testid="find-count">
           {matches.length ? `${index + 1}/${matches.length}` : "0/0"}
         </span>
-        <button type="button" className="icon-button" aria-label="Previous match" onClick={() => goTo(index - 1)} disabled={!matches.length} tabIndex={-1}>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Previous match"
+          onClick={() => goTo(index - 1)}
+          disabled={!matches.length}
+          tabIndex={-1}
+        >
           <Icon name="up" />
         </button>
-        <button type="button" className="icon-button" aria-label="Next match" onClick={() => goTo(index + 1)} disabled={!matches.length} tabIndex={-1}>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Next match"
+          onClick={() => goTo(index + 1)}
+          disabled={!matches.length}
+          tabIndex={-1}
+        >
           <Icon name="down" />
         </button>
         <button type="button" className="icon-button" aria-label="Close find" onClick={close} tabIndex={-1}>
@@ -171,7 +185,13 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
           <button type="button" className="text-button" onClick={replaceCurrent} disabled={!matches.length}>
             Replace
           </button>
-          <button type="button" className="text-button" onClick={replaceEverything} disabled={!matches.length} data-testid="replace-all">
+          <button
+            type="button"
+            className="text-button"
+            onClick={replaceEverything}
+            disabled={!matches.length}
+            data-testid="replace-all"
+          >
             Replace All
           </button>
         </div>

@@ -92,6 +92,7 @@ To run one suite at a time:
 
 ```sh
 npm run lint
+npx eslint editor packages/core  # editor and core lint
 npm run typecheck
 npm test                         # extension unit tests and helper socket tests
 npm test -w packages/core        # serialization fixtures and core essentials
@@ -107,7 +108,9 @@ If you see one, even outside your change, please fix it or open an issue.
 
 ## Style
 
-- Formatting and linting follow `npm run lint` (Raycast's ESLint and Prettier config).
+- Formatting and linting follow `npm run lint` (Raycast's ESLint and Prettier config) for the extension in `src/`.
+- The editor and `@overnote/core` use the same Prettier config and the root `eslint.config.js`, with typescript-eslint and the React hooks rules: `npx eslint editor packages/core` and `npx prettier --check editor packages/core`.
+- Markdown files are not formatted by Prettier (`.prettierignore`), and the serialization fixtures are never reformatted.
 - In Markdown docs, put each sentence on its own line, and do not use dashes as punctuation (hyphens in compound words are fine).
 
 ## Commit conventions

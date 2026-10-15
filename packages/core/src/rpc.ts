@@ -89,8 +89,8 @@ export interface DeletedItem extends NoteSummary {
 }
 
 export type UpdateParams = { id: NoteId; expectedUpdatedAt?: Millis } & Partial<NoteContent> & {
-  caretPosition?: number;
-};
+    caretPosition?: number;
+  };
 
 export type UpdateResult = { status: "ok"; note: Note } | { status: "conflict"; note: Note };
 
@@ -150,8 +150,7 @@ export interface Request<M extends MethodName = MethodName> {
 }
 
 export type Response<M extends MethodName = MethodName> =
-  | { id: number | string; result: Result<M> }
-  | { id: number | string; error: { code: number; message: string } };
+  { id: number | string; result: Result<M> } | { id: number | string; error: { code: number; message: string } };
 
 export const Event = {
   WindowDidShow: "window.didShow",

@@ -25,7 +25,11 @@ export function wordAt(state: EditorState): { from: number; to: number } | null 
 }
 
 /** The single link covering the whole range, if any. */
-export function linkCovering(state: EditorState, from: number, to: number): { from: number; to: number; href: string } | null {
+export function linkCovering(
+  state: EditorState,
+  from: number,
+  to: number,
+): { from: number; to: number; href: string } | null {
   const type = state.schema.marks.link;
   if (!type) return null;
   let href: string | null = null;

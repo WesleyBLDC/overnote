@@ -1,7 +1,8 @@
 /** Small React hooks for notices, settings, and content-driven window height. */
 import { DEFAULT_SETTINGS, type rpc, type Settings } from "@overnote/core";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
+import { exitFallbackMs } from "../lib/motion";
 
 export type NoticeKind = "info" | "error";
 
@@ -9,19 +10,34 @@ export interface Notice {
   id: number;
   message: string;
   kind: NoticeKind;
+  /** Set when the notice's time is up: the stylesheet fades it out, then it is removed. */
+  leaving: boolean;
 }
 
-export const NOTICE_MS = 2200;
+/** How long a notice stays before it starts to leave. */
+export const NOTICE_MS = 2000;
 
+/**
+ * Notices: JS decides when each one leaves (NOTICE_MS), the stylesheet decides how (the
+ * .notice[data-leaving] transition on --motion-slow). A notice is removed when its exit transition
+ * ends, or by a fallback timer derived from the same token when no transition runs (reduced motion).
+ */
 export function useNotices() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const next = useRef(1);
-  const notify = useCallback((message: string, kind: NoticeKind = "info") => {
-    const id = next.current++;
-    setNotices((list) => [...list.slice(-2), { id, message, kind }]);
-    setTimeout(() => setNotices((list) => list.filter((notice) => notice.id !== id)), NOTICE_MS);
-  }, []);
-  return { notices, notify };
+  const remove = useCallback((id: number) => setNotices((list) => list.filter((notice) => notice.id !== id)), []);
+  const notify = useCallback(
+    (message: string, kind: NoticeKind = "info") => {
+      const id = next.current++;
+      setNotices((list) => [...list.slice(-2), { id, message, kind, leaving: false }]);
+      setTimeout(() => {
+        setNotices((list) => list.map((notice) => (notice.id === id ? { ...notice, leaving: true } : notice)));
+        setTimeout(() => remove(id), exitFallbackMs("--motion-slow"));
+      }, NOTICE_MS);
+    },
+    [remove],
+  );
+  return { notices, notify, remove };
 }
 
 /** Settings from system.ready and settings.changed, with optimistic local updates. */
@@ -71,11 +87,10 @@ export function measureContentHeight(app: HTMLElement): number {
  * is already tall enough for the overlay, nothing is sent: the overlay opens and scrolls inside the
  * current window, so a roomy panel never resizes for ⌘K or browse.
  */
-export function useResizeReporter(ref: RefObject<HTMLElement | null>, api: Api, options: ResizeOptions) {
+export function useResizeReporter(app: HTMLElement | null, api: Api, options: ResizeOptions) {
   const last = useRef<{ height: number; temporary: boolean } | null>(null);
   const { autoSize, overlayRem } = options;
   useEffect(() => {
-    const app = ref.current;
     if (!app) return;
     let scheduled = false;
     const report = () => {
@@ -117,7 +132,7 @@ export function useResizeReporter(ref: RefObject<HTMLElement | null>, api: Api, 
       observer.disconnect();
       mutations.disconnect();
     };
-  }, [ref, api, autoSize, overlayRem]);
+  }, [app, api, autoSize, overlayRem]);
 }
 
 const INTERACTIVE = "button, a[href], input, select, textarea, [role=button], [contenteditable=true]";
@@ -174,10 +189,9 @@ export function computeDragRegions(app: HTMLElement): rpc.DragRect[] {
  * any toolbar part resizes, when zoom changes, and when the hover chrome shows or hides. Identical
  * regions are sent once.
  */
-export function useDragRegions(ref: RefObject<HTMLElement | null>, api: Api, zoom: number) {
+export function useDragRegions(app: HTMLElement | null, api: Api, zoom: number) {
   const last = useRef<string | null>(null);
   useEffect(() => {
-    const app = ref.current;
     if (!app) return;
     let scheduled = false;
     const report = () => {
@@ -202,7 +216,8 @@ export function useDragRegions(ref: RefObject<HTMLElement | null>, api: Api, zoo
       const toolbar = app.querySelector("[data-testid=toolbar]");
       if (!toolbar) return;
       observer.observe(toolbar);
-      for (const part of Array.from(toolbar.querySelectorAll(`${INTERACTIVE}, .toolbar-actions, .toolbar-leading`))) observer.observe(part);
+      for (const part of Array.from(toolbar.querySelectorAll(`${INTERACTIVE}, .toolbar-actions, .toolbar-leading`)))
+        observer.observe(part);
     };
     observeToolbar();
     const mutations = new MutationObserver(() => {
@@ -211,7 +226,13 @@ export function useDragRegions(ref: RefObject<HTMLElement | null>, api: Api, zoo
     });
     mutations.observe(app, { childList: true, subtree: false });
     const toolbar = app.querySelector("[data-testid=toolbar]");
-    if (toolbar) mutations.observe(toolbar, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "hidden", "disabled"] });
+    if (toolbar)
+      mutations.observe(toolbar, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "hidden", "disabled"],
+      });
     // The hover chrome fades in and out; its transition end is when the controls settle.
     app.addEventListener("mouseenter", schedule);
     app.addEventListener("mouseleave", schedule);
@@ -226,7 +247,7 @@ export function useDragRegions(ref: RefObject<HTMLElement | null>, api: Api, zoo
       app.removeEventListener("transitionend", schedule);
       window.removeEventListener("resize", schedule);
     };
-  }, [ref, api, zoom]);
+  }, [app, api, zoom]);
 }
 
 /**
@@ -234,18 +255,17 @@ export function useDragRegions(ref: RefObject<HTMLElement | null>, api: Api, zoo
  * the visible area, for the scroll fades and the toolbar hairline. It writes the attribute directly
  * (no React render) and only when the value changes.
  */
-export function useScrollEdges(ref: RefObject<HTMLElement | null>) {
+export function useScrollEdges(app: HTMLElement | null) {
   useEffect(() => {
-    const app = ref.current;
     const content = app?.querySelector<HTMLElement>(".content");
     if (!app || !content) return;
     const update = () => {
       const top = content.scrollTop > 1;
       const bottom = content.scrollTop + content.clientHeight < content.scrollHeight - 1;
       const value = [top ? "top" : "", bottom ? "bottom" : ""].filter(Boolean).join(" ");
-      if ((app.dataset.scroll ?? "") === value) return;
-      if (value) app.dataset.scroll = value;
-      else delete app.dataset.scroll;
+      if ((app.getAttribute("data-scroll") ?? "") === value) return;
+      if (value) app.setAttribute("data-scroll", value);
+      else app.removeAttribute("data-scroll");
     };
     const observer = new ResizeObserver(update);
     observer.observe(content);
@@ -256,12 +276,15 @@ export function useScrollEdges(ref: RefObject<HTMLElement | null>) {
       observer.disconnect();
       content.removeEventListener("scroll", update);
     };
-  }, [ref]);
+  }, [app]);
 }
 
 /** Keeps a ref pointing at the latest value, for callbacks created once. */
 export function useLatest<T>(value: T) {
   const ref = useRef(value);
-  ref.current = value;
+  // Updated after each commit, before the browser paints or dispatches the next event.
+  useLayoutEffect(() => {
+    ref.current = value;
+  });
   return ref;
 }

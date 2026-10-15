@@ -245,8 +245,9 @@ function renderChildren(parent: PMNode, inContainer: boolean): string {
 export function nodeToMarkdown(doc: PMNode): string {
   let target = doc;
   const last = doc.lastChild;
-  if (doc.childCount > 1 && isEmptyParagraph(last)) target = doc.copy(doc.content.cut(0, doc.content.size - (last?.nodeSize ?? 0)));
+  if (doc.childCount > 1 && isEmptyParagraph(last))
+    target = doc.copy(doc.content.cut(0, doc.content.size - (last?.nodeSize ?? 0)));
   const out = renderChildren(target, false).replace(/\n+$/, "");
-  if (out.replace(/&nbsp;| /g, "").trim() === "") return "";
+  if (out.replace(/&nbsp;|\u00a0/g, "").trim() === "") return "";
   return out;
 }

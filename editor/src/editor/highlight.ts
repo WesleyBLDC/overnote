@@ -37,7 +37,8 @@ function highlightDoc(doc: PMNode, name: string, lowlight: NoteLowlight): Highli
   for (const block of findChildren(doc, (node) => node.type.name === name)) {
     const language = (block.node.attrs.language as string | null) ?? null;
     const text = block.node.textContent;
-    const tree = language && lowlight.registered(language) ? lowlight.highlight(language, text) : lowlight.highlightAuto(text);
+    const tree =
+      language && lowlight.registered(language) ? lowlight.highlight(language, text) : lowlight.highlightAuto(text);
     let from = block.pos + 1;
     for (const run of flatten(tree.children as HastNode[])) {
       const to = from + run.text.length;
@@ -110,7 +111,8 @@ export function debouncedHighlightPlugin(options: { name: string; lowlight: Note
           clearTimeout(timer);
           if (!refreshKey.getState(view.state)?.stale) return;
           timer = setTimeout(() => {
-            if (!view.isDestroyed) view.dispatch(view.state.tr.setMeta(refreshKey, true).setMeta("addToHistory", false));
+            if (!view.isDestroyed)
+              view.dispatch(view.state.tr.setMeta(refreshKey, true).setMeta("addToHistory", false));
           }, delay);
         },
         destroy() {

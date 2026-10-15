@@ -14,18 +14,28 @@ import {
 } from "@overnote/core";
 import { Extension } from "@tiptap/core";
 import { Fragment, Slice, type Node as PMNode, type Schema } from "@tiptap/pm/model";
-import { Plugin, PluginKey, TextSelection, type Transaction } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { AttrStep } from "@tiptap/pm/transform";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
-import { createListEventPlugin, createListRenderingPlugin, createSafariInputMethodWorkaroundPlugin } from "prosemirror-flat-list";
+import {
+  createListEventPlugin,
+  createListRenderingPlugin,
+  createSafariInputMethodWorkaroundPlugin,
+} from "prosemirror-flat-list";
 
 export interface DomOptions {
   /** A link should open in the system browser. */
   onOpenLink: (href: string) => void;
-  /** A plain click on a link: show the popover in view mode. */
-  onLinkClick: (from: number, to: number) => void;
-  /** True once after ⇧⌘V: the paste is inserted as plain text. A function, so Tiptap's option merge keeps it shared. */
-  takePlainPaste: () => boolean;
+  /** A plain click on a link: show the popover in view mode. `state` is the editor state at the click. */
+  onLinkClick: (from: number, to: number, state: EditorState) => void;
+}
+
+/** How long ⇧⌘V waits for the paste it announces. */
+const PLAIN_PASTE_WINDOW_MS = 1000;
+
+interface DomStorage {
+  /** Until when the next paste is inserted as plain text (⇧⌘V), in Date.now() time. */
+  plainPasteUntil: number;
 }
 
 function linkRangeAt(view: EditorView, pos: number): { from: number; to: number; href: string } | null {
@@ -63,7 +73,7 @@ function sliceFromDoc(schema: Schema, json: ReturnType<typeof parsePastedText>):
   return new Slice(content, 0, 0);
 }
 
-function pastePlugin(options: DomOptions): Plugin {
+function pastePlugin(takePlainPaste: () => boolean): Plugin {
   return new Plugin({
     key: new PluginKey("notePaste"),
     props: {
@@ -77,7 +87,7 @@ function pastePlugin(options: DomOptions): Plugin {
         const schema = state.schema;
         if (state.selection.$from.parent.type.spec.code) return false;
 
-        if (plain && options.takePlainPaste()) {
+        if (plain && takePlainPaste()) {
           view.dispatch(state.tr.replaceSelection(sliceFromDoc(schema, plainTextToDoc(plain))).scrollIntoView());
           return true;
         }
@@ -140,7 +150,8 @@ function listSelectionPlugin(): Plugin {
         state.doc.nodesBetween(from, to, (node, pos) => {
           if (node.type.name !== "list") return true;
           const inner = innerTextRange(node, pos);
-          if (from <= inner.start && to >= inner.end) decorations.push(Decoration.node(pos, pos + node.nodeSize, { class: "in-selection" }));
+          if (from <= inner.start && to >= inner.end)
+            decorations.push(Decoration.node(pos, pos + node.nodeSize, { class: "in-selection" }));
           return true;
         });
         return decorations.length ? DecorationSet.create(state.doc, decorations) : DecorationSet.empty;
@@ -260,7 +271,7 @@ function clickPlugin(options: DomOptions): Plugin {
           event.preventDefault();
           if (!range) return true;
           if (event.metaKey) options.onOpenLink(range.href);
-          else options.onLinkClick(range.from, range.to);
+          else options.onLinkClick(range.from, range.to, view.state);
           return true;
         },
       },
@@ -268,19 +279,36 @@ function clickPlugin(options: DomOptions): Plugin {
   });
 }
 
-export const NoteDomBehavior = Extension.create<DomOptions>({
+export const NoteDomBehavior = Extension.create<DomOptions, DomStorage>({
   name: "noteDomBehavior",
   priority: 1100,
   addOptions() {
-    return { onOpenLink: () => undefined, onLinkClick: () => undefined, takePlainPaste: () => false };
+    return { onOpenLink: () => undefined, onLinkClick: () => undefined };
+  },
+  addStorage() {
+    return { plainPasteUntil: 0 };
+  },
+  addKeyboardShortcuts() {
+    return {
+      // ⇧⌘V: the paste that follows is inserted as plain text. The key itself still pastes.
+      "Mod-Shift-v": () => {
+        this.storage.plainPasteUntil = Date.now() + PLAIN_PASTE_WINDOW_MS;
+        return false;
+      },
+    };
   },
   addProseMirrorPlugins() {
+    const takePlainPaste = () => {
+      const plain = Date.now() <= this.storage.plainPasteUntil;
+      this.storage.plainPasteUntil = 0;
+      return plain;
+    };
     return [
       clickPlugin(this.options),
       createListEventPlugin(),
       createListRenderingPlugin(),
       createSafariInputMethodWorkaroundPlugin(),
-      pastePlugin(this.options),
+      pastePlugin(takePlainPaste),
       copyPlugin(),
       listSelectionPlugin(),
       taskCheckPlugin(),

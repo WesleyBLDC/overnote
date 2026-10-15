@@ -1,6 +1,17 @@
 /** The few rules the fixtures and the end-to-end flows cannot reach cheaply. */
 import { describe, expect, it } from "vitest";
-import { buildNoteContent, countCharacters, countWords, deriveTitle, displayTitle, docToPlainText, fold, highlightMarkdownMatches, loadDoc, markdownToDoc } from "../src/index";
+import {
+  buildNoteContent,
+  countCharacters,
+  countWords,
+  deriveTitle,
+  displayTitle,
+  docToPlainText,
+  fold,
+  highlightMarkdownMatches,
+  loadDoc,
+  markdownToDoc,
+} from "../src/index";
 
 describe("text rules", () => {
   it("folds case and diacritics", () => {
@@ -8,7 +19,12 @@ describe("text rules", () => {
   });
 
   it("derives and displays titles", () => {
-    expect(deriveTitle({ type: "doc", content: [{ type: "paragraph" }, { type: "paragraph", content: [{ type: "text", text: "  Second " }] }] })).toBe("Second");
+    expect(
+      deriveTitle({
+        type: "doc",
+        content: [{ type: "paragraph" }, { type: "paragraph", content: [{ type: "text", text: "  Second " }] }],
+      }),
+    ).toBe("Second");
     expect(deriveTitle(markdownToDoc("Line one  \nLine two"))).toBe("Line one");
     expect(displayTitle({ title: "", text: "\n first \nsecond" })).toBe("first");
     expect(displayTitle({ title: " ", text: "" })).toBe("Untitled");
@@ -27,8 +43,18 @@ describe("stored content", () => {
       type: "doc",
       content: [
         { type: "callout", attrs: { tone: "warm" } },
-        { type: "paragraph", content: [{ type: "text", text: "hi", marks: [{ type: "highlight" }] }, { type: "mention", attrs: { id: "u1" } }] },
-        { type: "list", attrs: { kind: "bullet", order: null, checked: false, collapsed: false }, content: [{ type: "embed" }] },
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "hi", marks: [{ type: "highlight" }] },
+            { type: "mention", attrs: { id: "u1" } },
+          ],
+        },
+        {
+          type: "list",
+          attrs: { kind: "bullet", order: null, checked: false, collapsed: false },
+          content: [{ type: "embed" }],
+        },
       ],
     };
     const saved = JSON.parse(buildNoteContent(loadDoc(JSON.stringify(stored), "")).rawContent);
@@ -47,9 +73,25 @@ describe("search highlighting", () => {
   });
 
   it("leaves code, link destinations, URLs, and block markers alone", () => {
-    const md = ["# Plan", "- [ ] plan `plan()`", "[plan](https://plan.dev/plan) and https://x.dev/plan", "```", "plan", "```", "> 1. plan"].join("\n");
+    const md = [
+      "# Plan",
+      "- [ ] plan `plan()`",
+      "[plan](https://plan.dev/plan) and https://x.dev/plan",
+      "```",
+      "plan",
+      "```",
+      "> 1. plan",
+    ].join("\n");
     expect(hl(md, "plan")).toBe(
-      ["# **Plan**", "- [ ] **plan** `plan()`", "[**plan**](https://plan.dev/plan) and https://x.dev/plan", "```", "plan", "```", "> 1. **plan**"].join("\n"),
+      [
+        "# **Plan**",
+        "- [ ] **plan** `plan()`",
+        "[**plan**](https://plan.dev/plan) and https://x.dev/plan",
+        "```",
+        "plan",
+        "```",
+        "> 1. **plan**",
+      ].join("\n"),
     );
     expect(hl("- [ ] task", "[ ]")).toBe("- [ ] task");
   });

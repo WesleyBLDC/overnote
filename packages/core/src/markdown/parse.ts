@@ -369,7 +369,12 @@ function readList(cursor: Cursor): JSONContent[] {
 }
 
 function listItem(children: JSONContent[], order: number | null): JSONContent {
-  const attrs: Record<string, unknown> = { kind: order === null ? "bullet" : "ordered", order, checked: false, collapsed: false };
+  const attrs: Record<string, unknown> = {
+    kind: order === null ? "bullet" : "ordered",
+    order,
+    checked: false,
+    collapsed: false,
+  };
   const first = children[0];
   if (!first || (first.type !== "paragraph" && first.type !== "list")) children.unshift(paragraph([]));
   const head = children[0];

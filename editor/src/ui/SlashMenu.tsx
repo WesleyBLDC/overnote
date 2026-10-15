@@ -29,7 +29,10 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
   useLayoutEffect(() => {
     const coords = editor.view.coordsAtPos(from);
     const box = container?.getBoundingClientRect() ?? { left: 0, top: 0, width: window.innerWidth };
-    setPosition({ left: Math.max(8, Math.min(coords.left - box.left, box.width - 288)), top: coords.bottom - box.top + 4 });
+    setPosition({
+      left: Math.max(8, Math.min(coords.left - box.left, box.width - 288)),
+      top: coords.bottom - box.top + 4,
+    });
   }, [editor, from, container, items.length]);
 
   useImperativeHandle(ref, () => ({
@@ -49,7 +52,12 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
 
   let lastSection = "";
   return (
-    <div className="popover slash-menu" role="listbox" data-testid="slash-menu" style={{ left: position.left, top: position.top }}>
+    <div
+      className="popover slash-menu"
+      role="listbox"
+      data-testid="slash-menu"
+      style={{ left: position.left, top: position.top }}
+    >
       {items.map((item, i) => {
         const header = item.section !== lastSection ? item.section : null;
         lastSection = item.section;

@@ -65,7 +65,8 @@
   --border-strong: rgba(12, 12, 14, 0.16);
   --link-underline: rgba(12, 12, 14, 0.36);
   --focus-ring: rgba(12, 12, 14, 0.12);
-  --shadow: 0 0.6rem 2rem rgba(10, 12, 16, 0.16), 0 0.1rem 0.35rem rgba(10, 12, 16, 0.06), 0 0 0 0.5px rgba(10, 12, 16, 0.12);
+  --shadow:
+    0 0.6rem 2rem rgba(10, 12, 16, 0.16), 0 0.1rem 0.35rem rgba(10, 12, 16, 0.06), 0 0 0 0.5px rgba(10, 12, 16, 0.12);
   --shadow-small: 0 0.15rem 0.6rem rgba(10, 12, 16, 0.1), 0 0 0 0.5px rgba(10, 12, 16, 0.1);
   /* Translucent: WebKit uses it as is, so the list gutter fill (editor.css) matches the native highlight. */
   --selection: rgba(12, 12, 14, 0.12);
@@ -139,7 +140,8 @@
     --border-strong: rgba(255, 255, 255, 0.16);
     --link-underline: rgba(255, 255, 255, 0.42);
     --focus-ring: rgba(255, 255, 255, 0.14);
-    --shadow: 0 0.6rem 2rem rgba(0, 0, 0, 0.45), 0 0.1rem 0.35rem rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+    --shadow:
+      0 0.6rem 2rem rgba(0, 0, 0, 0.45), 0 0.1rem 0.35rem rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
     --shadow-small: 0 0.15rem 0.6rem rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
     --selection: rgba(255, 255, 255, 0.16);
     --find-match: rgba(255, 200, 0, 0.3);

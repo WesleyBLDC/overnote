@@ -141,7 +141,9 @@ export class MockStore {
       (a.pinned ?? Number.POSITIVE_INFINITY) - (b.pinned ?? Number.POSITIVE_INFINITY) || order(a, b);
     let notes = this.live().sort(pinOrder);
     if (term) {
-      notes = notes.filter((n) => n.title.toLocaleLowerCase().includes(term) || n.text.toLocaleLowerCase().includes(term));
+      notes = notes.filter(
+        (n) => n.title.toLocaleLowerCase().includes(term) || n.text.toLocaleLowerCase().includes(term),
+      );
       if (titleFirst) {
         const hit = (n: Note) => (displayTitle(n).toLocaleLowerCase().includes(term) ? 0 : 1);
         notes = notes.sort((a, b) => hit(a) - hit(b) || pinOrder(a, b));

@@ -19,7 +19,7 @@ export type HeadingLevel = (typeof HEADING_LEVELS)[number];
 
 export interface ExtensionOptions {
   /**
-   * Replaces the default code block, for example with CodeBlockLowlight in the editor.
+   * Replaces the default code block, for example with a code block that has a node view in the editor.
    * It is passed through the same customizations, so the schema stays identical.
    */
   codeBlock?: AnyExtension;

@@ -10,12 +10,16 @@ const paths: Record<string, ReactElement> = {
   browse: <path d="M3 4h10M3 8h10M3 12h6" />,
   format: <path d="M4 12 7.5 3h1L12 12M5.3 9h5.4" />,
   heading: <path d="M4 3v10M12 3v10M4 8h8" />,
-  link: <path d="M7 9a3 3 0 0 0 4.2 0l1.6-1.6a3 3 0 0 0-4.2-4.2L7.8 4M9 7a3 3 0 0 0-4.2 0L3.2 8.6a3 3 0 0 0 4.2 4.2l.8-.8" />,
+  link: (
+    <path d="M7 9a3 3 0 0 0 4.2 0l1.6-1.6a3 3 0 0 0-4.2-4.2L7.8 4M9 7a3 3 0 0 0-4.2 0L3.2 8.6a3 3 0 0 0 4.2 4.2l.8-.8" />
+  ),
   code: <path d="M6 4 2.5 8 6 12M10 4l3.5 4L10 12" />,
   codeBlock: <path d="M3 3h10v10H3zM6 6.5 4.8 8 6 9.5M10 6.5 11.2 8 10 9.5" />,
   quote: <path d="M4 5h3v3H5v3M9 5h3v3h-2v3" />,
   bullet: <path d="M6 4h7M6 8h7M6 12h7M3 4h.01M3 8h.01M3 12h.01" />,
-  ordered: <path d="M7 4h6M7 8h6M7 12h6M3 3.5h1v2M2.8 7.5c.3-.4 1.4-.4 1.4.3 0 .6-1.4 1.2-1.4 1.7h1.4M2.8 11h1.4l-.7.8c.6 0 .8.4.6.8-.2.5-1 .5-1.3.2" />,
+  ordered: (
+    <path d="M7 4h6M7 8h6M7 12h6M3 3.5h1v2M2.8 7.5c.3-.4 1.4-.4 1.4.3 0 .6-1.4 1.2-1.4 1.7h1.4M2.8 11h1.4l-.7.8c.6 0 .8.4.6.8-.2.5-1 .5-1.3.2" />
+  ),
   task: <path d="M3 3h4v4H3zM3 9h4v4H3zM9 5h4M9 11h4M3.8 11l1 1 1.6-2" />,
   check: <path d="m3.5 8.5 3 3 6-7" />,
   trash: <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" />,

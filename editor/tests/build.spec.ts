@@ -11,7 +11,10 @@ test("production build boots, renders, and makes no external requests", async ({
   await page.addInitScript(() => {
     const note = {
       id: "01J0000000000000000000000A",
-      rawContent: JSON.stringify({ type: "doc", content: [{ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Shipped" }] }] }),
+      rawContent: JSON.stringify({
+        type: "doc",
+        content: [{ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Shipped" }] }],
+      }),
       markdown: "# Shipped",
       text: "Shipped",
       title: "Shipped",
@@ -31,11 +34,20 @@ test("production build boots, renders, and makes no external requests", async ({
             sent.push(message.method);
             const results: Record<string, unknown> = {
               "system.ready": {
-                settings: { escapeLosesFocus: false, hideWhileScreenSharing: false, zoom: 1, windowAutoSize: true, showFormatBar: false, countMode: "characters", panelFrame: null },
+                settings: {
+                  escapeLosesFocus: false,
+                  hideWhileScreenSharing: false,
+                  zoom: 1,
+                  windowAutoSize: true,
+                  showFormatBar: false,
+                  countMode: "characters",
+                  panelFrame: null,
+                },
                 windowData: { current: note, previousNoteId: null, nextNoteId: null, pinnedShortcutNoteIds: [] },
               },
             };
-            const bridge = (window as unknown as { overnoteBridge: { resolve(id: number, r: unknown): void } }).overnoteBridge;
+            const bridge = (window as unknown as { overnoteBridge: { resolve(id: number, r: unknown): void } })
+              .overnoteBridge;
             setTimeout(() => bridge.resolve(message.id, results[message.method] ?? {}), 1);
           },
         },

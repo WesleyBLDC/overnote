@@ -65,8 +65,16 @@ export function FormatBar({ editor, openLink, onMenuChange }: FormatBarProps) {
   return (
     <div className="format-bar" data-testid="format-bar" role="toolbar" aria-label="Format">
       <div className="format-group">
-        {button({ icon: "heading", label: "Heading", active: editor.isActive("heading"), onClick: () => setOpen(open === "heading" ? null : "heading"), menu: true })}
-        {open === "heading" ? <Menu items={items(HEADINGS)} onSelect={(id) => run(id as FormatId)} onClose={() => setOpen(null)} /> : null}
+        {button({
+          icon: "heading",
+          label: "Heading",
+          active: editor.isActive("heading"),
+          onClick: () => setOpen(open === "heading" ? null : "heading"),
+          menu: true,
+        })}
+        {open === "heading" ? (
+          <Menu items={items(HEADINGS)} onSelect={(id) => run(id as FormatId)} onClose={() => setOpen(null)} />
+        ) : null}
       </div>
       <div className="format-group">
         {button({
@@ -76,17 +84,37 @@ export function FormatBar({ editor, openLink, onMenuChange }: FormatBarProps) {
           onClick: () => setOpen(open === "format" ? null : "format"),
           menu: true,
         })}
-        {open === "format" ? <Menu items={items(MARKS)} onSelect={(id) => run(id as FormatId)} onClose={() => setOpen(null)} /> : null}
+        {open === "format" ? (
+          <Menu items={items(MARKS)} onSelect={(id) => run(id as FormatId)} onClose={() => setOpen(null)} />
+        ) : null}
       </div>
       {button({ icon: "link", label: "Link (⌘L)", active: editor.isActive("link"), onClick: openLink })}
       {button({ icon: "code", label: "Code (⌘E)", active: editor.isActive("code"), onClick: () => run("code") })}
       <span className="format-divider" />
-      {button({ icon: "codeBlock", label: "Code Block (⌥⌘C)", active: editor.isActive("codeBlock"), onClick: () => run("codeBlock") })}
-      {button({ icon: "quote", label: "Blockquote (⇧⌘B)", active: editor.isActive("blockquote"), onClick: () => run("blockquote") })}
+      {button({
+        icon: "codeBlock",
+        label: "Code Block (⌥⌘C)",
+        active: editor.isActive("codeBlock"),
+        onClick: () => run("codeBlock"),
+      })}
+      {button({
+        icon: "quote",
+        label: "Blockquote (⇧⌘B)",
+        active: editor.isActive("blockquote"),
+        onClick: () => run("blockquote"),
+      })}
       <span className="format-divider" />
       <div className="format-group">
-        {button({ icon: listIcon, label: "List", active: listKind !== null, onClick: () => setOpen(open === "list" ? null : "list"), menu: true })}
-        {open === "list" ? <Menu items={items(LISTS)} onSelect={(id) => run(id as FormatId)} onClose={() => setOpen(null)} /> : null}
+        {button({
+          icon: listIcon,
+          label: "List",
+          active: listKind !== null,
+          onClick: () => setOpen(open === "list" ? null : "list"),
+          menu: true,
+        })}
+        {open === "list" ? (
+          <Menu items={items(LISTS)} onSelect={(id) => run(id as FormatId)} onClose={() => setOpen(null)} />
+        ) : null}
       </div>
     </div>
   );

@@ -60,18 +60,11 @@ jobs:
       - name: Package
         run: bash scripts/package-release.sh "${{ steps.version.outputs.version }}" "$RUNNER_TEMP/release"
 
-      # Install from the zip the way a user does, without Raycast: npm ci, then the prebuilt
-      # assets path of prepare-assets.sh, then a production build of the unzipped folder.
-      - name: Check the zip installs without the Xcode tools' build steps
-        run: |
-          check="$RUNNER_TEMP/zip-check"
-          mkdir -p "$check"
-          unzip -q "$RUNNER_TEMP/release/overnote-${{ steps.version.outputs.version }}.zip" -d "$check"
-          cd "$check/overnote"
-          [[ ! -d helper ]] || { echo "the zip should not carry helper sources"; exit 1; }
-          npm run install-extension -- --no-register
-          npx ray build -e dist -o "$RUNNER_TEMP/zip-raybuild"
-          test -x "$RUNNER_TEMP/zip-raybuild/assets/bin/OvernoteHelper"
+      # Install from the zip the way a user does after a browser download, headless and without
+      # Raycast: check SHA256SUMS, quarantine every file, install with the Xcode tools stubbed
+      # out, start the helper through the zip's own launcher, then a production build.
+      - name: Check the zip as a browser download
+        run: bash scripts/check-release.sh "$RUNNER_TEMP/release/overnote-${{ steps.version.outputs.version }}.zip" --ray-build
 
       - name: Publish the GitHub release
         env:

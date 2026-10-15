@@ -93,7 +93,9 @@ export const FindHighlight = Extension.create({
             return DecorationSet.create(
               state.doc,
               matches.map((match, index) =>
-                Decoration.inline(match.from, match.to, { class: index === find.active ? "find-match is-active" : "find-match" }),
+                Decoration.inline(match.from, match.to, {
+                  class: index === find.active ? "find-match is-active" : "find-match",
+                }),
               ),
             );
           },

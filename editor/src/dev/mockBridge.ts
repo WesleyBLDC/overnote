@@ -48,7 +48,9 @@ function seedFromUrl(control: MockControl, search: string): void {
       // fall through to the default seed
     }
   }
-  control.seedMarkdown(["# Welcome to Overnote\n\nA floating notepad, one hotkey away.\n\n- [ ] Try ⌘↩ on this task\n- [x] Open the dev harness"]);
+  control.seedMarkdown([
+    "# Welcome to Overnote\n\nA floating notepad, one hotkey away.\n\n- [ ] Try ⌘↩ on this task\n- [x] Open the dev harness",
+  ]);
 }
 
 export function installMockBridge(target: MockWindow & Window): MockControl {
@@ -101,7 +103,8 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
               return;
             }
             try {
-              if (message.method === "window.resize") applyPanelHeight(params as { contentHeight: number; temporary?: boolean });
+              if (message.method === "window.resize")
+                applyPanelHeight(params as { contentHeight: number; temporary?: boolean });
               receiver()?.resolve(message.id, control.store.dispatch(message.method, params));
             } catch (error) {
               const code = error instanceof MockRpcError ? error.code : rpc.ErrorCode.Internal;

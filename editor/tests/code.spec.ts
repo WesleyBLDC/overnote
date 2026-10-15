@@ -51,7 +51,9 @@ test("language picker, auto detection, and copy", async ({ page }) => {
   await block.locator(".code-block-copy").click();
   await expect(block.locator(".code-block-copy")).toHaveText("Copied");
   const copies = await page.evaluate(() =>
-    (window as unknown as { __overnoteMock: { callsTo(m: string): { params: { text: string } }[] } }).__overnoteMock.callsTo("clipboard.copy"),
+    (
+      window as unknown as { __overnoteMock: { callsTo(m: string): { params: { text: string } }[] } }
+    ).__overnoteMock.callsTo("clipboard.copy"),
   );
   expect(copies.at(-1)?.params.text).toBe("def f():\n    return 1");
 });
@@ -59,10 +61,24 @@ test("language picker, auto detection, and copy", async ({ page }) => {
 test("highlighting waits for a pause in typing and ignores edits outside the block", async ({ page }) => {
   const highlight = () =>
     page.evaluate(() => {
-      const view = (window as unknown as { __bnEditor: { state: { plugins: { key: string; getState(s: unknown): { stale: boolean } }[] } } }).__bnEditor;
+      const view = (
+        window as unknown as {
+          __bnEditor: { state: { plugins: { key: string; getState(s: unknown): { stale: boolean } }[] } };
+        }
+      ).__bnEditor;
       const plugin = view.state.plugins.find((p) => p.key.startsWith("noteHighlight$"))!;
-      return { stale: plugin.getState(view.state).stale, tokens: document.querySelectorAll(".code-block [class*=hljs-]").length };
+      return {
+        stale: plugin.getState(view.state).stale,
+        tokens: document.querySelectorAll(".code-block [class*=hljs-]").length,
+      };
     });
+  // Exactly one highlighter runs: ours, never a stock lowlight plugin next to it.
+  const highlighters = await page.evaluate(() =>
+    (window as unknown as { __bnEditor: { state: { plugins: { key: string }[] } } }).__bnEditor.state.plugins
+      .map((p) => p.key)
+      .filter((key) => /^(lowlight|noteHighlight)\$/.test(key)),
+  );
+  expect(highlighters).toEqual(["noteHighlight$"]);
   await page.keyboard.type("```python");
   await page.keyboard.press("Enter");
   await page.keyboard.type("return 1");

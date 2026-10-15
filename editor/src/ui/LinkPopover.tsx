@@ -60,7 +60,13 @@ export function LinkPopover({ editor, target, container, onClose, notify, openUr
   };
 
   const unlink = () => {
-    editor.chain().focus().setTextSelection({ from: target.from, to: target.to }).unsetLink().setTextSelection(target.to).run();
+    editor
+      .chain()
+      .focus()
+      .setTextSelection({ from: target.from, to: target.to })
+      .unsetLink()
+      .setTextSelection(target.to)
+      .run();
     onClose();
   };
 

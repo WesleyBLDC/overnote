@@ -27,19 +27,27 @@ export async function calls(page: Page, method?: string): Promise<RecordedCall[]
 }
 
 export async function clearCalls(page: Page): Promise<void> {
-  await page.evaluate(() => (window as unknown as { __overnoteMock: { clearCalls(): void } }).__overnoteMock.clearCalls());
+  await page.evaluate(() =>
+    (window as unknown as { __overnoteMock: { clearCalls(): void } }).__overnoteMock.clearCalls(),
+  );
 }
 
 export async function emit(page: Page, event: string, payload: unknown): Promise<void> {
   await page.evaluate(
-    ([name, data]) => (window as unknown as { __overnoteMock: { emit(e: string, p: unknown): void } }).__overnoteMock.emit(name as string, data),
+    ([name, data]) =>
+      (window as unknown as { __overnoteMock: { emit(e: string, p: unknown): void } }).__overnoteMock.emit(
+        name as string,
+        data,
+      ),
     [event, payload] as const,
   );
 }
 
 /** The editor document as JSON. */
 export async function docJSON(page: Page): Promise<{ type: string; content?: Node[] }> {
-  return page.evaluate(() => (window as unknown as { __bnEditor: { getJSON(): { type: string } } }).__bnEditor.getJSON());
+  return page.evaluate(() =>
+    (window as unknown as { __bnEditor: { getJSON(): { type: string } } }).__bnEditor.getJSON(),
+  );
 }
 
 interface Node {
@@ -57,16 +65,23 @@ export async function blocks(page: Page): Promise<string[]> {
 }
 
 /** Notes stored in the mock, newest update first. */
-export async function storedNotes(page: Page): Promise<{ id: string; title: string; text: string; markdown: string; pinned: number | null; deletedAt: number | null }[]> {
+export async function storedNotes(
+  page: Page,
+): Promise<
+  { id: string; title: string; text: string; markdown: string; pinned: number | null; deletedAt: number | null }[]
+> {
   return page.evaluate(() => {
-    const mock = (window as unknown as { __overnoteMock: { store: { notes: Map<string, { updatedAt: number }> } } }).__overnoteMock;
+    const mock = (window as unknown as { __overnoteMock: { store: { notes: Map<string, { updatedAt: number }> } } })
+      .__overnoteMock;
     return [...mock.store.notes.values()].sort((a, b) => b.updatedAt - a.updatedAt) as never;
   });
 }
 
 /** Waits for autosave and returns the last notes.update params. */
 export async function lastSave(page: Page): Promise<Record<string, unknown>> {
-  await expect.poll(async () => (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params).length).toBeGreaterThan(0);
+  await expect
+    .poll(async () => (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params).length)
+    .toBeGreaterThan(0);
   const saves = (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params);
   return saves[saves.length - 1]?.params ?? {};
 }

@@ -194,7 +194,8 @@ kbd {
   align-items: center;
   gap: var(--space-2);
   min-height: var(--toolbar-height);
-  padding: var(--drag-strip) max(var(--corner-clearance), calc(var(--content-x) - (var(--chrome-hit) - var(--chrome-icon)) / 2)) 0
+  padding: var(--drag-strip)
+    max(var(--corner-clearance), calc(var(--content-x) - (var(--chrome-hit) - var(--chrome-icon)) / 2)) 0
     max(var(--corner-clearance), var(--content-x));
   -webkit-user-select: none;
   user-select: none;
@@ -330,8 +331,20 @@ kbd {
   overflow-y: auto;
   padding: var(--content-top) var(--content-x) var(--content-bottom);
   cursor: text;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-bottom)),
+    transparent 100%
+  );
   transition:
     --fade-top var(--motion-slow) var(--ease-out),
     --fade-bottom var(--motion-slow) var(--ease-out);
@@ -850,6 +863,15 @@ kbd {
   color: var(--text-tertiary);
 }
 
+/* A failed load: the same layout as an empty state, with a retry. */
+.panel-empty.is-error .icon {
+  color: var(--danger);
+}
+
+.panel-empty-action {
+  margin-top: var(--space-2);
+}
+
 /* ---- Settings view (⌘,) ---- */
 
 .panel[data-view="settings"] {
@@ -1028,7 +1050,10 @@ kbd {
   pointer-events: none;
 }
 
-/* A notice rises in, then fades out just before it is removed (NOTICE_MS in hooks.ts is 2200). */
+/*
+ * A notice rises in, then fades out once the editor marks it as leaving (data-leaving, set by
+ * useNotices in hooks.ts when its time is up); it is removed when this transition ends.
+ */
 .notice {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
@@ -1036,20 +1061,19 @@ kbd {
   box-shadow: var(--shadow);
   font-size: 0.85rem;
   white-space: nowrap;
-  animation:
-    rise-in var(--motion-slow) var(--ease-out),
-    notice-out var(--motion-slow) var(--ease-in) 2020ms forwards;
+  animation: rise-in var(--motion-slow) var(--ease-out);
+  transition:
+    opacity var(--motion-slow) var(--ease-in),
+    transform var(--motion-slow) var(--ease-in);
+}
+
+.notice[data-leaving] {
+  opacity: 0;
+  transform: translateY(0.15rem);
 }
 
 .notice.is-error {
   color: var(--danger);
-}
-
-@keyframes notice-out {
-  to {
-    opacity: 0;
-    transform: translateY(0.15rem);
-  }
 }
 
 /* ---- emoji picker ---- */

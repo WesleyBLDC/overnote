@@ -22,7 +22,9 @@ async function depthOf(page: Page, text: string): Promise<number> {
   let found = -1;
   const walk = (node: ListNode & { text?: string }, depth: number) => {
     if (node.text === text) found = depth;
-    node.content?.forEach((child) => walk(child as ListNode & { text?: string }, node.type === "list" ? depth + 1 : depth));
+    node.content?.forEach((child) =>
+      walk(child as ListNode & { text?: string }, node.type === "list" ? depth + 1 : depth),
+    );
   };
   walk((await docJSON(page)) as ListNode, 0);
   return found;

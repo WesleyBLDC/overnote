@@ -41,6 +41,8 @@ export interface SessionState {
   canGoForward: boolean;
   saving: boolean;
   ready: boolean;
+  /** The editor shows something else (a deleted note preview) and edits are not tracked. */
+  paused: boolean;
 }
 
 export interface SessionOptions {
@@ -70,6 +72,7 @@ export class NoteSession {
     canGoForward: false,
     saving: false,
     ready: false,
+    paused: false,
   };
   private readonly listeners = new Set<() => void>();
   private readonly api: Api;
@@ -87,7 +90,6 @@ export class NoteSession {
   private caretDirty = false;
   private lastEditAt = Number.NEGATIVE_INFINITY;
   private loading = false;
-  private paused = false;
   private chain: Promise<boolean> = Promise.resolve(true);
   private transition = 0;
 
@@ -253,27 +255,31 @@ export class NoteSession {
       this.notify("Could not save note. Try again.", "error");
       return false;
     }
-    this.paused = true;
+    this.setPaused(true);
     return true;
   }
 
   /** Puts the current note back into the editor and resumes saving. */
   resume(): void {
     if (!this.paused) return;
-    this.paused = false;
+    this.setPaused(false);
     const current = this.state.current;
     if (current) this.loadNote(current, current.caretPosition);
   }
 
-  get isPaused(): boolean {
-    return this.paused;
+  private get paused(): boolean {
+    return this.state.paused;
+  }
+
+  private setPaused(paused: boolean): void {
+    if (this.state.paused !== paused) this.setState({ paused });
   }
 
   // ---- loading notes into the editor ----
 
   private apply(windowData: WindowData, reload: boolean): void {
     const current = windowData.current;
-    if (reload) this.paused = false;
+    if (reload) this.setPaused(false);
     if (reload && current) this.loadNote(current, current.caretPosition);
     this.setState({
       current,
@@ -301,7 +307,7 @@ export class NoteSession {
    * A newer switch cancels an older one that is still waiting.
    */
   private async switchTo(id: NoteId, commit: HistoryCommit | null): Promise<boolean> {
-    this.paused = false;
+    this.setPaused(false);
     const token = ++this.transition;
     if (!(await this.flush())) {
       if (token === this.transition) this.notify("Could not save note. Try again.", "error");
@@ -507,7 +513,9 @@ export class NoteSession {
       return;
     }
     // Keep the local edit and our updatedAt so the next save detects the conflict.
-    const merged = contentChanged ? { ...stored, rawContent: current.rawContent, updatedAt: current.updatedAt } : stored;
+    const merged = contentChanged
+      ? { ...stored, rawContent: current.rawContent, updatedAt: current.updatedAt }
+      : stored;
     this.apply({ ...windowData, current: merged }, false);
     this.refreshFlags();
   }

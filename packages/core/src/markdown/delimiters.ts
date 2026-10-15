@@ -48,8 +48,20 @@ export function delimiterRule(options: DelimiterRuleOptions): { tokenize: Inline
       const open = state.tokens[start.token];
       const close = state.tokens[end.token];
       if (!open || !close) continue;
-      Object.assign(open, { type: `${options.tag}_open`, tag: options.tag, nesting: 1, markup: open.content, content: "" });
-      Object.assign(close, { type: `${options.tag}_close`, tag: options.tag, nesting: -1, markup: close.content, content: "" });
+      Object.assign(open, {
+        type: `${options.tag}_open`,
+        tag: options.tag,
+        nesting: 1,
+        markup: open.content,
+        content: "",
+      });
+      Object.assign(close, {
+        type: `${options.tag}_close`,
+        tag: options.tag,
+        nesting: -1,
+        markup: close.content,
+        content: "",
+      });
     }
   };
 

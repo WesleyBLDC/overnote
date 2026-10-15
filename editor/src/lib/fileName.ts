@@ -5,7 +5,7 @@ export function exportFileName(text: string, extension: "md" | "html" | "txt"): 
   const firstLine = (text.split("\n").find((line) => line.trim()) ?? "").trim();
   const safe = firstLine
     .replace(/[/:\\]/g, "-")
-    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/\p{Cc}/gu, "")
     .replace(/^\.+/, "")
     .trim()
     .slice(0, 200)

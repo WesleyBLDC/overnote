@@ -28,7 +28,13 @@ A marker file, `assets/prebuilt.json`, tells `scripts/prepare-assets.sh` to use 
    ```sh
    npm run build:editor && npm run build:helper
    bash scripts/package-release.sh 0.3.0 /tmp/overnote-release
+   bash scripts/check-release.sh /tmp/overnote-release/overnote-0.3.0.zip
    ```
+
+   `scripts/check-release.sh` takes a local zip (checked against the `SHA256SUMS` next to it) or a release URL (checked against the `SHA256SUMS` of the same release).
+   It quarantines every file the way a browser download does, installs with the Xcode tools stubbed out, starts the helper headless through the zip's own launcher, creates and lists a note, and checks that the launcher cleared the quarantine and that the signature verifies.
+   It never shows the panel and never talks to Raycast, so it is safe to run on a workstation, and it reports what Gatekeeper (`spctl`) says before and after.
+   Run it against a published release with `bash scripts/check-release.sh https://github.com/WesleyBLDC/overnote/releases/download/v0.3.0/overnote-0.3.0.zip`.
 
 5. Tag and push:
 
@@ -38,7 +44,7 @@ A marker file, `assets/prebuilt.json`, tells `scripts/prepare-assets.sh` to use 
    ```
 
 6. Watch the Release workflow in the Actions tab.
-   It builds the editor and the helper, runs the helper smoke test, packages the zip, installs from that zip the way a user does (without Raycast), and then publishes the release.
+   It builds the editor and the helper, runs the helper smoke test, packages the zip, checks that zip as a browser download with `scripts/check-release.sh` (headless, without Raycast), and then publishes the release.
 7. Open the release page and check the files and the notes.
 
 A tag with a suffix, such as `v0.3.0-beta.1`, is published as a prerelease.
@@ -48,6 +54,7 @@ Rerunning the workflow for the same tag replaces the files and the notes of the 
 
 The helper is signed ad hoc with the hardened runtime and is not notarized.
 Downloaded copies get the quarantine attribute, which the installer and the extension's launcher clear only after the helper matches its checksum.
+`spctl --assess --type execute` rejects the helper both before and after the attribute is cleared, because an ad hoc signature has no Developer ID; that is expected, and the helper still runs once the attribute is gone.
 Notarization would need an Apple Developer ID and repository secrets, which this workflow does not use yet.
 
 ## Repository settings

@@ -15,7 +15,7 @@ import {
 } from "@overnote/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { AnyExtension, Editor } from "@tiptap/core";
-import { EditorState, TextSelection } from "@tiptap/pm/state";
+import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Api } from "../bridge/api";
 import { runFormat, type FormatId } from "../editor/commands";
@@ -76,9 +76,10 @@ function sliceJSON(editor: Editor): JSONContent | null {
 }
 
 export function App({ api }: { api: Api }) {
-  const { notices, notify } = useNotices();
+  const { notices, notify, remove: dismissNotice } = useNotices();
   const { settings, setSettings, update: updateSettings } = useSettings(api);
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  // The app element as state, so popups and hooks get it as a value instead of reading a ref while rendering.
+  const [app, setApp] = useState<HTMLDivElement | null>(null);
   const [linkTarget, setLinkTarget] = useState<LinkTarget | null>(null);
   const [panel, setPanel] = useState<PanelViewName | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
@@ -88,12 +89,10 @@ export function App({ api }: { api: Api }) {
   const emojiRef = useRef<EmojiPickerHandle>(null);
   const [emojiDismissed, setEmojiDismissed] = useState<number | null>(null);
   const [slashDismissed, setSlashDismissed] = useState<number | null>(null);
-  const [tick, setTick] = useState(0);
+  // Bumped on every transaction: the editor state is read while rendering (shouldRerenderOnTransaction is off).
+  const [, setTick] = useState(0);
   const [formatMenuOpen, setFormatMenuOpen] = useState(false);
   const [preview, setPreview] = useState<rpc.DeletedItem | null>(null);
-  const sessionRef = useRef<NoteSession | null>(null);
-  const editorRef = useRef<Editor | null>(null);
-  const plainPasteFlag = useMemo(() => ({ next: false }), []);
 
   const copyText = useCallback(
     (text: string, html?: string) =>
@@ -113,28 +112,35 @@ export function App({ api }: { api: Api }) {
     [api, notify],
   );
 
-  const openLinkRef = useRef<() => void>(() => undefined);
+  /** ⌘L, the Link action, and the format bar: the popover for the selection or the word at the caret. */
+  const openLinkIn = useCallback(
+    (current: Editor) => {
+      const target = chooseLinkTarget(current.state);
+      if (!target) {
+        notify("Select text to add a link. Place the cursor inside a word or select text first.", "error");
+        return;
+      }
+      setLinkTarget(target);
+    },
+    [notify],
+  );
+
   const lowlight = useMemo(() => createNoteLowlight(), []);
   const extensions = useMemo<AnyExtension[]>(
     () =>
       createEditorExtensions({
         lowlight,
-        onLinkShortcut: () => openLinkRef.current(),
+        onLinkShortcut: openLinkIn,
         onOpenLink: (href) => openUrl(href),
-        onLinkClick: (from, to) => {
-          const editor = editorRef.current;
-          if (!editor) return;
-          const target = chooseLinkTarget(editor.state.apply(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, from, to))));
+        onLinkClick: (from, to, state) => {
+          const target = chooseLinkTarget(
+            state.apply(state.tr.setSelection(TextSelection.create(state.doc, from, to))),
+          );
           if (target) setLinkTarget({ ...target, from, to });
-        },
-        takePlainPaste: () => {
-          const plain = plainPasteFlag.next;
-          plainPasteFlag.next = false;
-          return plain;
         },
         copy: (text) => copyText(text),
       }),
-    [copyText, openUrl, plainPasteFlag, editorRef, lowlight],
+    [copyText, openUrl, openLinkIn, lowlight],
   );
 
   const editor = useEditor({
@@ -147,55 +153,71 @@ export function App({ api }: { api: Api }) {
       scrollThreshold: { top: 24, bottom: 100, left: 0, right: 0 },
       scrollMargin: { top: 24, bottom: 100, left: 0, right: 0 },
       attributes: { class: "note-editor", "data-testid": "editor", spellcheck: "true" },
-      handleKeyDown: (_view, event) => emojiRef.current?.onKeyDown(event) || slashRef.current?.onKeyDown(event) || false,
+      handleKeyDown: (_view, event) =>
+        emojiRef.current?.onKeyDown(event) || slashRef.current?.onKeyDown(event) || false,
     },
-    onUpdate: ({ transaction }) => {
-      if (transaction.docChanged && !transaction.getMeta("bnLoad")) sessionRef.current?.contentChanged();
-    },
-    onSelectionUpdate: () => sessionRef.current?.selectionChanged(),
     onTransaction: () => setTick((t) => t + 1),
-    onBlur: () => void sessionRef.current?.flush(),
   });
-  editorRef.current = editor;
-  if (import.meta.env.DEV) (window as unknown as { __bnEditor?: Editor | null }).__bnEditor = editor;
 
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const host = window as unknown as { __bnEditor?: Editor | null };
+    host.__bnEditor = editor;
+    return () => {
+      if (host.__bnEditor === editor) host.__bnEditor = null;
+    };
+  }, [editor]);
+
+  // The editor instance lives as long as the window, and so does its session.
   const session = useMemo(() => {
     const port: EditorPort = {
-      getDoc: () => editorRef.current?.getJSON() ?? { type: "doc", content: [{ type: "paragraph" }] },
-      getCaret: () => editorRef.current?.state.selection.from ?? 0,
-      getText: () => (editorRef.current ? docToPlainText(editorRef.current.getJSON()) : ""),
-      isComposing: () => editorRef.current?.view.composing ?? false,
-      load: (doc, caret) => {
-        const current = editorRef.current;
-        if (current) loadIntoEditor(current, doc, caret);
-      },
+      getDoc: () => editor.getJSON(),
+      getCaret: () => editor.state.selection.from,
+      getText: () => docToPlainText(editor.getJSON()),
+      isComposing: () => editor.view.composing,
+      load: (doc, caret) => loadIntoEditor(editor, doc, caret),
     };
     return new NoteSession({ api, editor: port, notice: (message, kind) => notify(message, kind) });
-  }, [api, notify, editorRef]);
-  sessionRef.current = session;
+  }, [api, notify, editor]);
   const state = useSyncExternalStore(session.subscribe, session.getState);
+
+  // Edits, caret moves, and blur reach the session.
+  useEffect(() => {
+    const onUpdate = ({ transaction }: { transaction: Transaction }) => {
+      if (transaction.docChanged && !transaction.getMeta("bnLoad")) session.contentChanged();
+    };
+    const onSelectionUpdate = () => session.selectionChanged();
+    const onBlur = () => void session.flush();
+    editor.on("update", onUpdate);
+    editor.on("selectionUpdate", onSelectionUpdate);
+    editor.on("blur", onBlur);
+    return () => {
+      editor.off("update", onUpdate);
+      editor.off("selectionUpdate", onSelectionUpdate);
+      editor.off("blur", onBlur);
+    };
+  }, [editor, session]);
 
   // ---- read-only preview of a deleted note ----
 
   const startPreview = useCallback(
     async (note: rpc.DeletedItem) => {
-      const current = editorRef.current;
-      if (!current || !(await session.pause())) return;
+      if (!(await session.pause())) return;
       setFind(null);
       setLinkTarget(null);
-      current.setEditable(false, false);
-      loadIntoEditor(current, loadDoc(note.rawContent || null, note.preview), 0);
+      editor.setEditable(false, false);
+      loadIntoEditor(editor, loadDoc(note.rawContent || null, note.preview), 0);
       setPreview(note);
     },
-    [session],
+    [editor, session],
   );
 
   const exitPreview = useCallback(() => {
-    editorRef.current?.setEditable(true, false);
+    editor.setEditable(true, false);
     session.resume();
     setPreview(null);
-    editorRef.current?.view.focus();
-  }, [session]);
+    editor.view.focus();
+  }, [editor, session]);
 
   const restorePreview = useCallback(
     async (note: rpc.DeletedItem) => {
@@ -205,20 +227,18 @@ export function App({ api }: { api: Api }) {
         notify("Could not restore the note", "error");
         return;
       }
-      editorRef.current?.setEditable(true, false);
+      editor.setEditable(true, false);
       await session.open(note.id);
       notify("Note restored");
     },
-    [api, session, notify],
+    [api, editor, session, notify],
   );
 
-  // Any switch, create, or delete reloads a note, which ends the preview.
+  // Any switch, create, or delete reloads a note and unpauses the session, which ends the preview.
+  if (preview && !state.paused) setPreview(null);
   useEffect(() => {
-    if (preview && !session.isPaused) {
-      editorRef.current?.setEditable(true, false);
-      setPreview(null);
-    }
-  });
+    if (!preview && !editor.isEditable) editor.setEditable(true, false);
+  }, [editor, preview]);
 
   // ---- boot and native events ----
 
@@ -230,13 +250,13 @@ export function App({ api }: { api: Api }) {
         if (cancelled) return;
         setSettings(ready.settings);
         await session.applyBoot(ready.windowData);
-        editorRef.current?.commands.focus();
+        editor.commands.focus();
       })
       .catch((error: unknown) => notify(`Could not load notes: ${String(error)}`, "error"));
     return () => {
       cancelled = true;
     };
-  }, [api, session, setSettings, notify, editorRef]);
+  }, [api, editor, session, setSettings, notify]);
 
   useEffect(() => {
     const offs = [
@@ -244,8 +264,7 @@ export function App({ api }: { api: Api }) {
       api.on("note.new", ({ note }) => void session.handleNoteNew(note)),
       api.on("notes.changed", ({ ids }) => void session.handleNotesChanged(ids)),
       api.on("window.didShow", () => {
-        const current = editorRef.current;
-        if (current && !current.isDestroyed) current.commands.focus(undefined, { scrollIntoView: true });
+        if (!editor.isDestroyed) editor.commands.focus(undefined, { scrollIntoView: true });
       }),
       api.on("window.didHide", () => void session.flush()),
       api.on("window.didResignKey", () => void session.flush()),
@@ -265,10 +284,10 @@ export function App({ api }: { api: Api }) {
       window.removeEventListener("beforeunload", onUnload);
       window.removeEventListener("blur", onUnload);
     };
-  }, [api, session, editorRef]);
+  }, [api, editor, session]);
 
   useEffect(() => {
-    if (editor) void loadGrammars(lowlight, editor);
+    void loadGrammars(lowlight, editor);
   }, [editor, lowlight]);
 
   // ---- zoom and resize ----
@@ -279,34 +298,26 @@ export function App({ api }: { api: Api }) {
 
   // ---- derived UI state ----
 
-  const doc = editor?.getJSON();
-  const text = doc ? docToPlainText(doc) : "";
-  const liveTitle = doc ? deriveTitle(doc) : "";
-  const counts = useMemo(() => ({ characters: countCharacters(text), words: countWords(text) }), [text]);
+  const doc = editor.getJSON();
+  const text = docToPlainText(doc);
+  const liveTitle = deriveTitle(doc);
+  const counts = { characters: countCharacters(text), words: countWords(text) };
   const title = displayTitle({ title: liveTitle, text });
   const blank = text.trim() === "";
-  const slash = editor && editor.isFocused ? slashQueryAt(editor.state) : null;
+  const slash = editor.isFocused ? slashQueryAt(editor.state) : null;
   const slashItems = slash && slash.from !== slashDismissed ? filterSlashItems(slash.query) : [];
-  const emojiQuery = editor && editor.isFocused ? emojiQueryAt(editor.state) : null;
+  const emojiQuery = editor.isFocused ? emojiQueryAt(editor.state) : null;
   const showEmoji = emojiQuery !== null && emojiQuery.from !== emojiDismissed;
   const overlayRem = panel || confirm ? 34 : slashItems.length || showEmoji || linkTarget || formatMenuOpen ? 16 : null;
-  useResizeReporter(wrapperRef, api, { autoSize: settings.windowAutoSize, overlayRem });
-  useDragRegions(wrapperRef, api, settings.zoom);
-  useScrollEdges(wrapperRef);
+  const hasSelection = !editor.state.selection.empty;
+  const inList = editor.isActive("list");
+  useResizeReporter(app, api, { autoSize: settings.windowAutoSize, overlayRem });
+  useDragRegions(app, api, settings.zoom);
+  useScrollEdges(app);
 
   // ---- actions ----
 
-  const openLink = useCallback(() => {
-    const current = editorRef.current;
-    if (!current) return;
-    const target = chooseLinkTarget(current.state);
-    if (!target) {
-      notify("Select text to add a link. Place the cursor inside a word or select text first.", "error");
-      return;
-    }
-    setLinkTarget(target);
-  }, [notify, editorRef]);
-  openLinkRef.current = openLink;
+  const openLink = useCallback(() => openLinkIn(editor), [editor, openLinkIn]);
 
   const setZoom = useCallback(
     (zoom: number, message: string) => {
@@ -318,32 +329,31 @@ export function App({ api }: { api: Api }) {
 
   const exportAs = useCallback(
     async (format: ExportFormat) => {
-      const current = editorRef.current;
-      if (!current) return;
-      const json = current.getJSON();
-      const content = format === "md" ? docToMarkdown(json) : format === "html" ? docToHTML(json) : docToPlainText(json);
+      const json = editor.getJSON();
+      const content =
+        format === "md" ? docToMarkdown(json) : format === "html" ? docToHTML(json) : docToPlainText(json);
       try {
         const result = await api.file.saveAs({ suggestedName: exportFileName(docToPlainText(json), format), content });
-        if (result.saved) notify(`Exported as ${format === "md" ? "Markdown" : format === "html" ? "HTML" : "Plain Text"}`);
+        if (result.saved)
+          notify(`Exported as ${format === "md" ? "Markdown" : format === "html" ? "HTML" : "Plain Text"}`);
       } catch {
         notify("Could not export the note", "error");
       }
     },
-    [api, notify, editorRef],
+    [api, editor, notify],
   );
 
   const copyAs = useCallback(
     async (format: ExportFormat) => {
-      const current = editorRef.current;
-      if (!current) return;
-      const json = sliceJSON(current) ?? current.getJSON();
-      const content = format === "md" ? docToMarkdown(json) : format === "html" ? docToHTML(json) : docToPlainText(json);
+      const json = sliceJSON(editor) ?? editor.getJSON();
+      const content =
+        format === "md" ? docToMarkdown(json) : format === "html" ? docToHTML(json) : docToPlainText(json);
       await copyText(content).then(
         () => notify(`Copied as ${format === "md" ? "Markdown" : format === "html" ? "HTML" : "Plain Text"}`),
         () => undefined,
       );
     },
-    [copyText, notify, editorRef],
+    [copyText, editor, notify],
   );
 
   const deleteAll = useCallback(() => {
@@ -368,58 +378,117 @@ export function App({ api }: { api: Api }) {
    * Create Quicklink form can autofill it from.
    */
   const createQuicklink = useCallback(() => {
-    const id = sessionRef.current?.getState().current?.id;
+    const id = session.getState().current?.id;
     if (!id) return;
     void copyText(noteDeeplink(id)).then(
       () => notify("Deeplink copied. Open Create Quicklink in Raycast and paste it as the link."),
       () => undefined,
     );
-  }, [copyText, notify]);
+  }, [copyText, notify, session]);
 
   const pinned = state.current?.pinned !== null && state.current?.pinned !== undefined;
 
   const moveItem = useCallback(
     (direction: "up" | "down") => {
-      const current = editorRef.current;
-      if (!current) return;
-      moveListItem(direction)(current.state, current.view.dispatch, current.view);
-      current.commands.focus();
+      moveListItem(direction)(editor.state, editor.view.dispatch, editor.view);
+      editor.commands.focus();
     },
-    [editorRef],
+    [editor],
   );
 
-  const format = useCallback((id: FormatId) => {
-    const current = editorRef.current;
-    if (current) runFormat(current, id, openLink);
-  }, [openLink, editorRef]);
+  const format = useCallback(
+    (id: FormatId) => {
+      runFormat(editor, id, openLink);
+    },
+    [editor, openLink],
+  );
 
+  const { current: currentNote, canGoBack, canGoForward } = state;
   const lists = useMemo((): Record<"root" | "format" | "heading" | "copyAs" | "export", PanelAction[]> => {
-    const hasSelection = editor ? !editor.state.selection.empty : false;
     return {
       root: [
-        { id: "new", title: "New Note", shortcut: "⌘N", section: "notes", enabled: !blank, run: () => void session.newNote() },
+        {
+          id: "new",
+          title: "New Note",
+          shortcut: "⌘N",
+          section: "notes",
+          enabled: !blank,
+          run: () => void session.newNote(),
+        },
         ...(preview
           ? []
           : [
-              { id: "duplicate", title: "Duplicate Note", shortcut: "⌘D", section: "notes", enabled: !blank, run: () => void session.duplicate() },
-              { id: "pin", title: pinned ? "Unpin Note" : "Pin Note", shortcut: "⇧⌘P", section: "notes", run: () => void session.togglePin() },
+              {
+                id: "duplicate",
+                title: "Duplicate Note",
+                shortcut: "⌘D",
+                section: "notes",
+                enabled: !blank,
+                run: () => void session.duplicate(),
+              },
+              {
+                id: "pin",
+                title: pinned ? "Unpin Note" : "Pin Note",
+                shortcut: "⇧⌘P",
+                section: "notes",
+                run: () => void session.togglePin(),
+              },
             ]),
         { id: "browse", title: "Browse Notes", shortcut: "⌘P", section: "notes", push: "browse" },
-        { id: "back", title: "Go Back", shortcut: "⌘[", section: "notes", enabled: state.canGoBack, run: () => void session.back() },
-        { id: "forward", title: "Go Forward", shortcut: "⌘]", section: "notes", enabled: state.canGoForward, run: () => void session.forward() },
+        {
+          id: "back",
+          title: "Go Back",
+          shortcut: "⌘[",
+          section: "notes",
+          enabled: canGoBack,
+          run: () => void session.back(),
+        },
+        {
+          id: "forward",
+          title: "Go Forward",
+          shortcut: "⌘]",
+          section: "notes",
+          enabled: canGoForward,
+          run: () => void session.forward(),
+        },
         { id: "find", title: "Find in Note", shortcut: "⌘F", section: "copy", run: () => setFind({ term: "" }) },
-        { id: "copyAs", title: hasSelection ? "Copy Selection As…" : "Copy Note As…", shortcut: "⇧⌘C", section: "copy", push: "copyAs" },
+        {
+          id: "copyAs",
+          title: hasSelection ? "Copy Selection As…" : "Copy Note As…",
+          shortcut: "⇧⌘C",
+          section: "copy",
+          push: "copyAs",
+        },
         {
           id: "deeplink",
           title: "Copy Deeplink",
           shortcut: "⇧⌘D",
           section: "copy",
-          run: () => state.current && void copyText(noteDeeplink(state.current.id)).then(() => notify("Copied deeplink"), () => undefined),
+          run: () =>
+            currentNote &&
+            void copyText(noteDeeplink(currentNote.id)).then(
+              () => notify("Copied deeplink"),
+              () => undefined,
+            ),
         },
         { id: "quicklink", title: "Create Quicklink", shortcut: "⇧⌘L", section: "copy", run: createQuicklink },
         { id: "export", title: "Export…", shortcut: "⇧⌘E", section: "copy", push: "export" },
-        { id: "moveUp", title: "Move List Item Up", shortcut: "⌃⌘↑", section: "edit", enabled: editor?.isActive("list") ?? false, run: () => moveItem("up") },
-        { id: "moveDown", title: "Move List Item Down", shortcut: "⌃⌘↓", section: "edit", enabled: editor?.isActive("list") ?? false, run: () => moveItem("down") },
+        {
+          id: "moveUp",
+          title: "Move List Item Up",
+          shortcut: "⌃⌘↑",
+          section: "edit",
+          enabled: inList,
+          run: () => moveItem("up"),
+        },
+        {
+          id: "moveDown",
+          title: "Move List Item Down",
+          shortcut: "⌃⌘↓",
+          section: "edit",
+          enabled: inList,
+          run: () => moveItem("down"),
+        },
         { id: "format", title: "Format…", shortcut: "⇧⌘,", section: "edit", push: "format" },
         {
           id: "autosize",
@@ -428,14 +497,62 @@ export function App({ api }: { api: Api }) {
           section: "window",
           run: () => updateSettings({ windowAutoSize: !settings.windowAutoSize }),
         },
-        { id: "formatBar", title: "Toggle Format Bar", shortcut: "⌥⌘,", section: "window", run: () => updateSettings({ showFormatBar: !settings.showFormatBar }) },
-        { id: "actualSize", title: "Actual Size", shortcut: "⌘0", section: "zoom", enabled: settings.zoom !== 1, run: () => setZoom(1, "Zoom reset") },
-        { id: "zoomIn", title: "Zoom In", shortcut: "⌘=", section: "zoom", enabled: settings.zoom < 2, run: () => setZoom(stepZoom(settings.zoom, 1), `Zoom ${zoomLabel(stepZoom(settings.zoom, 1))}`) },
-        { id: "zoomOut", title: "Zoom Out", shortcut: "⌘-", section: "zoom", enabled: settings.zoom > 0.75, run: () => setZoom(stepZoom(settings.zoom, -1), `Zoom ${zoomLabel(stepZoom(settings.zoom, -1))}`) },
-        { id: "settings", title: "Settings…", shortcut: "⌘,", section: "settings", keywords: ["preferences"], push: "settings" },
+        {
+          id: "formatBar",
+          title: "Toggle Format Bar",
+          shortcut: "⌥⌘,",
+          section: "window",
+          run: () => updateSettings({ showFormatBar: !settings.showFormatBar }),
+        },
+        {
+          id: "actualSize",
+          title: "Actual Size",
+          shortcut: "⌘0",
+          section: "zoom",
+          enabled: settings.zoom !== 1,
+          run: () => setZoom(1, "Zoom reset"),
+        },
+        {
+          id: "zoomIn",
+          title: "Zoom In",
+          shortcut: "⌘=",
+          section: "zoom",
+          enabled: settings.zoom < 2,
+          run: () => setZoom(stepZoom(settings.zoom, 1), `Zoom ${zoomLabel(stepZoom(settings.zoom, 1))}`),
+        },
+        {
+          id: "zoomOut",
+          title: "Zoom Out",
+          shortcut: "⌘-",
+          section: "zoom",
+          enabled: settings.zoom > 0.75,
+          run: () => setZoom(stepZoom(settings.zoom, -1), `Zoom ${zoomLabel(stepZoom(settings.zoom, -1))}`),
+        },
+        {
+          id: "settings",
+          title: "Settings…",
+          shortcut: "⌘,",
+          section: "settings",
+          keywords: ["preferences"],
+          push: "settings",
+        },
         { id: "deleted", title: "Show Recently Deleted Notes", section: "danger", push: "deleted" },
-        { id: "delete", title: "Delete Note", shortcut: "⌃X", section: "danger", destructive: true, run: () => void session.deleteCurrent() },
-        { id: "deleteAll", title: "Delete All Notes", shortcut: "⌃⇧X", section: "danger", destructive: true, run: deleteAll },
+        {
+          id: "delete",
+          title: "Delete Note",
+          shortcut: "⌃X",
+          section: "danger",
+          destructive: true,
+          run: () => void session.deleteCurrent(),
+        },
+        {
+          id: "deleteAll",
+          title: "Delete All Notes",
+          shortcut: "⌃⇧X",
+          section: "danger",
+          destructive: true,
+          run: deleteAll,
+        },
       ],
       format: [
         { id: "heading", title: "Heading…", section: "Inline", push: "heading" },
@@ -449,7 +566,14 @@ export function App({ api }: { api: Api }) {
         { id: "blockquote", title: "Blockquote", shortcut: "⇧⌘B", section: "Block", run: () => format("blockquote") },
         { id: "ordered", title: "Ordered List", shortcut: "⇧⌘7", section: "List", run: () => format("ordered") },
         { id: "bullet", title: "Bullet List", shortcut: "⇧⌘8", section: "List", run: () => format("bullet") },
-        { id: "task", title: "Task List", shortcut: "⇧⌘9", section: "List", keywords: ["todo", "check"], run: () => format("task") },
+        {
+          id: "task",
+          title: "Task List",
+          shortcut: "⇧⌘9",
+          section: "List",
+          keywords: ["todo", "check"],
+          run: () => format("task"),
+        },
       ],
       heading: [1, 2, 3].map((level) => ({
         id: `h${level}`,
@@ -471,34 +595,68 @@ export function App({ api }: { api: Api }) {
         run: () => void exportAs(f),
       })),
     };
-  }, [editor, blank, pinned, state, settings, session, copyText, notify, updateSettings, setZoom, deleteAll, format, openLink, copyAs, exportAs, moveItem, createQuicklink, preview, tick]);
+  }, [
+    hasSelection,
+    inList,
+    blank,
+    pinned,
+    currentNote,
+    canGoBack,
+    canGoForward,
+    settings,
+    session,
+    copyText,
+    notify,
+    updateSettings,
+    setZoom,
+    deleteAll,
+    format,
+    openLink,
+    copyAs,
+    exportAs,
+    moveItem,
+    createQuicklink,
+    preview,
+  ]);
 
   // ---- window level shortcuts ----
 
-  const handlers = useLatest({ createQuicklink, lists, session, state, settings, panel, find, linkTarget, confirm, slashItems, showEmoji, hide, deleteAll, setZoom, openLink, preview, exitPreview });
+  const handlers = useLatest({
+    createQuicklink,
+    lists,
+    session,
+    state,
+    settings,
+    panel,
+    find,
+    linkTarget,
+    confirm,
+    slashItems,
+    showEmoji,
+    hide,
+    deleteAll,
+    setZoom,
+    openLink,
+    preview,
+    exitPreview,
+  });
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const h = handlers.current;
       if (h.confirm) return;
-      if (matches(event, { code: "KeyV", meta: true, shift: true })) {
-        // ⇧⌘V: the paste that follows is inserted as plain text.
-        plainPasteFlag.next = true;
-        setTimeout(() => {
-          plainPasteFlag.next = false;
-        }, 1000);
-        return;
-      }
       const run = (fn: () => void) => {
         event.preventDefault();
         event.stopPropagation();
         fn();
       };
       if (matches(event, { code: "KeyK", meta: true })) return run(() => setPanel(h.panel ? null : "root"));
-      if (matches(event, { code: "KeyP", meta: true })) return run(() => setPanel(h.panel === "browse" ? null : "browse"));
+      if (matches(event, { code: "KeyP", meta: true }))
+        return run(() => setPanel(h.panel === "browse" ? null : "browse"));
       if (matches(event, { code: "Comma", meta: true, shift: true })) return run(() => setPanel("format"));
       if (matches(event, { code: "KeyC", meta: true, shift: true })) return run(() => setPanel("copyAs"));
       if (matches(event, { code: "KeyE", meta: true, shift: true })) return run(() => setPanel("export"));
-      if (matches(event, { code: "Comma", meta: true })) return run(() => setPanel(h.panel === "settings" ? null : "settings"));
+      if (matches(event, { code: "Comma", meta: true }))
+        return run(() => setPanel(h.panel === "settings" ? null : "settings"));
       if (h.panel) return; // the panel handles the rest of its keys
       const slot = pinSlot(event);
       if (slot !== null) {
@@ -509,27 +667,34 @@ export function App({ api }: { api: Api }) {
       if (matches(event, { code: "KeyN", meta: true })) return run(() => void h.session.newNote());
       if (matches(event, { code: "KeyX", ctrl: true })) return run(() => void h.session.deleteCurrent());
       if (matches(event, { code: "KeyX", ctrl: true, shift: true })) return run(h.deleteAll);
-      if (matches(event, { code: "KeyP", meta: true, shift: true })) return run(() => !h.preview && void h.session.togglePin());
+      if (matches(event, { code: "KeyP", meta: true, shift: true }))
+        return run(() => !h.preview && void h.session.togglePin());
       if (matches(event, { code: "KeyD", meta: true })) return run(() => !h.preview && void h.session.duplicate());
       if (matches(event, { code: "KeyD", meta: true, shift: true })) {
         return run(() => h.lists.root.find((a) => a.id === "deeplink")?.run?.());
       }
       if (matches(event, { code: "KeyL", meta: true, shift: true })) return run(h.createQuicklink);
-      if (matches(event, { code: "BracketLeft", meta: true }) || matches(event, { code: "ArrowDown", meta: true, alt: true })) {
+      if (
+        matches(event, { code: "BracketLeft", meta: true }) ||
+        matches(event, { code: "ArrowDown", meta: true, alt: true })
+      ) {
         if (h.find && event.code === "ArrowDown") return;
         return run(() => void h.session.back());
       }
-      if (matches(event, { code: "BracketRight", meta: true }) || matches(event, { code: "ArrowUp", meta: true, alt: true })) {
+      if (
+        matches(event, { code: "BracketRight", meta: true }) ||
+        matches(event, { code: "ArrowUp", meta: true, alt: true })
+      ) {
         return run(() => void h.session.forward());
       }
       if (matches(event, { code: "KeyF", meta: true })) {
         return run(() => {
-          const current = editorRef.current;
-          const selected = current ? current.state.doc.textBetween(current.state.selection.from, current.state.selection.to, " ") : "";
+          const { doc, selection } = editor.state;
+          const selected = doc.textBetween(selection.from, selection.to, " ");
           if (!h.find) setFind({ term: selected });
           else if (!findRef.current?.focusOrClose(selected)) {
             setFind(null);
-            current?.commands.focus();
+            editor.commands.focus();
           }
         });
       }
@@ -555,22 +720,25 @@ export function App({ api }: { api: Api }) {
       if (event.key === "Escape" && !event.defaultPrevented) {
         if (h.preview) return run(h.exitPreview);
         if (h.linkTarget || h.find || h.slashItems.length || h.showEmoji) return;
-        if (document.activeElement?.closest(".note-editor") || document.activeElement === document.body) return run(h.hide);
+        if (document.activeElement?.closest(".note-editor") || document.activeElement === document.body)
+          return run(h.hide);
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [handlers, updateSettings, editorRef, plainPasteFlag]);
+  }, [editor, handlers, updateSettings]);
 
-  // Notes switching closes the find bar and popups.
+  // Switching notes closes the find bar and the link popover, in the same render as the switch.
   const currentId = state.current?.id ?? null;
-  useEffect(() => {
+  const [shownId, setShownId] = useState(currentId);
+  if (shownId !== currentId) {
+    setShownId(currentId);
     setFind(null);
     setLinkTarget(null);
-  }, [currentId]);
+  }
 
   const runSlash = (item: SlashItem) => {
-    if (!editor || !slash) return;
+    if (!slash) return;
     editor.chain().focus().deleteRange({ from: slash.from, to: slash.to }).run();
     runFormat(editor, item.id as FormatId, openLink);
   };
@@ -578,16 +746,29 @@ export function App({ api }: { api: Api }) {
   const closePanel = () => {
     setPanel(null);
     // view.focus is synchronous; Tiptap's focus command waits a frame and could steal focus from a panel opened right after.
-    if (!find) editorRef.current?.view.focus();
+    if (!find) editor.view.focus();
   };
 
   return (
-    <div className="app" ref={wrapperRef} data-testid="app" data-ready={state.ready ? "true" : "false"} data-note-id={currentId ?? ""}>
-      <Toolbar title={title} untitled={blank} onClose={() => {
-        void session.flush();
-        void api.window.hide().catch(() => undefined);
-      }} onActions={() => setPanel(panel ? null : "root")} onBrowse={() => setPanel("browse")} onNew={() => void session.newNote()} />
-      {find && editor ? <FindBar ref={findRef} editor={editor} initialTerm={find.term} onClose={() => setFind(null)} /> : null}
+    <div
+      className="app"
+      ref={setApp}
+      data-testid="app"
+      data-ready={state.ready ? "true" : "false"}
+      data-note-id={currentId ?? ""}
+    >
+      <Toolbar
+        title={title}
+        untitled={blank}
+        onClose={() => {
+          void session.flush();
+          void api.window.hide().catch(() => undefined);
+        }}
+        onActions={() => setPanel(panel ? null : "root")}
+        onBrowse={() => setPanel("browse")}
+        onNew={() => void session.newNote()}
+      />
+      {find ? <FindBar ref={findRef} editor={editor} initialTerm={find.term} onClose={() => setFind(null)} /> : null}
       {preview ? (
         <div className="preview-banner" data-testid="preview-banner" role="status">
           <span>This note is in Recently Deleted.</span>
@@ -596,22 +777,25 @@ export function App({ api }: { api: Api }) {
           </button>
         </div>
       ) : null}
-      <main className="content" onMouseDown={(event) => {
-        if (preview) {
-          event.preventDefault();
-          setConfirm({
-            title: "Restore Note?",
-            message: "This note is in Recently Deleted. Restore it to edit it.",
-            confirm: "Restore",
-            onConfirm: () => void restorePreview(preview),
-          });
-          return;
-        }
-        if (event.target === event.currentTarget) {
-          event.preventDefault();
-          editor?.commands.focus("end");
-        }
-      }}>
+      <main
+        className="content"
+        onMouseDown={(event) => {
+          if (preview) {
+            event.preventDefault();
+            setConfirm({
+              title: "Restore Note?",
+              message: "This note is in Recently Deleted. Restore it to edit it.",
+              confirm: "Restore",
+              onConfirm: () => void restorePreview(preview),
+            });
+            return;
+          }
+          if (event.target === event.currentTarget) {
+            event.preventDefault();
+            editor.commands.focus("end");
+          }
+        }}
+      >
         <div className="content-inner">
           <EditorContent editor={editor} />
         </div>
@@ -626,24 +810,24 @@ export function App({ api }: { api: Api }) {
         openLink={openLink}
         onMenuChange={setFormatMenuOpen}
       />
-      {editor && slash && slashItems.length ? (
+      {slash && slashItems.length ? (
         <SlashMenu
           ref={slashRef}
           editor={editor}
           items={slashItems}
           from={slash.from}
-          container={wrapperRef.current}
+          container={app}
           onRun={runSlash}
           onDismiss={() => setSlashDismissed(slash.from)}
         />
       ) : null}
-      {editor && emojiQuery && showEmoji ? (
+      {emojiQuery && showEmoji ? (
         <EmojiPicker
           ref={emojiRef}
           editor={editor}
           from={emojiQuery.from}
           query={emojiQuery.query}
-          container={wrapperRef.current}
+          container={app}
           onPick={(emoji) => {
             editor.chain().focus().insertContentAt({ from: emojiQuery.from, to: emojiQuery.to }, emoji).run();
             recordEmojiUse(emoji);
@@ -651,11 +835,11 @@ export function App({ api }: { api: Api }) {
           onDismiss={() => setEmojiDismissed(emojiQuery.from)}
         />
       ) : null}
-      {editor && linkTarget ? (
+      {linkTarget ? (
         <LinkPopover
           editor={editor}
           target={linkTarget}
-          container={wrapperRef.current}
+          container={app}
           onClose={() => setLinkTarget(null)}
           notify={notify}
           openUrl={openUrl}
@@ -705,9 +889,15 @@ export function App({ api }: { api: Api }) {
           }
         />
       ) : null}
-      <ExitGhost open={panel !== null} root={wrapperRef} selector=".panel-backdrop" className="panel-ghost" />
+      <ExitGhost
+        open={panel !== null}
+        root={app}
+        selector=".panel-backdrop"
+        className="panel-ghost"
+        token="--motion-fast"
+      />
       {confirm ? <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} /> : null}
-      <Notices notices={notices} />
+      <Notices notices={notices} onExited={dismissNotice} />
     </div>
   );
 }

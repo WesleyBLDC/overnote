@@ -12,7 +12,7 @@
   "dependencies": {
     "@overnote/core": "*",
     "@tiptap/core": "^3.32.0",
-    "@tiptap/extension-code-block-lowlight": "^3.32.0",
+    "@tiptap/extension-code-block": "^3.32.0",
     "@tiptap/extensions": "^3.32.0",
     "@tiptap/pm": "^3.32.0",
     "@tiptap/react": "^3.32.0",
