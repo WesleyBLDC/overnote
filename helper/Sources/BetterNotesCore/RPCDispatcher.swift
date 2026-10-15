@@ -19,7 +19,7 @@ public final class RPCDispatcher: Sendable {
 
     /// Methods only the editor may call.
     public static let bridgeOnlyMethods: Set<String> = [
-        "system.ready", "window.resize", "window.resignFocus", "app.openURL", "clipboard.copy", "file.saveAs",
+        "system.ready", "window.resize", "window.setDragRegions", "window.resignFocus", "app.openURL", "clipboard.copy", "file.saveAs",
     ]
 
     public init(
@@ -79,6 +79,9 @@ public final class RPCDispatcher: Sendable {
             let height = try p.double("contentHeight")
             guard height >= 0 else { throw RPCError.badParams("contentHeight must not be negative") }
             await host.resizeWindow(contentHeight: height, temporary: try p.optionalBool("temporary") ?? false)
+            return [:]
+        case "window.setDragRegions":
+            await host.setDragRegions(try Self.dragRects(p))
             return [:]
         case "window.resignFocus":
             await host.resignFocus()
@@ -207,6 +210,27 @@ public final class RPCDispatcher: Sendable {
 
         default:
             throw RPCError.methodNotFound(method)
+        }
+    }
+
+    /// At most this many drag rects; the editor sends a handful at most.
+    static let maxDragRects = 64
+
+    /// Validates `{ rects: [{ x, y, width, height }] }`: finite numbers, no negative sizes.
+    private static func dragRects(_ p: Params) throws -> [DragRect] {
+        guard let raw = p.values["rects"], let items = raw.arrayValue else {
+            throw RPCError.badParams("rects must be an array")
+        }
+        guard items.count <= maxDragRects else { throw RPCError.badParams("at most \(maxDragRects) rects") }
+        return try items.map { item in
+            let rect = try Params(item)
+            let value = DragRect(
+                x: try rect.double("x"), y: try rect.double("y"),
+                width: try rect.double("width"), height: try rect.double("height"))
+            guard value.width >= 0, value.height >= 0 else {
+                throw RPCError.badParams("rect width and height must not be negative")
+            }
+            return value
         }
     }
 

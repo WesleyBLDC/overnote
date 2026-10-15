@@ -87,7 +87,8 @@ public struct Settings: Equatable, Sendable {
     public var zoom = 1.0
     public var showFormatBar = false
     public var countMode = CountMode.characters
-    public var windowAutoSize = true
+    /// Off by default (contract v2.8): the first open uses a roomy fixed size instead.
+    public var windowAutoSize = false
     public var panelFrame: PanelFrame?
 
     public static let zoomRange = 0.75...2.0

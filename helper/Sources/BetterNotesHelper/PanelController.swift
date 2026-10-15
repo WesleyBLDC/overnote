@@ -29,8 +29,8 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private var contentHeight: CGFloat?
     /// A temporary height (⌘K, browse, dialogs) that wins until the next normal report.
     private var temporaryHeight: CGFloat?
-    /// The frame when a user live resize began, to tell a height change from a width change.
-    private var liveResizeStartFrame: NSRect?
+    /// The height before a temporary growth, restored when no user height is stored.
+    private var heightBeforeTemporary: CGFloat?
     private var saveFrameWork: DispatchWorkItem?
     /// Every event sent to the editor, kept only when test hooks are on.
     private(set) var emittedEvents: [(String, JSONValue)] = []
@@ -65,7 +65,8 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         body.autoresizingMask = [.width, .height]
 
         let background = NSVisualEffectView(frame: body.bounds)
-        background.material = .popover
+        // A dark, dense material: under the editor's darker tint it reads as solid dark glass.
+        background.material = Self.material
         background.blendingMode = .behindWindow
         background.state = .active
         background.autoresizingMask = [.width, .height]
@@ -105,17 +106,27 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
                 height: NotesPanel.dragStripHeight))
         strip.autoresizingMask = [.width, .minYMargin]
 
+        // Resize zones go on top of everything; they claim only edge and corner events.
+        let overlay = ResizeOverlayView(frame: body.bounds)
+        overlay.autoresizingMask = [.width, .height]
+        webView.resizeOverlay = overlay
+
         body.addSubview(background)
         body.addSubview(webView)
         body.addSubview(strip)
+        body.addSubview(overlay)
         panel.contentView = body
         self.webView = webView
+        panel.onUserResize = { [weak self] start, end in self?.userDidResize(from: start, to: end) }
+        panel.onClose = { [weak self] in self?.hide() }
 
         placePanel()
         if let url = URL(string: "\(EditorSchemeHandler.scheme)://app/index.html") {
             webView.load(URLRequest(url: url))
         }
     }
+
+    static let material: NSVisualEffectView.Material = .hudWindow
 
     /// A stretchable rounded rectangle used as the material's mask.
     private static func roundedMask(radius: CGFloat) -> NSImage {
@@ -180,6 +191,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         emitEvent("window.didHide", [:])
     }
 
+    /// Close Window (⌘W): the same hide path as Esc and the editor's Close control; the editor
+    /// flushes pending edits when it receives `window.didHide`.
+    @objc func closeWindow(_ sender: Any?) {
+        hide()
+    }
+
     func returnFocusToPreviousApp() {
         guard let previousApp, !previousApp.isTerminated else { return }
         NSApp.yieldActivation(to: previousApp)
@@ -225,7 +242,9 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         } else if let saved = settings.panelFrame?.height {
             height = CGFloat(saved)
         } else {
-            height = panel.frame.height
+            // No stored height yet: the first open size, or whatever the panel had before a
+            // temporary growth.
+            height = heightBeforeTemporary ?? panel.frame.height
         }
         return min(max(height, panel.minSize.height), screen.visibleFrame.height).rounded()
     }
@@ -253,7 +272,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     /// Applies the current target height with the top edge fixed.
     private func applyHeight(force: Bool = false) {
-        guard !panel.inLiveResize, let screen = panel.screen ?? screenUnderPointer else { return }
+        guard !panel.isUserResizing, let screen = panel.screen ?? screenUnderPointer else { return }
         let height = targetHeight(on: screen)
         guard force || abs(height - panel.frame.height) > Self.heightTolerance else { return }
         var frame = panel.frame
@@ -300,10 +319,16 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     /// A user made height change turns auto-sizing off and keeps that height; a width only
-    /// change leaves auto-sizing on (spec/window.md 5.6). Programmatic resizes never get here,
-    /// because they do not run a live resize.
+    /// change leaves auto-sizing on (spec/window.md 5.6). Called at the end of a drag in the resize
+    /// zones; programmatic resizes never get here.
     func userDidResize(from start: NSRect, to end: NSRect) {
-        if abs(end.height - start.height) > Self.heightTolerance && settings.windowAutoSize {
+        let heightChanged = abs(end.height - start.height) > Self.heightTolerance
+        if heightChanged {
+            // The user's height wins over a temporary growth that was in effect.
+            temporaryHeight = nil
+            heightBeforeTemporary = nil
+        }
+        if heightChanged && settings.windowAutoSize {
             var frame = settings.panelFrame ?? PanelFrame(x: end.minX, y: end.maxY, width: end.width)
             frame.height = end.height
             do {
@@ -317,16 +342,6 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     // MARK: - NSWindowDelegate
-
-    func windowWillStartLiveResize(_ notification: Notification) {
-        liveResizeStartFrame = panel.frame
-    }
-
-    func windowDidEndLiveResize(_ notification: Notification) {
-        let start = liveResizeStartFrame ?? panel.frame
-        liveResizeStartFrame = nil
-        userDidResize(from: start, to: panel.frame)
-    }
 
     func windowDidMove(_ notification: Notification) {
         if panel.isVisible { scheduleFrameSave() }
@@ -385,14 +400,25 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         if recordEvents { resizeReports.append(height) }
         let rounded = CGFloat(height).rounded(.up)
         if temporary {
-            temporaryHeight = rounded
+            // Temporary growth only grows: a panel that is already tall enough stays as it is,
+            // and so does an earlier, taller temporary growth.
+            let zoom = CGFloat(settings.zoom)
+            let wanted = min(max(rounded, Self.autoMinimumHeight * zoom), Self.autoMaximumHeight * zoom)
+            guard panel.frame.height < wanted.rounded() - Self.heightTolerance else { return }
+            if temporaryHeight == nil { heightBeforeTemporary = panel.frame.height }
+            temporaryHeight = wanted
             applyHeight(force: true)
         } else {
             let wasTemporary = temporaryHeight != nil
             temporaryHeight = nil
             contentHeight = rounded
             applyHeight(force: wasTemporary)
+            heightBeforeTemporary = nil
         }
+    }
+
+    func setDragRegions(_ rects: [DragRect]) async {
+        webView?.dragRects = rects.map { NSRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
     }
 
     func openURL(_ url: URL) async {

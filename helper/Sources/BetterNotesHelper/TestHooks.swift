@@ -40,7 +40,7 @@ final class TestHooks {
                 "canJoinAllSpaces": .bool(behavior.contains(.canJoinAllSpaces)),
                 "fullScreenAuxiliary": .bool(behavior.contains(.fullScreenAuxiliary)),
                 "nonactivating": .bool(panel.styleMask.contains(.nonactivatingPanel)),
-                "resizable": .bool(panel.styleMask.contains(.resizable)),
+                "resizeZones": .bool(Self.find(ResizeOverlayView.self, in: panel.contentView) != nil),
                 "hidesOnDeactivate": .bool(panel.hidesOnDeactivate),
                 "acceptsFirstMouse": .bool(panel.contentView.flatMap(Self.webView(in:))?.acceptsFirstMouse(for: nil) ?? true),
                 "firstResponderIsWebView": .bool(panel.firstResponder is NotesWebView),
@@ -50,7 +50,17 @@ final class TestHooks {
                     "width": .double(frame.width), "height": .double(frame.height), "top": .double(frame.maxY),
                 ],
                 "screenKey": .string(panel.screen?.positionKey ?? ""),
+                "pointerScreenKey": .string(Self.screenUnderPointer?.positionKey ?? ""),
                 "visibleFrameHeight": .double(Double(panel.screen?.visibleFrame.height ?? 0)),
+                "visibleFrame": Self.rectJSON(panel.screen?.visibleFrame ?? .zero),
+                "minSize": ["width": .double(panel.minSize.width), "height": .double(panel.minSize.height)],
+                "material": .int(Int64(Self.find(NSVisualEffectView.self, in: panel.contentView)?.material.rawValue ?? -1)),
+                "hudWindowMaterial": .int(Int64(NSVisualEffectView.Material.hudWindow.rawValue)),
+                "materialActive": .bool(Self.find(NSVisualEffectView.self, in: panel.contentView)?.state == .active),
+                "webViewDrawsBackground": .bool(
+                    (Self.find(NotesWebView.self, in: panel.contentView)?.value(forKey: "drawsBackground") as? Bool) ?? true),
+                "dragRects": .array(
+                    (Self.find(NotesWebView.self, in: panel.contentView)?.dragRects ?? []).map(Self.rectJSON)),
             ]
         case "test.asBridge":
             guard let dispatcher else { throw RPCError.internal("No dispatcher") }
@@ -60,16 +70,71 @@ final class TestHooks {
                 "methods": .array(controller.bridgeMethods.map(JSONValue.string)),
                 "resizes": .array(controller.resizeReports.map(JSONValue.double)),
             ]
-        case "test.editMenu":
-            let edit = NSApp.mainMenu?.items.compactMap(\.submenu).first { $0.title == "Edit" }
-            return .array((edit?.items ?? []).filter { !$0.isSeparatorItem }.map { item in
-                var keys = ""
-                if item.keyEquivalentModifierMask.contains(.shift) { keys += "⇧" }
-                if item.keyEquivalentModifierMask.contains(.option) { keys += "⌥" }
-                if item.keyEquivalentModifierMask.contains(.command) { keys += "⌘" }
-                return ["title": .string(item.title), "keys": .string(keys + item.keyEquivalent.uppercased()),
-                        "action": .string(item.action.map(NSStringFromSelector) ?? "")]
+        case "test.menuItems":
+            let menus = NSApp.mainMenu?.items.compactMap(\.submenu) ?? []
+            return .array(menus.flatMap { menu in
+                menu.items.filter { !$0.isSeparatorItem }.map { item -> JSONValue in
+                    var keys = ""
+                    if item.keyEquivalentModifierMask.contains(.shift) { keys += "⇧" }
+                    if item.keyEquivalentModifierMask.contains(.option) { keys += "⌥" }
+                    if item.keyEquivalentModifierMask.contains(.command) { keys += "⌘" }
+                    return ["menu": .string(menu.title), "title": .string(item.title),
+                            "keys": .string(keys + item.keyEquivalent.uppercased()),
+                            "action": .string(item.action.map(NSStringFromSelector) ?? ""),
+                            "hasTarget": .bool(item.target != nil)]
+                }
             })
+        case "test.keyDown":
+            // A key event dispatched inside this process only (NSApp.sendEvent), the way AppKit
+            // delivers a real key press to our key panel. Never global input.
+            let key = try p.string("key")
+            guard let event = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: (try p.optionalBool("command") ?? false) ? [.command] : [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber, context: nil,
+                characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: try Self.keyCode(key))
+            else { throw RPCError.internal("Could not make a key event") }
+            NSApp.sendEvent(event)
+            return [:]
+        case "test.hitTest":
+            // Which view a click at { x, y } (points from the content's top left) would reach.
+            guard let content = panel.contentView else { throw RPCError.internal("No content view") }
+            let point = Self.windowPoint(try p.double("x"), try p.double("y"), in: panel)
+            let view = content.hitTest(content.convert(point, from: nil))
+            let zone = (view as? ResizeOverlayView)?.edge(atWindowPoint: point)
+            return ["view": .string(view.map { String(describing: type(of: $0)) } ?? ""),
+                    "zone": zone.map { .string($0.name) } ?? .null]
+        case "test.mouseDown":
+            // A synthetic click (down then up) sent to our own panel through NSApp.sendEvent,
+            // never through the window server. Drags are counted instead of performed.
+            var drags = 0
+            panel.dragInterceptor = { _ in drags += 1 }
+            defer { panel.dragInterceptor = nil }
+            let point = Self.windowPoint(try p.double("x"), try p.double("y"), in: panel)
+            NSApp.sendEvent(try Self.mouseEvent(.leftMouseDown, at: point, windowNumber: panel.windowNumber))
+            NSApp.sendEvent(try Self.mouseEvent(.leftMouseUp, at: point, windowNumber: panel.windowNumber))
+            return ["drags": .int(Int64(drags)), "key": .bool(panel.isKeyWindow)]
+        case "test.mouseDrag":
+            // Presses at { x, y }, drags by { dx, dy } (points, y down) and releases. The drag and
+            // release are queued in this app's own event queue as window-less events (screen
+            // coordinates), so the resize tracking loop reads them like real ones.
+            let point = Self.windowPoint(try p.double("x"), try p.double("y"), in: panel)
+            let screenStart = panel.convertPoint(toScreen: point)
+            let end = NSPoint(x: screenStart.x + CGFloat(try p.double("dx")), y: screenStart.y - CGFloat(try p.double("dy")))
+            let midway = NSPoint(x: (screenStart.x + end.x) / 2, y: (screenStart.y + end.y) / 2)
+            NSApp.postEvent(try Self.mouseEvent(.leftMouseDragged, at: midway, windowNumber: 0), atStart: false)
+            NSApp.postEvent(try Self.mouseEvent(.leftMouseDragged, at: end, windowNumber: 0), atStart: false)
+            NSApp.postEvent(try Self.mouseEvent(.leftMouseUp, at: end, windowNumber: 0), atStart: false)
+            var drags = 0
+            panel.dragInterceptor = { _ in drags += 1 }
+            defer { panel.dragInterceptor = nil }
+            NSApp.sendEvent(try Self.mouseEvent(.leftMouseDown, at: point, windowNumber: panel.windowNumber))
+            return ["drags": .int(Int64(drags))]
+        case "test.js":
+            // Evaluates a page expression and returns it through JSON.
+            guard let webView = Self.find(NotesWebView.self, in: panel.contentView) else { throw RPCError.internal("No web view") }
+            let script = "JSON.stringify((\(try p.string("expression"))) ?? null)"
+            let text = try await webView.evaluateJavaScript(script) as? String ?? "null"
+            return try JSONValue.parse(text)
         case "test.events":
             return .array(controller.emittedEvents.map { ["event": .string($0.0), "payload": $0.1] })
         case "test.simulateUserResize":
@@ -106,11 +171,48 @@ final class TestHooks {
     }
 
     private static func webView(in view: NSView) -> NotesWebView? {
-        if let webView = view as? NotesWebView { return webView }
+        find(NotesWebView.self, in: view)
+    }
+
+    private static func find<T: NSView>(_ type: T.Type, in view: NSView?) -> T? {
+        guard let view else { return nil }
+        if let match = view as? T { return match }
         for subview in view.subviews {
-            if let found = webView(in: subview) { return found }
+            if let found = find(type, in: subview) { return found }
         }
         return nil
+    }
+
+    private static var screenUnderPointer: NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+    }
+
+    private static func rectJSON(_ rect: NSRect) -> JSONValue {
+        ["x": .double(rect.minX), "y": .double(rect.minY), "width": .double(rect.width), "height": .double(rect.height)]
+    }
+
+    /// A point given from the content's top left, in window coordinates.
+    private static func windowPoint(_ x: Double, _ y: Double, in panel: NSWindow) -> NSPoint {
+        let height = panel.contentView?.bounds.height ?? panel.frame.height
+        return NSPoint(x: x, y: Double(height) - y)
+    }
+
+    private static func mouseEvent(_ type: NSEvent.EventType, at point: NSPoint, windowNumber: Int) throws -> NSEvent {
+        guard let event = NSEvent.mouseEvent(
+            with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1)
+        else { throw RPCError.internal("Could not make a mouse event") }
+        return event
+    }
+
+    private static func keyCode(_ key: String) throws -> UInt16 {
+        switch key.lowercased() {
+        case "w": return 13
+        case "a": return 0
+        case "c": return 8
+        default: throw RPCError.badParams("Unsupported key: \(key)")
+        }
     }
 }
 

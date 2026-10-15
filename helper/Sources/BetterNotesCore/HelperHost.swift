@@ -12,6 +12,9 @@ public protocol HelperHost: Sendable {
     /// (⌘K, browse, dialogs) applies even with auto-sizing off; the next non temporary report
     /// restores normal behavior.
     func resizeWindow(contentHeight: Double, temporary: Bool) async
+    /// Replaces the areas of the web view where a mouse down drags the panel. Points, with a
+    /// top left origin relative to the web view.
+    func setDragRegions(_ rects: [DragRect]) async
     /// Opens a link in the default app for its scheme (already checked by `LinkPolicy`).
     func openURL(_ url: URL) async
     /// Returns keyboard focus to the previously frontmost app without hiding.
@@ -27,11 +30,28 @@ public protocol HelperHost: Sendable {
     func requestShutdown() async
 }
 
+/// One `window.setDragRegions` rect: points, top left origin, relative to the web view.
+public struct DragRect: Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+    public var width: Double
+    public var height: Double
+
+    public init(x: Double, y: Double, width: Double, height: Double) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    public var json: JSONValue { ["x": .double(x), "y": .double(y), "width": .double(width), "height": .double(height)] }
+}
+
 /// A host with no window. It records calls, which makes it the test double and the
 /// implementation behind `--headless`.
 public final class RecordingHost: HelperHost, @unchecked Sendable {
     public enum Call: Equatable, Sendable {
-        case toggle, show, hide, resize(Double, temporary: Bool), openURL(String), resignFocus, copy(String, String?), save(String, String)
+        case toggle, show, hide, resize(Double, temporary: Bool), dragRegions([DragRect]), openURL(String), resignFocus, copy(String, String?), save(String, String)
         case settingsChanged(Settings), emit(String, JSONValue), shutdown
     }
 
@@ -83,6 +103,7 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
     public func resizeWindow(contentHeight: Double, temporary: Bool) async {
         record(.resize(contentHeight, temporary: temporary))
     }
+    public func setDragRegions(_ rects: [DragRect]) async { record(.dragRegions(rects)) }
     public func openURL(_ url: URL) async { record(.openURL(url.absoluteString)) }
     public func resignFocus() async { record(.resignFocus) }
     public func copyToClipboard(text: String, html: String?) async { record(.copy(text, html)) }

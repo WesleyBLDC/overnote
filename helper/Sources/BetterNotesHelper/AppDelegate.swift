@@ -12,8 +12,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.mainMenu = MainMenu.make()
-        guard let repository = runtime.repository else { return }
+        guard let repository = runtime.repository else {
+            NSApp.mainMenu = MainMenu.make(closeTarget: nil)
+            return
+        }
         let controller = PanelController(
             repository: repository,
             editorDirectory: runtime.arguments.editorDir,
@@ -22,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onShutdown: { [runtime] in runtime.scheduleShutdown() }
         )
         panelController = controller
+        NSApp.mainMenu = MainMenu.make(closeTarget: controller)
         let hooks = runtime.arguments.testHooks ? TestHooks(controller: controller) : nil
         testHooks = hooks
         runtime.start(host: controller, extensionHandler: hooks?.handler())
@@ -47,13 +50,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// standard key equivalents (copy, paste, undo, select all) through it to the web view.
 @MainActor
 enum MainMenu {
-    static func make() -> NSMenu {
+    static func make(closeTarget: PanelController?) -> NSMenu {
         let main = NSMenu()
 
         let appItem = NSMenuItem()
         // No Quit item: the extension owns the helper's lifetime, and a stray ⌘Q should not kill it.
         appItem.submenu = NSMenu()
         main.addItem(appItem)
+
+        // ⌘W hides the panel, like closing a window in any app.
+        let fileItem = NSMenuItem()
+        let file = NSMenu(title: "File")
+        let close = file.addItem(
+            withTitle: "Close Window", action: #selector(PanelController.closeWindow(_:)), keyEquivalent: "w")
+        close.target = closeTarget
+        fileItem.submenu = file
+        main.addItem(fileItem)
 
         let editItem = NSMenuItem()
         let edit = NSMenu(title: "Edit")
