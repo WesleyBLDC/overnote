@@ -63,9 +63,9 @@ final class HelperRuntime {
     }
 
     /// Starts serving requests through `host`, and starts the purge schedule.
-    func start(host: any HelperHost) {
+    func start(host: any HelperHost, extensionHandler: RPCDispatcher.ExtensionHandler? = nil) {
         guard let repository else { return }
-        let dispatcher = RPCDispatcher(repository: repository, host: host)
+        let dispatcher = RPCDispatcher(repository: repository, host: host, extensionHandler: extensionHandler)
         self.dispatcher = dispatcher
 
         let logger = logger

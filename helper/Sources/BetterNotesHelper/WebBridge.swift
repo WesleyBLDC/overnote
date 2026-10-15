@@ -11,6 +11,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, W
     private let handler: RPCDispatcher
     private weak var webView: WKWebView?
     private let logger: FileLogger
+    /// Called with each method the page sends (test hooks only).
+    var onMessage: ((String) -> Void)?
 
     init(dispatcher: RPCDispatcher, webView: WKWebView, logger: FileLogger) {
         self.handler = dispatcher
@@ -39,6 +41,7 @@ final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, W
             reject(id: id, error: .badParams("method must be a string"))
             return
         }
+        onMessage?(method)
         let params = request["params"]
         let dispatcher = handler
         Task {

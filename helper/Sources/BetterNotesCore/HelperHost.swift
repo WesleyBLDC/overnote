@@ -10,6 +10,8 @@ public protocol HelperHost: Sendable {
     func hideWindow() async
     /// Applies a content driven height (in points), clamped by the host.
     func resizeWindow(contentHeight: Double) async
+    /// Opens a link in the default app for its scheme (already checked by `LinkPolicy`).
+    func openURL(_ url: URL) async
     /// Returns keyboard focus to the previously frontmost app without hiding.
     func resignFocus() async
     func copyToClipboard(text: String, html: String?) async
@@ -27,7 +29,7 @@ public protocol HelperHost: Sendable {
 /// implementation behind `--headless`.
 public final class RecordingHost: HelperHost, @unchecked Sendable {
     public enum Call: Equatable, Sendable {
-        case toggle, show, hide, resize(Double), resignFocus, copy(String, String?), save(String, String)
+        case toggle, show, hide, resize(Double), openURL(String), resignFocus, copy(String, String?), save(String, String)
         case settingsChanged(Settings), emit(String, JSONValue), shutdown
     }
 
@@ -77,6 +79,7 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
     }
 
     public func resizeWindow(contentHeight: Double) async { record(.resize(contentHeight)) }
+    public func openURL(_ url: URL) async { record(.openURL(url.absoluteString)) }
     public func resignFocus() async { record(.resignFocus) }
     public func copyToClipboard(text: String, html: String?) async { record(.copy(text, html)) }
 
@@ -120,5 +123,21 @@ public enum FileNameSanitizer {
             cleaned = fallback + cleaned
         }
         return cleaned
+    }
+}
+
+/// Which links `app.openURL` may open: web pages, mail, and Raycast deeplinks only.
+public enum LinkPolicy {
+    public static let allowedSchemes: Set<String> = ["http", "https", "mailto", "raycast"]
+
+    /// The URL to open, or nil when the text is not a URL with an allowed scheme.
+    public static func openableURL(_ text: String) -> URL? {
+        guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+            let scheme = url.scheme?.lowercased(), allowedSchemes.contains(scheme)
+        else { return nil }
+        if scheme == "http" || scheme == "https" {
+            guard let host = url.host, !host.isEmpty else { return nil }
+        }
+        return url
     }
 }

@@ -5,6 +5,7 @@ import BetterNotesCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let runtime: HelperRuntime
     private var panelController: PanelController?
+    private var testHooks: TestHooks?
 
     init(runtime: HelperRuntime) {
         self.runtime = runtime
@@ -17,10 +18,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             repository: repository,
             editorDirectory: runtime.arguments.editorDir,
             logger: runtime.logger,
+            recordEvents: runtime.arguments.testHooks,
             onShutdown: { [runtime] in runtime.scheduleShutdown() }
         )
         panelController = controller
-        runtime.start(host: controller)
+        let hooks = runtime.arguments.testHooks ? TestHooks(controller: controller) : nil
+        testHooks = hooks
+        runtime.start(host: controller, extensionHandler: hooks?.handler())
+        hooks?.dispatcher = runtime.dispatcher
         // Prewarm: the panel and the web view exist and load now, hidden, so the first
         // toggle only has to order the panel in.
         controller.prewarm(dispatcher: runtime.dispatcher)
@@ -59,9 +64,10 @@ enum MainMenu {
         edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        // ⇧⌘V sends a real paste event to the web view; the editor turns it into plain text.
         let pastePlain = edit.addItem(
-            withTitle: "Paste and Match Style", action: #selector(NSTextView.pasteAsPlainText(_:)), keyEquivalent: "v")
-        pastePlain.keyEquivalentModifierMask = [.command, .option, .shift]
+            withTitle: "Paste and Match Style", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        pastePlain.keyEquivalentModifierMask = [.command, .shift]
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = edit
         main.addItem(editItem)

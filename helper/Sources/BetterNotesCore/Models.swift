@@ -104,14 +104,16 @@ public struct NoteSummary: Equatable, Sendable {
     }
 }
 
-/// A Recently Deleted row: a summary plus the markdown for previews.
+/// A Recently Deleted row: a summary plus markdown and the document, for previews.
 public struct DeletedNoteSummary: Equatable, Sendable {
     public var summary: NoteSummary
     public var markdown: String
+    public var rawContent: String
 
     public var json: JSONValue {
         guard case .object(var object) = summary.json else { return summary.json }
         object["markdown"] = .string(markdown)
+        object["rawContent"] = .string(rawContent)
         return .object(object)
     }
 }

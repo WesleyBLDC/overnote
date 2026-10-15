@@ -1,25 +1,49 @@
 import Foundation
 
-/// The panel position the helper remembers. `y` is the **top** edge in AppKit global
-/// coordinates (origin at the bottom left of the primary screen), because the height is
-/// content driven and the top edge is what stays put while it changes.
-/// `height` is stored only when `windowAutoSize` is off and the user sized the panel.
+/// A remembered top left point on one display. `y` is the **top** edge.
+public struct PanelPoint: Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
+    }
+
+    public var json: JSONValue { ["x": .double(x), "y": .double(y)] }
+}
+
+/// The panel geometry the helper remembers, in AppKit global coordinates (origin at the
+/// bottom left of the primary screen). Every `y` is the panel's **top** edge, because the
+/// height is content driven and the top edge is what stays put while it changes.
+///
+/// - `x`, `y`: the last used top left point, on whatever display that was.
+/// - `width`: the panel width, shared by all displays.
+/// - `height`: the user's height, stored only when `windowAutoSize` is off.
+/// - `displays`: one remembered top left point per display, keyed by
+///   `"<display uuid>@<width>x<height>"` (the display identity plus its size in points).
+///   Optional, so a v2.1 `{ x, y, width, height? }` value still reads and writes fine.
 public struct PanelFrame: Equatable, Sendable {
     public var x: Double
     public var y: Double
     public var width: Double
     public var height: Double?
+    public var displays: [String: PanelPoint]
 
-    public init(x: Double, y: Double, width: Double, height: Double? = nil) {
+    public init(x: Double, y: Double, width: Double, height: Double? = nil, displays: [String: PanelPoint] = [:]) {
         self.x = x
         self.y = y
         self.width = width
         self.height = height
+        self.displays = displays
     }
 
     public var json: JSONValue {
         var object: [String: JSONValue] = ["x": .double(x), "y": .double(y), "width": .double(width)]
         if let height { object["height"] = .double(height) }
+        if !displays.isEmpty {
+            object["displays"] = .object(displays.mapValues(\.json))
+        }
         return .object(object)
     }
 
@@ -38,7 +62,17 @@ public struct PanelFrame: Equatable, Sendable {
             }
             height = value
         }
-        self.init(x: x, y: y, width: width, height: height)
+        var displays: [String: PanelPoint] = [:]
+        if let raw = object["displays"], !raw.isNull {
+            guard let map = raw.objectValue else { throw RPCError.badParams("panelFrame.displays must be an object") }
+            for (key, value) in map {
+                guard let px = value["x"]?.doubleValue, let py = value["y"]?.doubleValue, px.isFinite, py.isFinite else {
+                    throw RPCError.badParams("panelFrame.displays values must be { x, y }")
+                }
+                displays[key] = PanelPoint(x: px, y: py)
+            }
+        }
+        self.init(x: x, y: y, width: width, height: height, displays: displays)
     }
 }
 

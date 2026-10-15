@@ -429,13 +429,13 @@ public final class NotesRepository: @unchecked Sendable {
         min(max(limit, 1), maxListLimit)
     }
 
-    /// Every trashed note, most recently deleted first, with markdown for previews.
+    /// Every trashed note, most recently deleted first, with markdown and the document for previews.
     public func listDeleted() throws -> [DeletedNoteSummary] {
         try locked {
             try db.query(
-                "SELECT \(Self.summaryColumns), markdown FROM notes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id ASC"
+                "SELECT \(Self.summaryColumns), markdown, raw_content FROM notes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id ASC"
             ) { row in
-                DeletedNoteSummary(summary: Self.readSummary(row), markdown: row.text(9))
+                DeletedNoteSummary(summary: Self.readSummary(row), markdown: row.text(9), rawContent: row.text(10))
             }
         }
     }

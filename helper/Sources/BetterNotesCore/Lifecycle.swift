@@ -159,9 +159,11 @@ public struct HelperArguments: Equatable, Sendable {
     public var version = false
     /// Runs the socket server with no window (for smoke tests and CI). Not part of the contract.
     public var headless = false
+    /// Adds `test.*` socket methods for the end to end window checks. Not part of the contract.
+    public var testHooks = false
 
     public static let usage = """
-        Usage: BetterNotesHelper --support-dir <dir> [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--headless] [--version]
+        Usage: BetterNotesHelper --support-dir <dir> [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--headless] [--test-hooks] [--version]
         """
 
     public struct ParseError: Error, CustomStringConvertible {
@@ -190,6 +192,7 @@ public struct HelperArguments: Equatable, Sendable {
             case "--show": result.show = true
             case "--version": result.version = true
             case "--headless": result.headless = true
+            case "--test-hooks": result.testHooks = true
             default:
                 // Ignore arguments AppKit or launchd may add, such as -psn_ or -NSDocumentRevisionsDebugMode.
                 if argument.hasPrefix("--") {

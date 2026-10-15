@@ -26,7 +26,20 @@ if runtime.acquire() == .alreadyRunning {
 
 if arguments.headless {
     let host = RecordingHost(onShutdown: { runtime.scheduleShutdown() })
-    runtime.start(host: host)
+    // With --test-hooks, smoke tests can read what a window host would have received.
+    let hooks: RPCDispatcher.ExtensionHandler? =
+        arguments.testHooks
+        ? { @Sendable method, _ in
+            switch method {
+            case "test.events":
+                return .array(host.events.map { ["event": .string($0.0), "payload": $0.1] })
+            case "test.visible":
+                return .bool(host.isVisible)
+            default:
+                return nil
+            }
+        } : nil
+    runtime.start(host: host, extensionHandler: hooks)
     dispatchMain()
 } else {
     let app = NSApplication.shared

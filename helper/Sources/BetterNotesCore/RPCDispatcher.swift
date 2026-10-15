@@ -12,16 +12,24 @@ public final class RPCDispatcher: Sendable {
     public let repository: NotesRepository
     public let host: any HelperHost
     private let processId: Int32
+    private let extensionHandler: ExtensionHandler?
+
+    /// Extra socket methods (the `--test-hooks` set). Returns nil for methods it does not own.
+    public typealias ExtensionHandler = @Sendable (_ method: String, _ params: JSONValue?) async throws -> JSONValue?
 
     /// Methods only the editor may call.
     public static let bridgeOnlyMethods: Set<String> = [
-        "system.ready", "window.resize", "window.resignFocus", "clipboard.copy", "file.saveAs",
+        "system.ready", "window.resize", "window.resignFocus", "app.openURL", "clipboard.copy", "file.saveAs",
     ]
 
-    public init(repository: NotesRepository, host: any HelperHost, processId: Int32 = getpid()) {
+    public init(
+        repository: NotesRepository, host: any HelperHost, processId: Int32 = getpid(),
+        extensionHandler: ExtensionHandler? = nil
+    ) {
         self.repository = repository
         self.host = host
         self.processId = processId
+        self.extensionHandler = extensionHandler
     }
 
     /// Runs one request. Always throws `RPCError`; anything else is wrapped as code 500.
@@ -30,6 +38,9 @@ public final class RPCDispatcher: Sendable {
             throw RPCError(code: RPCError.methodNotFoundCode, message: "\(method) is only available to the editor")
         }
         do {
+            if source == .socket, let extensionHandler, let result = try await extensionHandler(method, rawParams) {
+                return result
+            }
             let params = try Params(rawParams)
             return try await route(method: method, params: params, source: source)
         } catch let error as RPCError {
@@ -74,6 +85,12 @@ public final class RPCDispatcher: Sendable {
             return [:]
 
         // MARK: native services
+        case "app.openURL":
+            guard let url = LinkPolicy.openableURL(try p.string("url")) else {
+                throw RPCError.badParams("url must be an http, https, mailto, or raycast link")
+            }
+            await host.openURL(url)
+            return [:]
         case "clipboard.copy":
             await host.copyToClipboard(text: try p.string("text"), html: try p.optionalString("html"))
             return [:]

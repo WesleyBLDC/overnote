@@ -62,9 +62,13 @@ enum PlaceholderPage {
             status.textContent = note ? "Placeholder editor, note " + note.id : "Placeholder editor";
             resize();
           }
-          async function loadCurrent(noteId) {
+          // Only the first load creates a note when there is none; later reloads just show
+          // whatever is current (or nothing), so external deletes never spawn notes.
+          async function loadCurrent(noteId, createIfEmpty) {
             const data = await call("notes.windowData", noteId ? { noteId } : {});
-            if (data.current) { load(data.current); } else { load(await call("notes.create", contentFor(""))); }
+            if (data.current) { load(data.current); }
+            else if (createIfEmpty) { load(await call("notes.create", contentFor(""))); }
+            else { load(null); return; }
             await call("notes.setCurrentNote", { noteId: current.id });
           }
           async function save() {
@@ -82,7 +86,7 @@ enum PlaceholderPage {
           document.addEventListener("keydown", (e) => {
             if (e.key === "Escape") { e.preventDefault(); clearTimeout(saveTimer); save().finally(() => call("window.hide")); }
           });
-          call("system.ready").then(r => load(r.windowData.current)).then(() => { if (!current) loadCurrent(); });
+          call("system.ready").then(r => load(r.windowData.current)).then(() => { if (!current) loadCurrent(null, true); });
         })();
         </script>
         </body>
