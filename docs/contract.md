@@ -75,7 +75,7 @@ interface NoteContent {
   rawContent: string;          // JSON.stringify(ProseMirror doc JSON); canonical
   markdown: string;            // derived by @better-notes/core
   text: string;                // plain text, derived by core
-  title: string;               // derived by core: first line of the plain text, trimmed (may be empty)
+  title: string;               // derived by core: first line of the plain text (empty blocks skipped), trimmed, no length cap (may be empty)
 }
 
 interface Note extends NoteContent {
@@ -204,7 +204,11 @@ All writes go through the helper.
 ## 7. @better-notes/core API (TypeScript, runs in the browser and in Node 22 with no DOM)
 
 ```ts
-export const extensions: AnyExtension[];            // the Tiptap extension list both sides use (schema source of truth)
+export const headlessExtensions: AnyExtension[];    // schema, input rules, serializers; runs in Node with no DOM (schema source of truth)
+// the editor adds its own DOM-only extensions (lowlight node view, slash and emoji menus, find highlighting) on top
+// lists use prosemirror-flat-list: one `list` node per item, attrs kind (bullet|ordered|task|toggle), order, checked, collapsed;
+// content "(paragraph|list) block*"; headings 1 to 3; codeBlock.language string|null; link attrs href,title (non-inclusive);
+// unknown nodes/marks are preserved as placeholder nodes/marks
 export function getNoteSchema(): Schema;
 export function emptyDoc(): JSONContent;
 export function markdownToDoc(markdown: string): JSONContent;
@@ -215,6 +219,14 @@ export function deriveTitle(doc: JSONContent): string;        // first line of p
 export function displayTitle(n: { title: string; text: string }): string; // title, else first text line, else "Untitled"
 export function buildNoteContent(doc: JSONContent): NoteContent; // rawContent + markdown + text + title
 export function noteContentFromMarkdown(markdown: string): NoteContent;
+export function loadDoc(rawContent: string, text: string): JSONContent;   // placeholder handling, plain-text fallback for invalid JSON
+export function toStoredDoc(doc: JSONContent): JSONContent;               // inverse of loadDoc's placeholder mapping
+export function docToClipboard(docOrSlice: JSONContent): { plainText: string; html: string };
+export function parsePastedText(plain: string, html?: string): JSONContent;
+export function looksLikeMarkdown(plain: string, html?: string): boolean;
+export function normalizeLinkHref(input: string): string | null;
+export function countCharacters(text: string): number;                   // grapheme clusters of trimmed text
+export function countWords(text: string): number;                        // Intl.Segmenter word segments
 export type { Note, NoteSummary, NoteContent, Settings, WindowData, NoteId } from "./types";
 export * as rpc from "./rpc";   // method name constants and param/result types from section 5
 ```
@@ -235,6 +247,8 @@ Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows t
 This lets deeplinks and quicklinks open a specific note or create one with text.
 
 ## Changelog
+
+- v2.2 (2026-10-14): from spec/editor.md, the flat-list schema, a headless/editor extension split, title skips empty blocks with no cap, and new core helpers (loadDoc, toStoredDoc, docToClipboard, parsePastedText, looksLikeMarkdown, normalizeLinkHref, countCharacters, countWords).
 
 - v2.1 (2026-10-14): from spec/keymap.md, added `windowAutoSize`, a 0.75 to 2.0 zoom range, `panelFrame.height`, bridge `clipboard.copy` and `file.saveAs`, `notes.duplicate` `titleSuffix`, and launch contexts for `toggle-notes` and `create-note`.
 
