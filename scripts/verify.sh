@@ -52,6 +52,7 @@ step "Unit: editor" npm test -w editor
 step "Unit: helper" bash helper/test.sh
 step "End to end: editor (Playwright)" npm run test:e2e -w editor
 step "End to end: helper smoke" bash scripts/smoke-helper.sh
+step "End to end: install, update, backups, and restore" bash scripts/e2e-update.sh
 window_e2e="${OVERNOTE_WINDOW_E2E:-}"
 if [[ -z "$window_e2e" ]]; then
   [[ "${CI:-}" == "true" ]] && window_e2e=1 || window_e2e=0

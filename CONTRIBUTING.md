@@ -45,7 +45,7 @@ Add `?seed=empty` to the URL to start with no notes.
 | `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/` |
 | `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository |
 | `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
-| `scripts/` | Helper build, the full local suite (`verify.sh`), helper end-to-end, window end-to-end, and release packaging scripts |
+| `scripts/` | Helper build, the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, and release packaging and version checks |
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
 | `assets/` | The icon, plus the built editor and helper (generated, not committed) |
 | `media/` | README screenshots |
@@ -101,7 +101,11 @@ npm run test:e2e -w editor       # editor end-to-end (WebKit, plus a Chromium bu
 bash helper/test.sh              # helper unit tests
 bash scripts/smoke-helper.sh     # helper end-to-end over its socket
 bash scripts/e2e-window.sh       # panel window behavior end-to-end
+bash scripts/e2e-update.sh       # install, update, backups, and restore end-to-end (headless)
 ```
+
+Every suite that starts the helper points `OVERNOTE_BACKUP_DIR` at a temporary folder, so tests never write into your real backups.
+Keep it that way when you add one.
 
 Flaky tests count as failures.
 If you see one, even outside your change, please fix it or open an issue.

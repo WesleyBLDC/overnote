@@ -53,6 +53,8 @@ EDITOR_DIR="$ROOT/assets/editor"
 [[ -f "$EDITOR_DIR/index.html" ]] || { echo "Editor not built: assets/editor/index.html is missing" >&2; exit 1; }
 
 TMP="$(mktemp -d /tmp/overnote-e2e.XXXXXX)"
+# Never write into the real backups folder.
+export OVERNOTE_BACKUP_DIR="$TMP/backups"
 finish() {
   local status=$?
   pkill -TERM -f "$TMP/support" 2>/dev/null || true

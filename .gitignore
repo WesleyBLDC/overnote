@@ -4,6 +4,7 @@ dist/
 assets/bin/
 assets/editor/
 assets/prebuilt.json
+assets/install-location.json
 helper/.build/
 .build/
 .swiftpm/

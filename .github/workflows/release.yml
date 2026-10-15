@@ -47,6 +47,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      # helper/VERSION, HelperVersion.current, and the newest CHANGELOG entry must all name the tag.
+      - name: Check the version
+        run: bash scripts/check-version.sh "${{ steps.version.outputs.version }}"
+
       - name: Build editor
         run: npm run build:editor
 
@@ -59,6 +63,10 @@ jobs:
 
       - name: Package
         run: bash scripts/package-release.sh "${{ steps.version.outputs.version }}" "$RUNNER_TEMP/release"
+
+      # The zip's assets/prebuilt.json must record the same version and a schema version.
+      - name: Check the packaged version
+        run: bash scripts/check-version.sh "${{ steps.version.outputs.version }}" "$RUNNER_TEMP/release/overnote-${{ steps.version.outputs.version }}.zip"
 
       # Install from the zip the way a user does after a browser download, headless and without
       # Raycast: check SHA256SUMS, quarantine every file, install with the Xcode tools stubbed

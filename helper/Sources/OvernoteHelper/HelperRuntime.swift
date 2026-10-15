@@ -10,6 +10,8 @@ final class HelperRuntime {
     let logger: FileLogger
     private(set) var repository: NotesRepository?
     private(set) var dispatcher: RPCDispatcher?
+    let backups = BackupStore(directory: BackupStore.defaultDirectory())
+    private var backupScheduler: BackupScheduler?
     private var lock: InstanceLock?
     private var server: SocketServer?
     private var purgeScheduler: PurgeScheduler?
@@ -54,8 +56,15 @@ final class HelperRuntime {
 
         do {
             let path = (arguments.supportDir as NSString).appendingPathComponent("notes.sqlite")
-            let repository = try NotesRepository(path: path)
+            let isNew = !FileManager.default.fileExists(atPath: path)
+            let repository = try NotesRepository(path: path, backups: backups)
             self.repository = repository
+            // A missing database next to existing backups usually means the extension was removed
+            // and installed again. Start empty, touch nothing, and let the extension offer a restore.
+            if isNew, let count = try? backups.list().count, count > 0 {
+                try repository.setRestoreOffered(true)
+                logger.log("No database yet, but \(count) backup(s) in \(backups.directory): offering a restore")
+            }
         } catch {
             fail("Cannot open the database: \(error)")
         }
@@ -65,10 +74,11 @@ final class HelperRuntime {
     /// Starts serving requests through `host`, and starts the purge schedule.
     func start(host: any HelperHost, extensionHandler: RPCDispatcher.ExtensionHandler? = nil) {
         guard let repository else { return }
-        let dispatcher = RPCDispatcher(repository: repository, host: host, extensionHandler: extensionHandler)
+        let dispatcher = RPCDispatcher(repository: repository, host: host, backups: backups, extensionHandler: extensionHandler)
         self.dispatcher = dispatcher
 
         let logger = logger
+        backupScheduler = BackupScheduler(store: backups, repository: repository, log: { logger.log($0) })
         purgeScheduler = PurgeScheduler {
             do {
                 let removed = try repository.purgeExpiredTrash()
@@ -107,6 +117,7 @@ final class HelperRuntime {
             logger.log("Shutting down (\(reason))")
             server?.stop()
             purgeScheduler?.cancel()
+            backupScheduler?.cancel()
             repository?.close()
             lock?.release()
             logger.close()

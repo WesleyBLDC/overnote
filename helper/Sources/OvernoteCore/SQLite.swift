@@ -24,9 +24,9 @@ final class SQLiteDatabase {
     private(set) var handle: OpaquePointer?
     private var statementCache: [String: Statement] = [:]
 
-    init(path: String) throws {
+    init(path: String, readOnly: Bool = false) throws {
         var db: OpaquePointer?
-        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX
+        let flags = (readOnly ? SQLITE_OPEN_READONLY : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) | SQLITE_OPEN_NOMUTEX
         let status = sqlite3_open_v2(path, &db, flags, nil)
         guard status == SQLITE_OK, let db else {
             let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "cannot open database"
@@ -125,6 +125,33 @@ final class SQLiteDatabase {
     var userVersion: Int {
         get throws {
             try queryFirst("PRAGMA user_version") { Int($0.int(0)) } ?? 0
+        }
+    }
+
+    /// Copies every page of this database's `main` schema into `destination` with SQLite's online
+    /// backup API, so the copy is consistent even while the database is in WAL mode. Retries
+    /// briefly while another connection holds a lock.
+    func copy(into destination: SQLiteDatabase) throws {
+        let source = try requireHandle()
+        let target = try destination.requireHandle()
+        // Cached statements on the destination would keep read transactions open.
+        destination.statementCache.values.forEach { $0.reset() }
+        guard let backup = sqlite3_backup_init(target, "main", source, "main") else {
+            throw destination.lastError()
+        }
+        var status: Int32 = SQLITE_OK
+        let deadline = Date().addingTimeInterval(5)
+        repeat {
+            status = sqlite3_backup_step(backup, -1)
+            if status == SQLITE_BUSY || status == SQLITE_LOCKED {
+                guard Date() < deadline else { break }
+                sqlite3_sleep(25)
+            }
+        } while status == SQLITE_OK || status == SQLITE_BUSY || status == SQLITE_LOCKED
+        let finish = sqlite3_backup_finish(backup)
+        guard status == SQLITE_DONE, finish == SQLITE_OK else {
+            let code = status == SQLITE_DONE ? finish : status
+            throw SQLiteError(code: code, message: String(cString: sqlite3_errstr(code)))
         }
     }
 

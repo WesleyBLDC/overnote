@@ -285,3 +285,70 @@ struct SecurityTests {
         #expect(try file("overnote://other/index.html") == nil)
     }
 }
+
+@Suite("Backups")
+struct BackupTests {
+    let day: Millis = 24 * 60 * 60 * 1000
+
+    @Test func retentionKeepsTheLatestTenAndTheNewestOfEachOfTheLastFourIsoWeeks() throws {
+        // Thursday 2026-10-15 12:00 UTC (ISO week 42).
+        let now: Millis = 1_792_065_600_000
+        // Three a day for the last 40 days, newest first: 120 backups.
+        let backups = (0..<120).map { index -> (name: String, createdAt: Millis) in
+            let createdAt = now - Millis(index) * (day / 3)
+            return (BackupName.make(createdAt: createdAt, version: "1.0.0", reason: .daily), createdAt)
+        }
+        let kept = BackupRetention.kept(backups, now: now)
+        let latest = Set(backups.prefix(10).map(\.name))
+        #expect(latest.isSubset(of: kept))
+        // The latest ten reach back to Monday 12:00 of week 42, so the weekly rule adds the newest
+        // backup of weeks 41, 40, and 39: the Sundays 2026-10-11, 10-04, and 09-27 at 20:00.
+        let weekly = kept.subtracting(latest).sorted()
+        #expect(weekly == [1_791_748_800_000, 1_791_144_000_000, 1_790_539_200_000].map {
+            BackupName.make(createdAt: $0, version: "1.0.0", reason: .daily)
+        }.sorted())
+        #expect(kept.count == 13)
+        // Fewer than ten backups are all kept, however old.
+        let few = [(name: "a", createdAt: now - 400 * day), (name: "b", createdAt: now)]
+        #expect(BackupRetention.kept(few, now: now) == ["a", "b"])
+    }
+
+    @Test func restoreOnlyAcceptsBackupFilesInsideTheBackupsFolder() throws {
+        let directory = TempDirectory()
+        let folder = directory.file("backups")
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let store = BackupStore(directory: folder)
+        // A prerelease version and a hyphenated reason still parse as a backup name.
+        let name = BackupName.make(createdAt: 1_792_065_600_123, version: "0.3.0-beta.1", reason: .preUpdate)
+        #expect(name == "notes-20261015T120000.123Z-v0.3.0-beta.1-pre-update.sqlite")
+        let good = folder + "/" + name
+        try "x".write(toFile: good, atomically: true, encoding: .utf8)
+        try "x".write(toFile: directory.file(name), atomically: true, encoding: .utf8)
+        try "x".write(toFile: folder + "/notes.sqlite", atomically: true, encoding: .utf8)
+        let linked = folder + "/" + BackupName.make(createdAt: 1_792_065_600_001, version: "1.0.0", reason: .manual)
+        try FileManager.default.createSymbolicLink(atPath: linked, withDestinationPath: directory.file(name))
+        try FileManager.default.createDirectory(
+            atPath: folder + "/" + BackupName.make(createdAt: 1_792_065_600_002, version: "1.0.0", reason: .manual),
+            withIntermediateDirectories: true)
+
+        #expect(try store.validatedRestorePath(good).hasSuffix("/backups/" + name))
+        #expect(try store.validatedRestorePath(folder + "/../backups/./" + name).hasSuffix("/backups/" + name))
+        func code(_ path: String) -> Int? {
+            do {
+                _ = try store.validatedRestorePath(path)
+                return nil
+            } catch let error as RPCError {
+                return error.code
+            } catch {
+                return -1
+            }
+        }
+        #expect(code(directory.file(name)) == RPCError.badParams("").code)  // outside the folder
+        #expect(code(folder + "/../" + name) == RPCError.badParams("").code)  // .. out of the folder
+        #expect(code(linked) == RPCError.badParams("").code)  // a symlink pointing outside
+        #expect(code(folder + "/notes.sqlite") == RPCError.badParams("").code)  // not a backup name
+        #expect(code(folder + "/" + BackupName.make(createdAt: 1_792_065_600_002, version: "1.0.0", reason: .manual)) == RPCError.badParams("").code)
+        #expect(code(folder + "/missing.sqlite") == RPCError.notFoundCode)
+        #expect(code(name) == RPCError.badParams("").code)  // relative
+    }
+}

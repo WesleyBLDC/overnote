@@ -32,6 +32,7 @@ import {
 import { noteDeeplink } from "../domain/deeplink";
 import { escapeNonAscii, summaryTitle } from "../domain/format";
 import type { Note, NoteSummary } from "../domain/types";
+import { BackupActionsSection } from "./BackupActions";
 import { NoteDetail } from "./NoteDetail";
 
 export interface NoteActionsProps {
@@ -256,6 +257,7 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, h
           onAction={removeAll}
         />
       </ActionPanel.Section>
+      <BackupActionsSection onRestored={onChange} />
     </ActionPanel>
   );
 }

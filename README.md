@@ -50,7 +50,9 @@ This is the quickest way, with nothing to build.
 3. Open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it.
    Overnote ships with no default hotkey, so pick whatever feels natural (for example ⌥N).
 
-[`docs/install.md`](docs/install.md) has the full steps, updating, checksums, and troubleshooting.
+To update later, run `npm run update-extension` in the same folder; it backs up your notes first.
+The **Check for Updates** command tells you when a new release is out.
+[`docs/install.md`](docs/install.md) has the full steps for installing, updating, backing up and restoring, and uninstalling.
 
 ### Build from source
 
@@ -125,9 +127,10 @@ Formatting inside the editor:
 |---|---|
 | Toggle Overnote | Shows or hides the floating panel. Bind your hotkey here. |
 | Create Note | Creates a note from its argument, the Raycast search text, or the selected text, and opens it. |
-| Search Notes | Lists notes grouped by date, with a preview and actions to open, pin, copy, duplicate, and delete. |
+| Search Notes | Lists notes grouped by date, with a preview and actions to open, pin, copy, duplicate, and delete, plus Back Up Notes Now, Restore Notes from Backup, and Reveal Backups Folder. |
 | Recently Deleted Notes | Restores deleted notes or removes them for good. |
-| Overnote Menu Bar | Pinned and recent notes in the menu bar. Off by default; enable it in Raycast Settings. |
+| Overnote Menu Bar | Pinned and recent notes in the menu bar, plus the backup actions. Off by default; enable it in Raycast Settings. |
+| Check for Updates | Compares your version with the latest GitHub release and, when a newer one exists, copies the update command to the clipboard. |
 
 Copy Deeplink (⇧⌘D in the panel, or from Search Notes) gives you a `raycast://` link that opens that exact note.
 Create Quicklink in Search Notes saves it as a Raycast quicklink.
@@ -161,8 +164,11 @@ Raycast
 ### Your data
 
 - Notes live in a SQLite database, `notes.sqlite`, inside the extension's Raycast support directory (`environment.supportPath`), next to the helper's log.
+- Backups are separate copies in `~/Library/Application Support/Overnote/backups`, outside the extension, so they survive removing it: one a day while Overnote runs, and one before every update, database upgrade, and restore.
+  The latest 10 are kept, plus one per week for the last 4 weeks.
 - Everything stays on your Mac.
-  Overnote makes no network requests, has no account, and sends no analytics; the editor even runs under a content security policy that blocks network connections.
+  Overnote has no account and sends no analytics, and the editor runs under a content security policy that blocks network connections.
+  The only network request is the one you start with Check for Updates or `npm run update-extension`, which asks GitHub for the latest release.
 - Deleted notes are purged automatically after 60 days.
 
 ## Development
@@ -196,6 +202,7 @@ Overnote keeps unit tests to the essentials and closes every feature with end-to
 | Helper unit tests | `bash helper/test.sh` |
 | Helper end-to-end over its real socket | `bash scripts/smoke-helper.sh` |
 | Panel window behavior end-to-end | `bash scripts/e2e-window.sh` |
+| Install, update, backups, and restore end-to-end (headless, temporary folders) | `bash scripts/e2e-update.sh` |
 
 `npm run verify` runs all of them, plus typechecking, lint, and the builds, in the same order as CI.
 The panel window check shows the panel on screen, so `npm run verify` runs it only in CI or with `OVERNOTE_WINDOW_E2E=1`.
@@ -218,7 +225,7 @@ Planned next:
 | File | Contents |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | Architecture and protocol reference: paths, socket and bridge protocol, data types, methods, schema, core API |
-| [`docs/install.md`](docs/install.md) | Installing from a release, updating, and troubleshooting |
+| [`docs/install.md`](docs/install.md) | Installing from a release, updating, backing up and restoring, and uninstalling |
 | [`docs/releasing.md`](docs/releasing.md) | How releases are built and published |
 | [`docs/clean-room.md`](docs/clean-room.md) | How the clean-room process works |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Development setup, project layout, testing policy, and conventions |

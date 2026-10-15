@@ -22,6 +22,10 @@ export class MockRpcError extends Error {
   }
 }
 
+function socketOnly(method: string): never {
+  throw new MockRpcError(rpc.ErrorCode.UnknownMethod, `${method} is only available on the socket`);
+}
+
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 export function makeUlid(now: number, random: () => number = Math.random): string {
@@ -164,6 +168,12 @@ export class MockStore {
     "system.ping": () => ({ version: "mock", pid: 0 }),
     "system.shutdown": () => ({}),
     "system.ready": () => ({ settings: { ...this.settings }, windowData: this.windowData() }),
+    // Socket-only on the real helper, so the bridge refuses them the same way.
+    "system.status": () => socketOnly("system.status"),
+    "system.backup": () => socketOnly("system.backup"),
+    "system.listBackups": () => socketOnly("system.listBackups"),
+    "system.restoreBackup": () => socketOnly("system.restoreBackup"),
+    "system.dismissRestoreOffer": () => socketOnly("system.dismissRestoreOffer"),
     "window.toggle": () => {
       this.visible = !this.visible;
       this.emit(this.visible ? rpc.Event.WindowDidShow : rpc.Event.WindowDidHide, {});

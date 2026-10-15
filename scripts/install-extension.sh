@@ -50,6 +50,9 @@ fi
 
 # ---------------------------------------------------------------- 3. assets
 bash scripts/prepare-assets.sh
+# Records this folder for Check for Updates, which runs from Raycast's copy of the build and
+# shows the update command for the folder the person installed from.
+node -e 'require("fs").writeFileSync("assets/install-location.json", JSON.stringify({ installDir: process.argv[1] }, null, 2) + "\n")' "$ROOT"
 
 if (( ! REGISTER )); then
   log "Ready. Skipped registering with Raycast (--no-register)."
@@ -101,5 +104,6 @@ Next:
   2. Record a hotkey for it (Overnote ships without one; ⌥N works well).
   3. Press your hotkey to open the panel.
 
-To update later, download the new release and run `npm run install-extension` again.
+To update later, run `npm run update-extension` in this folder (Check for Updates in Raycast
+tells you when a new release is out). Your notes are backed up before every update.
 EOF

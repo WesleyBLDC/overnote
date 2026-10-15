@@ -21,6 +21,11 @@ export const Method = {
   SystemPing: "system.ping",
   SystemShutdown: "system.shutdown",
   SystemReady: "system.ready",
+  SystemStatus: "system.status",
+  SystemBackup: "system.backup",
+  SystemListBackups: "system.listBackups",
+  SystemRestoreBackup: "system.restoreBackup",
+  SystemDismissRestoreOffer: "system.dismissRestoreOffer",
   WindowToggle: "window.toggle",
   WindowShow: "window.show",
   WindowHide: "window.hide",
@@ -66,7 +71,51 @@ export const BRIDGE_ONLY_METHODS: readonly MethodName[] = [
   Method.AppOpenURL,
 ];
 
+/** Methods that only exist on the socket (backups and restores are for the extension and scripts). */
+export const SOCKET_ONLY_METHODS: readonly MethodName[] = [
+  Method.SystemStatus,
+  Method.SystemBackup,
+  Method.SystemListBackups,
+  Method.SystemRestoreBackup,
+  Method.SystemDismissRestoreOffer,
+];
+
 type Empty = Record<string, never>;
+
+/** Why a backup was written; the last part of its file name. */
+export type BackupReason = "manual" | "daily" | "pre-migration" | "pre-update" | "pre-restore";
+
+/** One file in the backups folder: `notes-<UTC timestamp>-v<version>-<reason>.sqlite`. */
+export interface BackupInfo {
+  path: string;
+  name: string;
+  createdAt: Millis;
+  /** The helper version that wrote it. */
+  version: string;
+  reason: BackupReason;
+  sizeBytes: number;
+}
+
+export interface SystemStatus {
+  version: string;
+  pid: number;
+  /** The database's `PRAGMA user_version`. */
+  schemaVersion: number;
+  /** Live notes. */
+  noteCount: number;
+  backupDir: string;
+  backupCount: number;
+  latestBackup: BackupInfo | null;
+  /** The helper started without a database while backups existed, and nothing was restored or dismissed since. */
+  restoreAvailable: boolean;
+}
+
+export interface RestoreResult {
+  restored: BackupInfo;
+  /** The backup of the database as it was just before the restore. */
+  preRestoreBackup: BackupInfo;
+  noteCount: number;
+}
 
 /** Params for notes.list and notes.browse. */
 export interface ListParams {
@@ -107,6 +156,11 @@ export interface Methods {
   "system.ping": { params: Empty; result: { version: string; pid: number } };
   "system.shutdown": { params: Empty; result: Empty };
   "system.ready": { params: Empty; result: { settings: Settings; windowData: WindowData } };
+  "system.status": { params: Empty; result: SystemStatus };
+  "system.backup": { params: { reason?: BackupReason }; result: BackupInfo };
+  "system.listBackups": { params: Empty; result: { directory: string; items: BackupInfo[] } };
+  "system.restoreBackup": { params: { path: string }; result: RestoreResult };
+  "system.dismissRestoreOffer": { params: Empty; result: Empty };
   "window.toggle": { params: Empty; result: { visible: boolean } };
   "window.show": { params: { noteId?: NoteId }; result: { visible: true } };
   "window.hide": { params: Empty; result: { visible: false } };

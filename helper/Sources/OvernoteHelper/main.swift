@@ -18,6 +18,10 @@ if arguments.version {
     print(HelperVersion.current)
     exit(0)
 }
+if arguments.schemaVersion {
+    print(HelperVersion.schemaVersion)
+    exit(0)
+}
 
 let runtime = HelperRuntime(arguments: arguments)
 if runtime.acquire() == .alreadyRunning {

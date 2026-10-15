@@ -121,6 +121,11 @@ jobs:
       - name: End to end, helper over its socket
         run: bash scripts/smoke-helper.sh
 
+      # Headless: installs a release packaged from this tree into temporary folders, updates it
+      # through a fake releases API, rolls it back, and restores notes after a simulated removal.
+      - name: End to end, install, update, backups, and restore
+        run: bash scripts/e2e-update.sh
+
       # GitHub's macOS runners log in a GUI session, which the panel needs. If a runner image
       # ever lacks one, set the repository variable OVERNOTE_WINDOW_E2E to 0 to skip this
       # step (and only this step) until it is back. The same variable and value make

@@ -14,15 +14,18 @@ Pushing a tag that starts with `v` runs `.github/workflows/release.yml`, which b
 
 The release body is a source summary: the commit, the helper version, architectures, checksum, the macOS and Swift toolchain it was built with, and the list of files in the zip.
 
-The extension zip holds one folder, `overnote/`, with the manifest and lockfile, `src/`, `packages/core`, the editor workspace sources (npm needs every workspace in the lockfile), the installer scripts, and `assets/` with the prebuilt helper, its checksum, and the prebuilt editor.
+The extension zip holds one folder, `overnote/`, with the manifest and lockfile, `src/`, `packages/core`, the editor workspace sources (npm needs every workspace in the lockfile), the install and update scripts, and `assets/` with the prebuilt helper, its checksum, and the prebuilt editor.
 It leaves out tests, the helper's Swift sources, build output, and `node_modules`.
 A marker file, `assets/prebuilt.json`, tells `scripts/prepare-assets.sh` to use the prebuilt assets and never rebuild them, so installing needs only Node 22+ and a signed-in Raycast.
+It also records the release `version`, which Check for Updates and `npm run update-extension` read, and the `schemaVersion` the helper writes (`OvernoteHelper --schema-version`), which the update's rollback guard compares with the database.
 
 ## Steps
 
 1. Make sure `main` is green in CI and `npm run verify` passes locally.
-2. If the helper changed, bump `helper/VERSION` and `HelperVersion.current` together (`scripts/build-helper.sh` refuses a mismatch).
-3. Add the release to `CHANGELOG.md`.
+2. Bump `helper/VERSION` and `HelperVersion.current` to the release version together (`scripts/build-helper.sh` refuses a mismatch).
+   The launcher restarts a running helper whose version differs, so every release that changes the helper needs a new version.
+3. Add the release to `CHANGELOG.md`, with a newest heading that names the version, for example `## [0.3.0] - {PR_MERGE_DATE}`.
+   `scripts/check-version.sh 0.3.0` checks steps 2 and 3 locally; the Release workflow runs it on the tag and fails before publishing if the tag, `helper/VERSION`, `HelperVersion.current`, the newest `CHANGELOG.md` heading, or the zip's `prebuilt.json` disagree.
 4. Optionally, check the packaging locally:
 
    ```sh
@@ -44,8 +47,11 @@ A marker file, `assets/prebuilt.json`, tells `scripts/prepare-assets.sh` to use 
    ```
 
 6. Watch the Release workflow in the Actions tab.
-   It builds the editor and the helper, runs the helper smoke test, packages the zip, checks that zip as a browser download with `scripts/check-release.sh` (headless, without Raycast), and then publishes the release.
+   It checks the version, builds the editor and the helper, runs the helper smoke test, packages the zip, checks the packaged version and that zip as a browser download with `scripts/check-release.sh` (headless, without Raycast), and then publishes the release.
 7. Open the release page and check the files and the notes.
+8. On your own install, run Check for Updates, then `npm run update-extension` in the install folder, and check that your notes and the new version are there.
+
+`scripts/e2e-update.sh` (part of `npm run verify` and CI) covers the update path end to end with fake releases: install, update, rollback guard, backups, and restore after removal.
 
 A tag with a suffix, such as `v0.3.0-beta.1`, is published as a prerelease.
 Rerunning the workflow for the same tag replaces the files and the notes of the existing release.

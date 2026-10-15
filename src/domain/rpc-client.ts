@@ -59,7 +59,11 @@ interface ResponseLine {
   error?: { code?: unknown; message?: unknown };
 }
 
+/** Backups and restores copy the whole database, so they get longer than ordinary calls. */
+export const BACKUP_TIMEOUT_MS = 60000;
+
 export function defaultTimeoutFor(method: string): number {
+  if (method === "system.backup" || method === "system.restoreBackup") return BACKUP_TIMEOUT_MS;
   return method === "system.shutdown" ? SHUTDOWN_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
 }
 

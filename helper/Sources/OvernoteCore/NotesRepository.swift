@@ -28,13 +28,19 @@ public final class NotesRepository: @unchecked Sendable {
     public static let systemClock: Clock = { Millis((Date().timeIntervalSince1970 * 1000).rounded(.down)) }
 
     /// Opens (creating if needed) the database at `path` and migrates it to the latest schema.
-    public init(path: String, clock: @escaping Clock = NotesRepository.systemClock) throws {
+    /// With `backups`, a database that holds notes is backed up (reason `pre-migration`) before
+    /// any migration runs; if that backup fails, the migration does not run.
+    public init(path: String, clock: @escaping Clock = NotesRepository.systemClock, backups: BackupStore? = nil) throws {
         self.clock = clock
         do {
             db = try SQLiteDatabase(path: path)
             try db.execute("PRAGMA journal_mode = WAL")
             try db.execute("PRAGMA synchronous = NORMAL")
             try db.execute("PRAGMA foreign_keys = ON")
+            let current = try db.userVersion
+            if let backups, current > 0, current < Migrations.latestVersion, try Self.holdsNotes(db) {
+                _ = try backups.create(reason: .preMigration) { try Self.write(db, to: $0) }
+            }
             try Migrations.migrate(db)
         } catch let error as Migrations.NewerSchemaError {
             throw RPCError.internal(error.description)
@@ -497,6 +503,82 @@ public final class NotesRepository: @unchecked Sendable {
                 [.int(Int64(WindowData.maxPinShortcuts))]
             ) { $0.text(0) }
             return WindowData(current: current, previousNoteId: previous, nextNoteId: next, pinnedShortcutNoteIds: pinned)
+        }
+    }
+
+    // MARK: - Backups
+
+    /// Settings key set when the helper started without a database while backups existed.
+    static let restoreOfferKey = "restoreOffer"
+
+    private static func holdsNotes(_ db: SQLiteDatabase) throws -> Bool {
+        try db.queryFirst("SELECT EXISTS (SELECT 1 FROM notes)") { $0.int(0) != 0 } ?? false
+    }
+
+    /// Copies `db` into a new file at `path` and switches the copy to rollback journal mode, so it
+    /// is one self contained file.
+    private static func write(_ db: SQLiteDatabase, to path: String) throws {
+        let copy = try SQLiteDatabase(path: path)
+        defer { copy.close() }
+        try db.copy(into: copy)
+        try copy.execute("PRAGMA journal_mode = DELETE")
+    }
+
+    /// Writes a consistent copy of the database to `path` with the online backup API.
+    public func backup(to path: String) throws {
+        try locked { try Self.write(db, to: path) }
+    }
+
+    /// Writes a backup into `store`. Automatic reasons (`daily`, `pre-migration`) skip a database
+    /// with no notes at all and return nil.
+    public func backup(into store: BackupStore, reason: BackupReason) throws -> BackupInfo? {
+        if reason.skipsEmptyDatabase, try !locked({ try Self.holdsNotes(db) }) { return nil }
+        return try store.create(reason: reason) { try backup(to: $0) }
+    }
+
+    /// Replaces the whole database (notes and settings) with the backup at `path`, through the
+    /// live connection with the online backup API, then migrates it if it is older. The backup
+    /// must pass `quick_check` and must not have a newer schema. Returns every note id after.
+    public func restore(from path: String) throws -> [String] {
+        try locked {
+            let source: SQLiteDatabase
+            do {
+                source = try SQLiteDatabase(path: path, readOnly: true)
+            } catch {
+                throw RPCError.badParams("Cannot open the backup: \(error)")
+            }
+            defer { source.close() }
+            let check = (try? source.queryFirst("PRAGMA quick_check") { $0.text(0) }) ?? nil
+            guard check == "ok" else { throw RPCError.badParams("The backup is damaged (\(check ?? "not a database"))") }
+            let version = try source.userVersion
+            guard version >= 1 else { throw RPCError.badParams("The backup has no Overnote notes") }
+            guard version <= Migrations.latestVersion else {
+                throw RPCError.conflict(Migrations.NewerSchemaError(found: version, supported: Migrations.latestVersion).description)
+            }
+            try source.copy(into: db)
+            try db.execute("PRAGMA journal_mode = WAL")
+            try Migrations.migrate(db)
+            try db.run("DELETE FROM settings WHERE key = ?", [.text(Self.restoreOfferKey)])
+            return try db.query("SELECT id FROM notes ORDER BY id") { $0.text(0) }
+        }
+    }
+
+    /// Whether the extension should offer to restore a backup (see `restoreOfferKey`).
+    public func restoreOffered() throws -> Bool {
+        try locked {
+            try db.queryFirst("SELECT value FROM settings WHERE key = ?", [.text(Self.restoreOfferKey)]) { $0.text(0) } == "1"
+        }
+    }
+
+    public func setRestoreOffered(_ offered: Bool) throws {
+        try locked {
+            if offered {
+                _ = try db.run(
+                    "INSERT INTO settings (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                    [.text(Self.restoreOfferKey)])
+            } else {
+                _ = try db.run("DELETE FROM settings WHERE key = ?", [.text(Self.restoreOfferKey)])
+            }
         }
     }
 

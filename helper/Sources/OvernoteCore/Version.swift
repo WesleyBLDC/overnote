@@ -4,4 +4,8 @@
 /// version differs from the one it ships with.
 public enum HelperVersion {
     public static let current = "0.2.0"
+
+    /// The database schema this helper writes (`PRAGMA user_version`), printed by
+    /// `--schema-version` and recorded per release in `assets/prebuilt.json`.
+    public static var schemaVersion: Int { Migrations.latestVersion }
 }

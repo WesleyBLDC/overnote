@@ -1,10 +1,12 @@
-import { ensureHelper } from "./helper";
+import { callHelper, ensureHelper } from "./helper";
 import { listNotes } from "./notes";
 import type { NoteSummary } from "../domain/types";
 
 export interface MenuData {
   pinned: NoteSummary[];
   recent: NoteSummary[];
+  /** The helper started without a database while backups existed (see system.status). */
+  restoreAvailable: boolean;
 }
 
 const RECENT_COUNT = 10;
@@ -15,8 +17,9 @@ const RECENT_COUNT = 10;
  */
 export async function loadMenuData(): Promise<MenuData> {
   await ensureHelper();
-  const notes = await listNotes();
+  const [notes, status] = await Promise.all([listNotes(), callHelper("system.status", {})]);
   return {
+    restoreAvailable: status.restoreAvailable,
     pinned: notes.filter((note) => note.pinned !== null),
     recent: notes.filter((note) => note.pinned === null).slice(0, RECENT_COUNT),
   };

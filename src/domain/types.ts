@@ -9,6 +9,10 @@ export type { Millis, Note, NoteContent, NoteId, NoteSummary, Settings, WindowDa
 export type ListParams = rpc.ListParams;
 export type DeletedNoteSummary = rpc.DeletedItem;
 export type UpdateResult = rpc.UpdateResult;
+export type BackupInfo = rpc.BackupInfo;
+export type BackupReason = rpc.BackupReason;
+export type SystemStatus = rpc.SystemStatus;
+export type RestoreResult = rpc.RestoreResult;
 
 export interface Page<T> {
   items: T[];

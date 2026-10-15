@@ -34,6 +34,8 @@ BIN="assets/bin/OvernoteHelper"
 codesign --verify --strict "$BIN" || die "$BIN signature does not verify"
 
 HELPER_VERSION="$("$BIN" --version)"
+SCHEMA_VERSION="$("$BIN" --schema-version)"
+[[ "$SCHEMA_VERSION" =~ ^[0-9]+$ ]] || die "$BIN --schema-version printed $SCHEMA_VERSION"
 HELPER_SHA="$(cut -d' ' -f1 "$BIN.sha256")"
 COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 
@@ -57,14 +59,17 @@ copy package.json package-lock.json tsconfig.json eslint.config.js .prettierrc L
 copy src packages/core/package.json packages/core/tsconfig.json packages/core/src
 # The editor workspace stays (npm ci needs every workspace in the lockfile), without its tests.
 copy editor/package.json editor/tsconfig.json editor/index.html editor/vite.config.ts editor/src
-copy scripts/prepare-assets.sh scripts/install-extension.sh
+copy scripts/prepare-assets.sh scripts/install-extension.sh scripts/update-extension.sh
 copy assets/extension-icon.png assets/bin/OvernoteHelper assets/bin/OvernoteHelper.sha256 assets/editor
 [[ -d media ]] && copy media
 
-# Marks the assets as prebuilt, so prepare-assets.sh never tries to rebuild them.
+# Marks the assets as prebuilt, so prepare-assets.sh never tries to rebuild them. It also
+# records the release version (Check for Updates, update-extension.sh) and the database schema
+# the helper writes (the rollback guard in update-extension.sh).
 cat > "$PKG/assets/prebuilt.json" <<EOF
 {
   "version": "$VERSION",
+  "schemaVersion": $SCHEMA_VERSION,
   "commit": "$COMMIT",
   "helperVersion": "$HELPER_VERSION",
   "helperSha256": "$HELPER_SHA"
@@ -97,6 +102,8 @@ cat > "$OUT/release-notes.md" <<EOF
 2. In Terminal: \`cd overnote\` (in the unzipped folder), then \`npm run install-extension\`.
 3. In Raycast Settings, bind a hotkey to **Toggle Overnote**.
 
+Already installed? Run \`npm run update-extension\` in your Overnote folder instead; it backs up your notes first.
+
 You need macOS 14+, Node.js 22+, and a signed-in Raycast. The Xcode tools are not needed: the zip carries a prebuilt helper and editor.
 Full steps: [docs/install.md](https://github.com/${GITHUB_REPOSITORY:-WesleyBLDC/overnote}/blob/$COMMIT/docs/install.md).
 
@@ -106,6 +113,7 @@ Full steps: [docs/install.md](https://github.com/${GITHUB_REPOSITORY:-WesleyBLDC
 |---|---|
 | Commit | \`$COMMIT\` |
 | Helper version | \`$HELPER_VERSION\` |
+| Database schema | \`$SCHEMA_VERSION\` |
 | Helper architectures | \`$(lipo -archs "$BIN")\` |
 | Helper SHA-256 | \`$HELPER_SHA\` |
 | Helper signature | ad-hoc, hardened runtime, identifier \`dev.overnote.helper\` |

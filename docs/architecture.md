@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v2.8 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v2.9 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -22,14 +22,19 @@ Raycast extension (src/)  ──socket JSON-RPC──▶  OvernoteHelper (helper
 | Socket | `/tmp/overnote-<uid>/helper.sock`; the directory is created with mode 0700 by whoever starts first |
 | PID file | `/tmp/overnote-<uid>/helper.pid` |
 | Helper log | `<support-dir>/helper.log` (rotated at 1 MB) |
+| Backups | `~/Library/Application Support/Overnote/backups/` (mode 0700), outside the extension; `OVERNOTE_BACKUP_DIR` overrides it (see [section 9](#9-backups-installs-and-updates)) |
+| Release marker | `assets/prebuilt.json` in a release install: `{ version, schemaVersion, commit, helperVersion, helperSha256 }` |
+| Install location | `assets/install-location.json`: `{ installDir }`, written by `scripts/install-extension.sh` for Check for Updates |
 
 Helper command line:
 
 ```
-OvernoteHelper --support-dir <dir> --socket <path> --pid-file <path> --editor-dir <assets/editor> [--show] [--version]
+OvernoteHelper --support-dir <dir> --socket <path> --pid-file <path> --editor-dir <assets/editor> [--show] [--version] [--schema-version]
 ```
 
 `--version` prints the version string and exits.
+`--schema-version` prints the database schema version this helper writes (the latest migration) and exits.
+The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups folder; tests always set it to a temporary folder.
 `--show` shows the panel right after startup.
 
 ## 2. Wire protocol (socket)
@@ -38,11 +43,11 @@ OvernoteHelper --support-dir <dir> --socket <path> --pid-file <path> --editor-di
 - Request: `{"id": <int|string>, "method": "<name>", "params": {...}}`.
 - Response: `{"id": ..., "result": ...}` or `{"id": ..., "error": {"code": <int>, "message": "<text>"}}`.
 - Many requests may be in flight on one connection; responses can arrive out of order and are matched by `id`.
-- Error codes: `-32700` unparseable JSON (with `id: null`), `-32601` unknown method (also bridge-only methods on the socket), `-32602` bad params, `404` note not found, `409` invalid state (for example pin or move on a trashed or unpinned note), `500` internal.
+- Error codes: `-32700` unparseable JSON (with `id: null`), `-32601` unknown method (also bridge-only methods on the socket and socket-only methods on the bridge), `-32602` bad params, `404` note or backup not found, `409` invalid state (for example pin or move on a trashed or unpinned note, or a backup with a newer schema), `500` internal.
 - `touchAccessed` on a missing id is a silent no-op; `permanentlyDelete` on a missing id is 404; `window.show {noteId}` is 404 for a missing note and persists it as current.
 - `notes.update` sets `updatedAt` to max(now, old + 1) so same-millisecond edits still change it.
 - The helper also accepts `--headless` (no window) for smoke tests and CI.
-- Clients must time out after 3 s (10 s for `system.shutdown`).
+- Clients must time out after 3 s (10 s for `system.shutdown`, 60 s for `system.backup` and `system.restoreBackup`).
 
 ## 3. Bridge protocol (editor ⇄ helper)
 
@@ -119,6 +124,11 @@ The helper stores `NoteContent` verbatim.
 |---|---|---|---|
 | `system.ping` | `{}` | `{ version: string, pid: number }` | Health check; the launcher restarts the helper on a version mismatch |
 | `system.shutdown` | `{}` | `{}` | Graceful exit |
+| `system.status` (socket) | `{}` | `SystemStatus` | Version, schema, note and backup counts, and the restore offer (section 9) |
+| `system.backup` (socket) | `{ reason?: BackupReason }` (default `"manual"`) | `BackupInfo` | Writes a backup now, even of an empty database, then prunes old ones |
+| `system.listBackups` (socket) | `{}` | `{ directory: string, items: BackupInfo[] }` | Newest first; other files in the folder are ignored |
+| `system.restoreBackup` (socket) | `{ path: string }` | `{ restored: BackupInfo, preRestoreBackup: BackupInfo, noteCount: number }` | Only a backup file directly inside the backups folder (symlinks and `..` resolved first), else `-32602`; `404` when missing. Backs up the current database (reason `pre-restore`), copies the backup into the live connection, migrates it if older, clears the restore offer, and emits `notes.changed` with every note id. A damaged backup is `-32602`, a newer schema `409` |
+| `system.dismissRestoreOffer` (socket) | `{}` | `{}` | Clears the restore offer |
 | `system.ready` (bridge) | `{}` | `{ settings: Settings, windowData: WindowData }` | Editor finished loading; windowData is for the persisted current note |
 | `window.toggle` | `{}` | `{ visible: boolean }` | Show and focus, or hide |
 | `window.show` | `{ noteId?: NoteId }` | `{ visible: true }` | Shows the panel, optionally on a note (emits `note.open`) |
@@ -163,6 +173,24 @@ interface WindowData {
   previousNoteId: NoteId | null;     // newer neighbor in updatedAt desc order
   nextNoteId: NoteId | null;         // older neighbor in updatedAt desc order
   pinnedShortcutNoteIds: NoteId[];   // pin order, at most 9 (⌘1 through ⌘9); ⌘0 is reset zoom
+}
+```
+
+```ts
+type BackupReason = "manual" | "daily" | "pre-migration" | "pre-update" | "pre-restore";
+
+interface BackupInfo {
+  path: string; name: string;          // notes-<UTC timestamp>-v<version>-<reason>.sqlite
+  createdAt: Millis; version: string;  // from the name; version is the helper that wrote it
+  reason: BackupReason; sizeBytes: number;
+}
+
+interface SystemStatus {
+  version: string; pid: number;
+  schemaVersion: number;               // PRAGMA user_version of the open database
+  noteCount: number;                   // live notes
+  backupDir: string; backupCount: number; latestBackup: BackupInfo | null;
+  restoreAvailable: boolean;           // see section 9
 }
 ```
 
@@ -262,16 +290,59 @@ export * as rpc from "./rpc";
 | `create-note` | Create Note | no-view | Optional `text` argument, then `fallbackText`, then selected text, then empty. `notes.create` with `show: true` |
 | `search-notes` | Search Notes | view | List with markdown detail using `notes.list` with `filter` (or the read-only DB with the same order and matching); title matches are moved first within each page; writes through the helper |
 | `recently-deleted` | Recently Deleted Notes | view | Recover, delete permanently, empty trash |
-| `menu-bar` | Overnote Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note; restarts a dead helper |
+| `menu-bar` | Overnote Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note, the backup actions, and the restore offer; restarts a dead helper |
+| `check-for-updates` | Check for Updates | no-view | Reads the version from `assets/prebuilt.json` (the helper's version in a source checkout), asks `https://api.github.com/repos/WesleyBLDC/overnote/releases/latest` with a 5 s timeout, compares semver, and shows a HUD. When newer, copies `cd '<installDir>' && npm run update-extension` to the clipboard; it never runs it |
+
+Search Notes and the menu bar both offer **Back Up Notes Now**, **Restore Notes from Backup** (a list of backups, restored after a `confirmAlert`), and **Reveal Backups Folder**.
+While `system.status` reports `restoreAvailable`, Search Notes shows **Restore Notes from Backup** as its first item (with a Dismiss action), and the menu bar shows it at the top.
+Search Notes asks a running helper, and starts one only when the database does not exist yet, so lists stay instant.
+The menu bar's restore item opens Search Notes with `launchContext: { restore: true }`, which shows the backup list directly.
 
 No default hotkeys.
 
 Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows that note via `window.show`), and `create-note` accepts `launchContext: { text?: string }`.
 This lets deeplinks and quicklinks open a specific note or create one with text.
 
+## 9. Backups, installs, and updates
+
+The database stays in the extension's support directory (`environment.supportPath`), as Raycast recommends.
+That folder is keyed by the extension name `overnote`, so it persists across `ray develop` reinstalls and updates; the name must never change.
+Removing the extension can remove that folder, so backups live outside it.
+
+**Backups.**
+- Written by the helper with SQLite's online backup API (`sqlite3_backup_*`), so a copy is consistent while the database is in WAL mode, then switched to rollback journal mode so each backup is one self contained file.
+- Folder `~/Library/Application Support/Overnote/backups` (or `OVERNOTE_BACKUP_DIR`), mode 0700; files mode 0600, written to a hidden `.partial` file and renamed into place.
+- Name `notes-<UTC timestamp>-v<helper version>-<reason>.sqlite`, with the timestamp in ISO 8601 basic format with milliseconds (`20261015T093000.123Z`), so names sort by time.
+- Reasons: `manual` (`system.backup`), `daily`, `pre-migration`, `pre-update` (`scripts/update-extension.sh`), and `pre-restore`.
+- `daily`: half a second after startup and then every hour, the helper writes one when the newest backup of any reason is at least 24 h old.
+  `daily` and `pre-migration` skip a database with no notes (live or trashed); the other reasons always write.
+- `pre-migration`: before applying any migration to a database that has notes; if that backup fails, the helper does not migrate and does not start.
+- Retention, after every backup: keep the newest 10, plus the newest backup of each of the last 4 ISO weeks in UTC (the current week and the 3 before it); delete the rest, and partial files older than an hour.
+
+**Restore offer.**
+When the helper starts and `notes.sqlite` does not exist while the backups folder holds at least one backup (typically after the extension was removed and installed again), it creates an empty database, overwrites nothing, and stores the settings row `restoreOffer = "1"`.
+`system.status.restoreAvailable` is true while that row is set and backups exist.
+`system.restoreBackup` and `system.dismissRestoreOffer` clear it; the settings row is not part of `Settings`.
+
+**Release metadata.**
+`scripts/package-release.sh` records `version` (the tag) and `schemaVersion` (`OvernoteHelper --schema-version`) in `assets/prebuilt.json`.
+Releases without `schemaVersion` wrote schema 1.
+On tag builds, `scripts/check-version.sh` checks that the tag, `helper/VERSION`, `HelperVersion.current`, the newest `CHANGELOG.md` heading, and the zip's `prebuilt.json` agree.
+
+**Updates.** `npm run update-extension` (`scripts/update-extension.sh`) runs in an installed release folder:
+1. Reads the installed version from `assets/prebuilt.json` (it refuses a folder without one, or a git checkout).
+2. Resolves the target from `<api>/latest`, or `<api>/tags/vX.Y.Z` with `--version vX.Y.Z`, where `<api>` is `OVERNOTE_RELEASES_API` or `https://api.github.com/repos/WesleyBLDC/overnote/releases`; downloads `overnote-<version>.zip` and `SHA256SUMS` to a temporary folder and checks the zip.
+3. Rollback guard: refuses a target whose `schemaVersion` is lower than the database's `PRAGMA user_version`, read with `sqlite3 -readonly` from a copy, before changing anything.
+4. Backs up with `system.backup { reason: "pre-update" }`, starting the installed helper headless first when none answers; if the helper cannot start, it copies the database with `sqlite3 .backup` into the same folder under the same naming.
+5. Stops the helper with `system.shutdown`, then SIGTERM to the pid in the pid file.
+6. Replaces the folder's files with `rsync --checksum --delete`, excluding `node_modules`, and never touches the support folder or the backups folder (it refuses to run if either is inside the install folder); a changed lockfile forces `npm ci`.
+7. Runs the new `scripts/install-extension.sh` and prints the old and new versions.
+
+The support, runtime, and backups folders default to the real ones and can be overridden with `OVERNOTE_SUPPORT_DIR`, `OVERNOTE_RUNTIME_DIR`, and `OVERNOTE_BACKUP_DIR`, which `scripts/e2e-update.sh` points at temporary folders.
+
 ## Protocol versioning
 
-The protocol described here is v2.8.
+The protocol described here is v2.9 (v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.

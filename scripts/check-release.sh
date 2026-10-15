@@ -70,6 +70,8 @@ DOWNLOAD="$WORK/download"
 TOOLS="$WORK/tools"
 RUNTIME="$(mktemp -d /tmp/ovrc.XXXXXX)"
 mkdir -p "$DOWNLOAD" "$TOOLS"
+# The helper started below never writes into the real backups folder.
+export OVERNOTE_BACKUP_DIR="$WORK/backups"
 cleanup() {
   local pid
   pid="$(cat "$RUNTIME"/overnote-*/helper.pid 2>/dev/null || true)"

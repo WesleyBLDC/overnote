@@ -84,6 +84,19 @@
       ]
     },
     {
+      "name": "check-for-updates",
+      "title": "Check for Updates",
+      "description": "Compare the installed Overnote with the latest GitHub release and copy the update command.",
+      "mode": "no-view",
+      "keywords": [
+        "update",
+        "upgrade",
+        "version",
+        "release",
+        "new version"
+      ]
+    },
+    {
       "name": "menu-bar",
       "title": "Overnote Menu Bar",
       "description": "Pinned and recent notes in the menu bar.",
@@ -127,6 +140,7 @@
     "test": "vitest run",
     "verify": "bash scripts/verify.sh",
     "install-extension": "bash scripts/install-extension.sh",
+    "update-extension": "bash scripts/update-extension.sh",
     "publish": "npx @raycast/api@latest publish"
   },
   "allowScripts": {

@@ -52,6 +52,7 @@ describe("extension domain layer against the real helper", () => {
 
   beforeAll(() => {
     root = shortTempDir("bne2e-");
+    process.env.OVERNOTE_BACKUP_DIR = path.join(root, "backups");
     const assets = path.join(root, "assets");
     fs.mkdirSync(path.join(assets, "bin"), { recursive: true });
     fs.mkdirSync(path.join(assets, "editor"), { recursive: true });

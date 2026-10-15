@@ -29,6 +29,8 @@ command -v node >/dev/null || { echo "node is required for the smoke client" >&2
 command -v sqlite3 >/dev/null || { echo "sqlite3 is required" >&2; exit 1; }
 
 TMP="$(mktemp -d /tmp/overnote-smoke.XXXXXX)"
+# Never write into the real backups folder.
+export OVERNOTE_BACKUP_DIR="$TMP/backups"
 SUPPORT="$TMP/support"
 RUN="$TMP/run"
 SOCKET="$RUN/helper.sock"

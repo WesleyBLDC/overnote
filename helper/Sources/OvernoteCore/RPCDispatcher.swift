@@ -11,11 +11,18 @@ public enum RPCSource: Sendable {
 public final class RPCDispatcher: Sendable {
     public let repository: NotesRepository
     public let host: any HelperHost
+    /// The backups folder; nil disables the `system.*Backup*` methods (unit tests).
+    public let backups: BackupStore?
     private let processId: Int32
     private let extensionHandler: ExtensionHandler?
 
     /// Extra socket methods (the `--test-hooks` set). Returns nil for methods it does not own.
     public typealias ExtensionHandler = @Sendable (_ method: String, _ params: JSONValue?) async throws -> JSONValue?
+
+    /// Methods only the socket may call: backups and restores are for the extension and scripts.
+    public static let socketOnlyMethods: Set<String> = [
+        "system.status", "system.backup", "system.listBackups", "system.restoreBackup", "system.dismissRestoreOffer",
+    ]
 
     /// Methods only the editor may call.
     public static let bridgeOnlyMethods: Set<String> = [
@@ -23,11 +30,12 @@ public final class RPCDispatcher: Sendable {
     ]
 
     public init(
-        repository: NotesRepository, host: any HelperHost, processId: Int32 = getpid(),
+        repository: NotesRepository, host: any HelperHost, backups: BackupStore? = nil, processId: Int32 = getpid(),
         extensionHandler: ExtensionHandler? = nil
     ) {
         self.repository = repository
         self.host = host
+        self.backups = backups
         self.processId = processId
         self.extensionHandler = extensionHandler
     }
@@ -36,6 +44,9 @@ public final class RPCDispatcher: Sendable {
     public func handle(method: String, params rawParams: JSONValue?, source: RPCSource) async throws -> JSONValue {
         if source == .socket && Self.bridgeOnlyMethods.contains(method) {
             throw RPCError(code: RPCError.methodNotFoundCode, message: "\(method) is only available to the editor")
+        }
+        if source == .bridge && Self.socketOnlyMethods.contains(method) {
+            throw RPCError(code: RPCError.methodNotFoundCode, message: "\(method) is only available on the socket")
         }
         do {
             if source == .socket, let extensionHandler, let result = try await extensionHandler(method, rawParams) {
@@ -57,6 +68,48 @@ public final class RPCDispatcher: Sendable {
             return ["version": .string(HelperVersion.current), "pid": .int(Int64(processId))]
         case "system.shutdown":
             await host.requestShutdown()
+            return [:]
+        case "system.status":
+            let store = try requireBackups()
+            let list = try store.list()
+            let offered = try repository.restoreOffered()
+            return [
+                "version": .string(HelperVersion.current), "pid": .int(Int64(processId)),
+                "schemaVersion": .int(Int64(try repository.schemaVersion())),
+                "noteCount": .int(Int64(try repository.count())),
+                "backupDir": .string(store.directory), "backupCount": .int(Int64(list.count)),
+                "latestBackup": list.first?.json ?? .null,
+                "restoreAvailable": .bool(!list.isEmpty && offered),
+            ]
+        case "system.backup":
+            let store = try requireBackups()
+            let raw = try p.optionalString("reason") ?? BackupReason.manual.rawValue
+            guard let reason = BackupReason(rawValue: raw) else {
+                let names = BackupReason.allCases.map(\.rawValue).joined(separator: ", ")
+                throw RPCError.badParams("reason must be one of \(names)")
+            }
+            // Asked for explicitly, so even an empty database is written.
+            return try store.create(reason: reason) { try repository.backup(to: $0) }.json
+        case "system.listBackups":
+            let store = try requireBackups()
+            return ["directory": .string(store.directory), "items": .array(try store.list().map(\.json))]
+        case "system.restoreBackup":
+            let store = try requireBackups()
+            let path = try store.validatedRestorePath(try p.string("path"))
+            let name = (path as NSString).lastPathComponent
+            guard let restored = try store.list().first(where: { $0.name == name }) else {
+                throw RPCError.notFound("No backup at \(path)")
+            }
+            let safety = try store.create(reason: .preRestore) { try repository.backup(to: $0) }
+            let ids = try repository.restore(from: path)
+            // Every note may have changed, so the editor reloads even when the backup was empty.
+            await host.emit("notes.changed", ["ids": .array(ids.map(JSONValue.string))])
+            return [
+                "restored": restored.json, "preRestoreBackup": safety.json,
+                "noteCount": .int(Int64(try repository.count())),
+            ]
+        case "system.dismissRestoreOffer":
+            try repository.setRestoreOffered(false)
             return [:]
         case "system.ready":
             return ["settings": try repository.settings().json, "windowData": try repository.windowData().json]
@@ -211,6 +264,11 @@ public final class RPCDispatcher: Sendable {
         default:
             throw RPCError.methodNotFound(method)
         }
+    }
+
+    private func requireBackups() throws -> BackupStore {
+        guard let backups else { throw RPCError.internal("Backups are not configured") }
+        return backups
     }
 
     /// At most this many drag rects; the editor sends a handful at most.

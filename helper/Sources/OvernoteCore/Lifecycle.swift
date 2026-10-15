@@ -157,13 +157,15 @@ public struct HelperArguments: Equatable, Sendable {
     public var editorDir: String?
     public var show = false
     public var version = false
+    /// Prints the database schema version this helper writes and exits.
+    public var schemaVersion = false
     /// Runs the socket server with no window (for smoke tests and CI). Not part of the contract.
     public var headless = false
     /// Adds `test.*` socket methods for the end to end window checks. Not part of the contract.
     public var testHooks = false
 
     public static let usage = """
-        Usage: OvernoteHelper --support-dir <dir> [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--headless] [--test-hooks] [--version]
+        Usage: OvernoteHelper --support-dir <dir> [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--headless] [--test-hooks] [--version] [--schema-version]
         """
 
     public struct ParseError: Error, CustomStringConvertible {
@@ -191,6 +193,7 @@ public struct HelperArguments: Equatable, Sendable {
             case "--editor-dir": editorDir = try value(for: argument)
             case "--show": result.show = true
             case "--version": result.version = true
+            case "--schema-version": result.schemaVersion = true
             case "--headless": result.headless = true
             case "--test-hooks": result.testHooks = true
             default:
@@ -200,7 +203,7 @@ public struct HelperArguments: Equatable, Sendable {
                 }
             }
         }
-        if result.version {
+        if result.version || result.schemaVersion {
             return result
         }
         guard let supportDir else { throw ParseError(description: "--support-dir is required") }
