@@ -78,7 +78,7 @@ public final class RPCDispatcher: Sendable {
         case "window.resize":
             let height = try p.double("contentHeight")
             guard height >= 0 else { throw RPCError.badParams("contentHeight must not be negative") }
-            await host.resizeWindow(contentHeight: height)
+            await host.resizeWindow(contentHeight: height, temporary: try p.optionalBool("temporary") ?? false)
             return [:]
         case "window.resignFocus":
             await host.resignFocus()

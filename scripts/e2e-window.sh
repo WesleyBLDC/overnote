@@ -181,11 +181,12 @@ const panelWindow = (pid, state) =>
   f = await height(140);
   assert.equal(f.height, 140);
 
-  // While ⌘K or ⌘P is open the editor reports a taller content height, then restores it.
-  // Those reports are programmatic: they never turn auto-sizing off.
-  const grown = await height(442);
+  // While ⌘K, browse, or a dialog is open the editor sends a temporary taller report, then a
+  // normal one. Reports are programmatic: they never turn auto-sizing off.
+  await bridge("window.resize", { contentHeight: 442, temporary: true });
+  const grown = (await state()).frame;
   const restored = await height(140);
-  check("temporary growth to 442 and back keeps auto-sizing on", () => {
+  check("auto-sizing on: a temporary report grows to 442 and the next normal report restores", () => {
     assert.equal(grown.height, 442);
     assert.equal(grown.top, top);
     assert.equal(restored.height, 140);
@@ -245,6 +246,20 @@ const panelWindow = (pid, state) =>
     assert.equal(f.height, 500);
   });
 
+  // With auto-sizing off, a temporary report still grows the panel, and the next normal
+  // report restores the user's stored height (not the content height).
+  await call("test.simulateUserResize", { height: 300 });
+  await bridge("window.resize", { contentHeight: 442, temporary: true });
+  const grownOff = (await state()).frame;
+  const storedDuringGrowth = (await call("settings.get")).panelFrame.height;
+  const restoredOff = await height(200);
+  check("auto-sizing off: a temporary report grows to 442 and the next normal report restores the user's height", () => {
+    assert.equal(grownOff.height, 442);
+    assert.equal(storedDuringGrowth, 300);
+    assert.equal(restoredOff.height, 300);
+  });
+  assert.equal((await call("settings.get")).windowAutoSize, false);
+
   // Per display position memory.
   s = await state();
   const target = { x: Math.round(s.frame.x) - 40, top: Math.round(s.frame.top) - 30 };
@@ -280,7 +295,7 @@ const panelWindow = (pid, state) =>
     assert.equal(after.frame.x, target.x);
     assert.equal(after.frame.top, target.top);
     assert.equal(after.frame.width, 640);
-    assert.equal(after.frame.height, 500);
+    assert.equal(after.frame.height, 300);
   });
   await stop(helper);
 

@@ -27,6 +27,8 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private(set) var settings: Settings
     /// The latest content height the editor reported, nil until the first report.
     private var contentHeight: CGFloat?
+    /// A temporary height (⌘K, browse, dialogs) that wins until the next normal report.
+    private var temporaryHeight: CGFloat?
     /// The frame when a user live resize began, to tell a height change from a width change.
     private var liveResizeStartFrame: NSRect?
     private var saveFrameWork: DispatchWorkItem?
@@ -215,7 +217,9 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private func targetHeight(on screen: NSScreen) -> CGFloat {
         let zoom = CGFloat(settings.zoom)
         var height: CGFloat
-        if settings.windowAutoSize {
+        if let temporaryHeight {
+            height = min(max(temporaryHeight, Self.autoMinimumHeight * zoom), Self.autoMaximumHeight * zoom)
+        } else if settings.windowAutoSize {
             let content = contentHeight ?? (panel.isVisible ? panel.frame.height : NotesPanel.defaultHeight)
             height = min(max(content, Self.autoMinimumHeight * zoom), Self.autoMaximumHeight * zoom)
         } else if let saved = settings.panelFrame?.height {
@@ -280,7 +284,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         saved.x = frame.minX
         saved.y = frame.maxY
         saved.width = frame.width
-        saved.height = settings.windowAutoSize ? nil : frame.height
+        // A temporary height is never the user's height.
+        if settings.windowAutoSize {
+            saved.height = nil
+        } else if temporaryHeight == nil {
+            saved.height = frame.height
+        }
         saved.displays[screen.positionKey] = PanelPoint(x: frame.minX, y: frame.maxY)
         guard saved != settings.panelFrame else { return }
         do {
@@ -368,13 +377,22 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         hide()
     }
 
-    /// Content driven height, including the editor's temporary growth while ⌘K, browse, or a
-    /// dialog is open. Always programmatic: it never turns auto-sizing off. With auto-sizing
-    /// off the user's height wins (and the editor stops reporting).
-    func resizeWindow(contentHeight height: Double) async {
+    /// Content driven height. Always programmatic: it never turns auto-sizing off.
+    /// A temporary report grows the panel even with auto-sizing off; the next normal report
+    /// clears it, which restores the content height (auto-sizing on) or the user's stored
+    /// height (auto-sizing off).
+    func resizeWindow(contentHeight height: Double, temporary: Bool) async {
         if recordEvents { resizeReports.append(height) }
-        contentHeight = CGFloat(height).rounded(.up)
-        applyHeight()
+        let rounded = CGFloat(height).rounded(.up)
+        if temporary {
+            temporaryHeight = rounded
+            applyHeight(force: true)
+        } else {
+            let wasTemporary = temporaryHeight != nil
+            temporaryHeight = nil
+            contentHeight = rounded
+            applyHeight(force: wasTemporary)
+        }
     }
 
     func openURL(_ url: URL) async {

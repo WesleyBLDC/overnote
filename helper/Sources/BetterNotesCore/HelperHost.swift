@@ -8,8 +8,10 @@ public protocol HelperHost: Sendable {
     func toggleWindow() async -> Bool
     func showWindow() async
     func hideWindow() async
-    /// Applies a content driven height (in points), clamped by the host.
-    func resizeWindow(contentHeight: Double) async
+    /// Applies a content driven height (in points), clamped by the host. A `temporary` report
+    /// (⌘K, browse, dialogs) applies even with auto-sizing off; the next non temporary report
+    /// restores normal behavior.
+    func resizeWindow(contentHeight: Double, temporary: Bool) async
     /// Opens a link in the default app for its scheme (already checked by `LinkPolicy`).
     func openURL(_ url: URL) async
     /// Returns keyboard focus to the previously frontmost app without hiding.
@@ -29,7 +31,7 @@ public protocol HelperHost: Sendable {
 /// implementation behind `--headless`.
 public final class RecordingHost: HelperHost, @unchecked Sendable {
     public enum Call: Equatable, Sendable {
-        case toggle, show, hide, resize(Double), openURL(String), resignFocus, copy(String, String?), save(String, String)
+        case toggle, show, hide, resize(Double, temporary: Bool), openURL(String), resignFocus, copy(String, String?), save(String, String)
         case settingsChanged(Settings), emit(String, JSONValue), shutdown
     }
 
@@ -78,7 +80,9 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
         }
     }
 
-    public func resizeWindow(contentHeight: Double) async { record(.resize(contentHeight)) }
+    public func resizeWindow(contentHeight: Double, temporary: Bool) async {
+        record(.resize(contentHeight, temporary: temporary))
+    }
     public func openURL(_ url: URL) async { record(.openURL(url.absoluteString)) }
     public func resignFocus() async { record(.resignFocus) }
     public func copyToClipboard(text: String, html: String?) async { record(.copy(text, html)) }
