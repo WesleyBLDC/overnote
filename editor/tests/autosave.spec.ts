@@ -3,19 +3,23 @@ import { expect, test } from "@playwright/test";
 import { calls, clearCalls, editor, emit, lastSave, openHarness, storedNotes } from "./harness";
 
 test("an empty store gets a note, typing saves after about 300 ms with derived fields", async ({ page }) => {
+  // A fake clock makes the debounce exact instead of racing real time on slow machines.
+  await page.clock.install();
   await openHarness(page);
   expect((await calls(page, "notes.create")).length).toBe(1);
   await clearCalls(page);
   await page.keyboard.type("Groceries");
   await page.keyboard.press("Enter");
   await page.keyboard.type("- eggs");
-  const typedAt = Date.now();
+  const contentSaves = async () => (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params);
+  await page.clock.runFor(250);
+  expect(await contentSaves()).toHaveLength(0);
+  await page.clock.runFor(100);
   const save = await lastSave(page);
-  expect(Date.now() - typedAt).toBeGreaterThanOrEqual(250);
   expect(save).toMatchObject({ title: "Groceries", text: "Groceries\n\neggs", markdown: "Groceries\n\n- eggs" });
   expect(typeof save.expectedUpdatedAt).toBe("number");
   expect(JSON.parse(String(save.rawContent)).type).toBe("doc");
-  expect((await calls(page, "notes.update")).filter((c) => "rawContent" in c.params).length).toBe(1);
+  expect(await contentSaves()).toHaveLength(1);
 });
 
 test("switching notes flushes the last keystroke and restores the caret", async ({ page }) => {
