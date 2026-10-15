@@ -34,7 +34,7 @@ import { CommandPanel, type PanelAction, type PanelViewName } from "./CommandPan
 import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
 import { FindBar, type FindBarHandle } from "./FindBar";
 import { Footer } from "./Footer";
-import { useLatest, useNotices, useResizeReporter, useSettings } from "./hooks";
+import { useDragRegions, useLatest, useNotices, useResizeReporter, useSettings } from "./hooks";
 import { LinkPopover } from "./LinkPopover";
 import { Notices } from "./Notices";
 import { SlashMenu, type SlashMenuHandle } from "./SlashMenu";
@@ -285,6 +285,7 @@ export function App({ api }: { api: Api }) {
   const showEmoji = emojiQuery !== null && emojiQuery.from !== emojiDismissed;
   const overlayRem = panel || confirm ? 34 : slashItems.length || showEmoji || linkTarget || formatMenuOpen ? 16 : null;
   useResizeReporter(wrapperRef, api, { autoSize: settings.windowAutoSize, overlayRem });
+  useDragRegions(wrapperRef, api, settings.zoom);
 
   // ---- actions ----
 

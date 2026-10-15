@@ -15,7 +15,7 @@ import {
 import { Extension } from "@tiptap/core";
 import { Fragment, Slice, type Schema } from "@tiptap/pm/model";
 import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
-import type { EditorView } from "@tiptap/pm/view";
+import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { createListEventPlugin, createListRenderingPlugin, createSafariInputMethodWorkaroundPlugin } from "prosemirror-flat-list";
 
 export interface DomOptions {
@@ -114,6 +114,26 @@ function pastePlugin(options: DomOptions): Plugin {
   });
 }
 
+/**
+ * Marks the first top-level block as the note's title line with a node decoration (class
+ * note-title), so the stylesheet can set it apart. A decoration keeps stored content and
+ * serialization untouched, and it follows the first block on every change. A blank note also gets
+ * is-blank-note, so only the placeholder shows until the first character is typed.
+ */
+function titleDecorationPlugin(): Plugin {
+  return new Plugin({
+    key: new PluginKey("noteTitleLine"),
+    props: {
+      decorations(state) {
+        const first = state.doc.firstChild;
+        if (!first) return DecorationSet.empty;
+        const blank = state.doc.childCount === 1 && first.isTextblock && first.content.size === 0;
+        return DecorationSet.create(state.doc, [Decoration.node(0, first.nodeSize, { class: blank ? "note-title is-blank-note" : "note-title" })]);
+      },
+    },
+  });
+}
+
 function copyPlugin(): Plugin {
   const write = (view: EditorView, event: ClipboardEvent, cut: boolean) => {
     const { selection } = view.state;
@@ -191,6 +211,7 @@ export const NoteDomBehavior = Extension.create<DomOptions>({
       createSafariInputMethodWorkaroundPlugin(),
       pastePlugin(this.options),
       copyPlugin(),
+      titleDecorationPlugin(),
       new Plugin({
         key: new PluginKey("noFileDrop"),
         props: {

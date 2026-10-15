@@ -20,6 +20,7 @@ export function createApi(client: BridgeClient) {
       resize: (contentHeight: number, temporary = false) =>
         call(M.WindowResize, temporary ? { contentHeight, temporary } : { contentHeight }),
       resignFocus: () => call(M.WindowResignFocus, {}),
+      setDragRegions: (rects: rpc.DragRect[]) => call(M.WindowSetDragRegions, { rects }),
     },
     clipboard: {
       copy: (params: P<"clipboard.copy">) => call(M.ClipboardCopy, params),

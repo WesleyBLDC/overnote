@@ -180,6 +180,8 @@ export class MockStore {
     },
     "window.resize": () => ({}),
     "window.resignFocus": () => ({}),
+    // The helper turns these into native drag areas; the mock only records the call.
+    "window.setDragRegions": () => ({}),
     "clipboard.copy": () => ({}),
     "app.openURL": () => ({}),
     "file.saveAs": (params) => ({ saved: true, path: `/tmp/${params.suggestedName}` }),

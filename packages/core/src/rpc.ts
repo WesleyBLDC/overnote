@@ -26,6 +26,7 @@ export const Method = {
   WindowHide: "window.hide",
   WindowResize: "window.resize",
   WindowResignFocus: "window.resignFocus",
+  WindowSetDragRegions: "window.setDragRegions",
   ClipboardCopy: "clipboard.copy",
   FileSaveAs: "file.saveAs",
   AppOpenURL: "app.openURL",
@@ -59,6 +60,7 @@ export const BRIDGE_ONLY_METHODS: readonly MethodName[] = [
   Method.SystemReady,
   Method.WindowResize,
   Method.WindowResignFocus,
+  Method.WindowSetDragRegions,
   Method.ClipboardCopy,
   Method.FileSaveAs,
   Method.AppOpenURL,
@@ -92,6 +94,14 @@ export type UpdateParams = { id: NoteId; expectedUpdatedAt?: Millis } & Partial<
 
 export type UpdateResult = { status: "ok"; note: Note } | { status: "conflict"; note: Note };
 
+/** A window drag region in points, top-left origin relative to the web view, zoom already applied. */
+export interface DragRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /** Params and result for every method, keyed by method name. */
 export interface Methods {
   "system.ping": { params: Empty; result: { version: string; pid: number } };
@@ -102,6 +112,7 @@ export interface Methods {
   "window.hide": { params: Empty; result: { visible: false } };
   "window.resize": { params: { contentHeight: number; temporary?: boolean }; result: Empty };
   "window.resignFocus": { params: Empty; result: Empty };
+  "window.setDragRegions": { params: { rects: DragRect[] }; result: Empty };
   "clipboard.copy": { params: { text: string; html?: string }; result: Empty };
   "app.openURL": { params: { url: string }; result: Empty };
   "file.saveAs": { params: { suggestedName: string; content: string }; result: { saved: boolean; path?: string } };

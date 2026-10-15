@@ -33,6 +33,9 @@ interface MockWindow {
   __betterNotesMock?: MockControl;
 }
 
+/** The helper's first-open panel height in points when auto-sizing is off (contract section 4). */
+const FIRST_OPEN_HEIGHT = 560;
+
 function seedFromUrl(control: MockControl, search: string): void {
   const params = new URLSearchParams(search);
   const seed = params.get("seed");
@@ -49,8 +52,9 @@ function seedFromUrl(control: MockControl, search: string): void {
 }
 
 export function installMockBridge(target: MockWindow & Window): MockControl {
-  // Emulates the helper's panel sizing: clamp to 128 to 860 points times zoom; temporary heights
-  // apply even with auto-sizing off and the next normal report restores the panel.
+  // Emulates the helper's panel sizing: clamp to 128 to 860 points times zoom. With auto-sizing off
+  // the panel opens at the roomy first-open size. Temporary heights only ever grow the panel (a tall
+  // enough panel stays as it is) and the next normal report restores the resting height.
   let restingHeight: number | null = null;
   const applyPanelHeight = ({ contentHeight, temporary }: { contentHeight: number; temporary?: boolean }) => {
     const root = target.document.getElementById("root");
@@ -58,7 +62,8 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
     const zoom = control.store.settings.zoom;
     const clamp = (value: number) => Math.min(860 * zoom, Math.max(128 * zoom, value));
     if (temporary) {
-      root.style.height = `${clamp(contentHeight)}px`;
+      const current = root.getBoundingClientRect().height;
+      if (current < contentHeight) root.style.height = `${clamp(contentHeight)}px`;
       return;
     }
     if (control.store.settings.windowAutoSize || restingHeight === null) restingHeight = clamp(contentHeight);
@@ -110,5 +115,10 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
   target.__betterNotesMock = control;
   target.document.documentElement.dataset.harness = "true";
   seedFromUrl(control, target.location.search);
+  if (!control.store.settings.windowAutoSize) {
+    restingHeight = FIRST_OPEN_HEIGHT;
+    const root = target.document.getElementById("root");
+    if (root) root.style.height = `${FIRST_OPEN_HEIGHT}px`;
+  }
   return control;
 }

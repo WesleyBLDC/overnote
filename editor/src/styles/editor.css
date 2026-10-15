@@ -1,8 +1,10 @@
 /* Note content: typography, lists (prosemirror-flat-list markup), tasks, code, find highlights. */
+/* Note text is --note-scale times the UI base; every size below is in em, so it all grows together. */
 .note-editor {
+  --line-height: var(--note-line-height);
   min-height: 1.55em;
   outline: none;
-  font-size: 1rem;
+  font-size: calc(1rem * var(--note-scale));
   line-height: var(--line-height);
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -11,6 +13,7 @@
   font-variant-ligatures: none;
 }
 
+.note-editor::selection,
 .note-editor ::selection {
   background: var(--selection);
 }
@@ -56,10 +59,11 @@
 }
 
 .note-editor a {
-  color: var(--accent);
+  color: inherit;
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  text-underline-offset: 0.15em;
+  text-decoration-color: var(--link-underline);
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.18em;
   cursor: pointer;
 }
 
@@ -86,6 +90,31 @@
 
 .note-editor hr.ProseMirror-selectednode {
   border-top-color: var(--accent);
+}
+
+/*
+ * The first line is the note's title: the first top-level block carries the note-title decoration
+ * (see titleDecoration in domExtensions.ts). Same font, a touch larger and medium weight for a
+ * paragraph, then space and a low-contrast hairline across the text column.
+ */
+.note-editor > .note-title {
+  padding-bottom: 0.4em;
+  margin-bottom: 0.6em;
+  border-bottom: 1px solid var(--title-rule);
+}
+
+/* An empty note shows only the placeholder; the hairline appears with the first character. */
+.note-editor > .note-title.is-blank-note {
+  border-bottom-color: transparent;
+}
+
+.note-editor > p.note-title {
+  font-size: 1.08em;
+  font-weight: 500;
+}
+
+.note-editor > .note-title + * {
+  margin-top: 0;
 }
 
 /* Placeholders (Tiptap adds data-placeholder on the empty node). */
@@ -175,14 +204,14 @@
   width: calc(var(--list-gutter) - 0.35em);
   text-align: right;
   font-variant-numeric: tabular-nums;
-  color: var(--accent);
+  color: var(--text-secondary);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="ordered"] > .list-content > * {
   contain: style;
 }
 
-/* Tasks: a rounded square outlined in the accent color, a filled inner square when checked. */
+/* Tasks: a rounded square outlined in the neutral accent, a filled inner square when checked. */
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker label {
   display: flex;
   cursor: pointer;
@@ -192,10 +221,11 @@
   -webkit-appearance: none;
   appearance: none;
   position: relative;
-  width: 0.95em;
-  height: 0.95em;
+  font-size: inherit;
+  width: 0.85em;
+  height: 0.85em;
   margin: 0;
-  border: 0.1em solid var(--accent);
+  border: 0.09em solid var(--text-secondary);
   border-radius: 0.25em;
   background: transparent;
   cursor: pointer;
@@ -204,8 +234,8 @@
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input:checked::after {
   content: "";
   position: absolute;
-  inset: 0.14em;
-  border-radius: 0.1em;
+  inset: 0.13em;
+  border-radius: 0.08em;
   background: var(--accent);
 }
 

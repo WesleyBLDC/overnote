@@ -59,7 +59,7 @@ export interface Settings {
   hideWhileScreenSharing: boolean;
   /** Default 1.0, range 0.75 to 2.0, step 0.05. */
   zoom: number;
-  /** Default true: height follows content; false keeps the user's height. */
+  /** Default false: the first open uses a roomy 640 x 560 pt panel and keeps the user's height; true: height follows content. */
   windowAutoSize: boolean;
   /** Default false. */
   showFormatBar: boolean;
@@ -91,7 +91,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   escapeLosesFocus: false,
   hideWhileScreenSharing: false,
   zoom: 1,
-  windowAutoSize: true,
+  windowAutoSize: false,
   showFormatBar: false,
   countMode: "characters",
   panelFrame: null,

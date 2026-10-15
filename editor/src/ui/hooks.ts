@@ -1,5 +1,5 @@
 /** Small React hooks for notices, settings, and content-driven window height. */
-import { DEFAULT_SETTINGS, type Settings } from "@better-notes/core";
+import { DEFAULT_SETTINGS, type rpc, type Settings } from "@better-notes/core";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type { Api } from "../bridge/api";
 
@@ -67,7 +67,9 @@ export function measureContentHeight(app: HTMLElement): number {
  * Measuring happens right in the ResizeObserver callback (not in requestAnimationFrame, which hidden
  * WebKit windows pause), coalesced to one report per microtask.
  * While an overlay is open the report is temporary and at least as tall as the overlay needs; it is
- * sent even with auto-sizing off, and a normal report follows when the overlay closes.
+ * sent even with auto-sizing off, and a normal report follows when the overlay closes. When the panel
+ * is already tall enough for the overlay, nothing is sent: the overlay opens and scrolls inside the
+ * current window, so a roomy panel never resizes for ⌘K or browse.
  */
 export function useResizeReporter(ref: RefObject<HTMLElement | null>, api: Api, options: ResizeOptions) {
   const last = useRef<{ height: number; temporary: boolean } | null>(null);
@@ -85,6 +87,7 @@ export function useResizeReporter(ref: RefObject<HTMLElement | null>, api: Api, 
       const previous = last.current;
       if (height <= 0) return;
       if (previous && previous.height === height && previous.temporary === temporary) return;
+      if (temporary && !previous?.temporary && app.getBoundingClientRect().height >= height) return;
       if (!temporary && !autoSize && !previous?.temporary) return;
       last.current = { height, temporary };
       void api.window.resize(height, temporary).catch(() => undefined);
@@ -115,6 +118,115 @@ export function useResizeReporter(ref: RefObject<HTMLElement | null>, api: Api, 
       mutations.disconnect();
     };
   }, [ref, api, autoSize, overlayRem]);
+}
+
+const INTERACTIVE = "button, a[href], input, select, textarea, [role=button], [contenteditable=true]";
+
+/** The parts of `rect` not covered by `hole`: up to four rectangles (above, below, left, right). */
+function subtract(rect: rpc.DragRect, hole: rpc.DragRect): rpc.DragRect[] {
+  const right = rect.x + rect.width;
+  const bottom = rect.y + rect.height;
+  const holeRight = hole.x + hole.width;
+  const holeBottom = hole.y + hole.height;
+  if (hole.x >= right || holeRight <= rect.x || hole.y >= bottom || holeBottom <= rect.y) return [rect];
+  const top = Math.max(rect.y, hole.y);
+  const low = Math.min(bottom, holeBottom);
+  const pieces: rpc.DragRect[] = [
+    { x: rect.x, y: rect.y, width: rect.width, height: top - rect.y },
+    { x: rect.x, y: low, width: rect.width, height: bottom - low },
+    { x: rect.x, y: top, width: Math.max(rect.x, hole.x) - rect.x, height: low - top },
+    { x: Math.min(right, holeRight), y: top, width: right - Math.min(right, holeRight), height: low - top },
+  ];
+  return pieces.filter((piece) => piece.width > 0 && piece.height > 0);
+}
+
+/**
+ * The toolbar area that should drag the window: the toolbar's bounds minus every control in it,
+ * in points (CSS px, which already include zoom) with a top-left origin at the panel's corner.
+ * Edges are rounded outward for controls so a click on a control's edge never starts a drag.
+ */
+export function computeDragRegions(app: HTMLElement): rpc.DragRect[] {
+  const toolbar = app.querySelector<HTMLElement>("[data-testid=toolbar]");
+  if (!toolbar) return [];
+  const origin = app.getBoundingClientRect();
+  const box = toolbar.getBoundingClientRect();
+  let rects: rpc.DragRect[] = [
+    {
+      x: Math.round(box.left - origin.left),
+      y: Math.round(box.top - origin.top),
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+    },
+  ];
+  for (const control of Array.from(toolbar.querySelectorAll<HTMLElement>(INTERACTIVE))) {
+    const r = control.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    const x = Math.floor(r.left - origin.left);
+    const y = Math.floor(r.top - origin.top);
+    const hole = { x, y, width: Math.ceil(r.right - origin.left) - x, height: Math.ceil(r.bottom - origin.top) - y };
+    rects = rects.flatMap((rect) => subtract(rect, hole));
+  }
+  return rects;
+}
+
+/**
+ * Sends the toolbar's drag regions to the helper (window.setDragRegions): on load, when the panel or
+ * any toolbar part resizes, when zoom changes, and when the hover chrome shows or hides. Identical
+ * regions are sent once.
+ */
+export function useDragRegions(ref: RefObject<HTMLElement | null>, api: Api, zoom: number) {
+  const last = useRef<string | null>(null);
+  useEffect(() => {
+    const app = ref.current;
+    if (!app) return;
+    let scheduled = false;
+    const report = () => {
+      scheduled = false;
+      const rects = computeDragRegions(app);
+      const key = JSON.stringify(rects);
+      if (key === last.current) return;
+      last.current = key;
+      void api.window.setDragRegions(rects).catch(() => {
+        last.current = null;
+      });
+    };
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(report);
+    };
+    const observer = new ResizeObserver(schedule);
+    const observeToolbar = () => {
+      observer.disconnect();
+      observer.observe(app);
+      const toolbar = app.querySelector("[data-testid=toolbar]");
+      if (!toolbar) return;
+      observer.observe(toolbar);
+      for (const part of Array.from(toolbar.querySelectorAll(`${INTERACTIVE}, .toolbar-actions, .toolbar-leading`))) observer.observe(part);
+    };
+    observeToolbar();
+    const mutations = new MutationObserver(() => {
+      observeToolbar();
+      schedule();
+    });
+    mutations.observe(app, { childList: true, subtree: false });
+    const toolbar = app.querySelector("[data-testid=toolbar]");
+    if (toolbar) mutations.observe(toolbar, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "hidden", "disabled"] });
+    // The hover chrome fades in and out; its transition end is when the controls settle.
+    app.addEventListener("mouseenter", schedule);
+    app.addEventListener("mouseleave", schedule);
+    app.addEventListener("transitionend", schedule);
+    window.addEventListener("resize", schedule);
+    schedule();
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+      app.removeEventListener("mouseenter", schedule);
+      app.removeEventListener("mouseleave", schedule);
+      app.removeEventListener("transitionend", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [ref, api, zoom]);
 }
 
 /** Keeps a ref pointing at the latest value, for callbacks created once. */

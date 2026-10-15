@@ -1,6 +1,8 @@
 /*
  * Better Notes theme: every color and size token lives here.
- * The native panel provides the vibrancy, so the page background stays transparent.
+ * The native panel provides the vibrancy material; the editor paints a deep, nearly solid tint on top
+ * (--body-tint) so text keeps strong contrast whatever is behind the window.
+ * The accent is monochrome: dark gray in light mode, soft white in dark mode.
  */
 :root {
   color-scheme: light dark;
@@ -8,88 +10,115 @@
 
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  /* The UI base (1rem at 100% zoom); note text is --note-scale times larger. */
   --font-size: 14px;
   --line-height: 1.7;
+  --note-scale: 1.5;
+  --note-line-height: 1.55;
 
-  --accent: #0d8c7d;
-  --accent-soft: rgba(13, 140, 125, 0.14);
-  --accent-strong: #08715f;
+  --body-tint: rgba(251, 251, 252, 0.94);
 
-  --text: rgba(20, 22, 26, 0.92);
-  --text-secondary: rgba(20, 22, 26, 0.58);
-  --text-tertiary: rgba(20, 22, 26, 0.38);
-  --text-dimmed: rgba(20, 22, 26, 0.42);
-  --placeholder: rgba(20, 22, 26, 0.3);
+  --accent: #3a3a3d;
+  --accent-soft: rgba(20, 20, 24, 0.08);
+  --accent-strong: #1c1c1e;
+  --on-accent: #ffffff;
+
+  --text: rgba(12, 12, 14, 0.9);
+  --text-secondary: rgba(12, 12, 14, 0.58);
+  --text-tertiary: rgba(12, 12, 14, 0.4);
+  --text-dimmed: rgba(12, 12, 14, 0.42);
+  --placeholder: rgba(12, 12, 14, 0.3);
 
   --surface: transparent;
   --surface-raised: rgba(255, 255, 255, 0.985);
-  --surface-hover: rgba(20, 22, 26, 0.06);
-  --surface-selected: rgba(13, 140, 125, 0.16);
-  --surface-code: rgba(20, 22, 26, 0.05);
-  --border: rgba(20, 22, 26, 0.1);
-  --border-strong: rgba(20, 22, 26, 0.18);
+  --surface-hover: rgba(12, 12, 14, 0.06);
+  --surface-selected: rgba(12, 12, 14, 0.08);
+  --surface-code: rgba(12, 12, 14, 0.05);
+  --border: rgba(12, 12, 14, 0.1);
+  --border-strong: rgba(12, 12, 14, 0.18);
+  --title-rule: rgba(12, 12, 14, 0.09);
+  --link-underline: rgba(12, 12, 14, 0.38);
+  --focus-ring: rgba(12, 12, 14, 0.14);
   --shadow: 0 0.6rem 2rem rgba(10, 12, 16, 0.18), 0 0 0 0.5px rgba(10, 12, 16, 0.12);
-  --selection: rgba(13, 140, 125, 0.22);
+  --selection: rgba(12, 12, 14, 0.14);
   --find-match: rgba(255, 196, 0, 0.35);
   --find-active: rgba(255, 140, 0, 0.6);
   --danger: #d13b3b;
-  --success: #1f9d55;
+  --success: #2f7d4f;
+  --dialog-scrim: rgba(0, 0, 0, 0.12);
 
   --code-keyword: #8b3fbf;
   --code-string: #1f7a3a;
   --code-number: #b35900;
-  --code-comment: rgba(20, 22, 26, 0.45);
+  --code-comment: rgba(12, 12, 14, 0.45);
   --code-title: #1d5fbf;
   --code-attr: #9a5b00;
 
   --drag-strip: 12px;
-  /* One line note: 52 + 7 + 24 + 4 + 48 = 135 points at 100% (spec/visual.md 2). */
+  /* The helper's resize zones: 8 pt along edges, 16 pt squares at corners; controls stay outside. */
+  --corner-clearance: 16px;
+  /* One line note: 52 + 7 + 35 (title line) + 10 (title rule) + 4 + 48 = about 157 points at 100%. */
   --toolbar-height: 3.715rem;
   --content-top: 0.5rem;
   --content-bottom: 0.3rem;
   --footer-height: 3.43rem;
+  /* Toolbar and format bar icons are 20% larger than the 1rem base, with hit targets to match. */
+  --chrome-icon: 1.2rem;
+  --chrome-hit: 2.05rem;
+  --close-size: 1rem;
   --close: #ec5f59;
-  --quote-border: rgba(13, 140, 125, 0.45);
+  --close-glyph: rgba(0, 0, 0, 0.6);
+  --quote-border: rgba(12, 12, 14, 0.22);
   --radius-s: 0.3rem;
   --radius-m: 0.5rem;
   --radius-l: 0.75rem;
-  --list-gutter: 1.6rem;
-  --content-x: 1.15rem;
+  /* In em, so it resolves against the note text where it is used. */
+  --list-gutter: 1.5em;
+  --content-x: 1.43rem;
   --harness-backdrop: linear-gradient(135deg, #e9eef2, #d9e4ea);
+  --harness-material: rgba(236, 238, 241, 0.7);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --accent: #3cc8b4;
-    --accent-soft: rgba(60, 200, 180, 0.16);
-    --accent-strong: #5fe0cc;
+    --body-tint: rgba(24, 24, 26, 0.94);
 
-    --text: rgba(240, 242, 245, 0.92);
-    --text-secondary: rgba(240, 242, 245, 0.58);
-    --text-tertiary: rgba(240, 242, 245, 0.36);
-    --text-dimmed: rgba(240, 242, 245, 0.4);
-    --placeholder: rgba(240, 242, 245, 0.28);
+    --accent: rgba(255, 255, 255, 0.88);
+    --accent-soft: rgba(255, 255, 255, 0.12);
+    --accent-strong: #ffffff;
+    --on-accent: #17171a;
 
-    --surface-raised: rgba(38, 40, 44, 0.985);
-    --quote-border: rgba(60, 200, 180, 0.5);
-    --surface-hover: rgba(255, 255, 255, 0.07);
-    --surface-selected: rgba(60, 200, 180, 0.2);
-    --surface-code: rgba(255, 255, 255, 0.06);
+    --text: rgba(255, 255, 255, 0.94);
+    --text-secondary: rgba(255, 255, 255, 0.6);
+    --text-tertiary: rgba(255, 255, 255, 0.38);
+    --text-dimmed: rgba(255, 255, 255, 0.4);
+    --placeholder: rgba(255, 255, 255, 0.3);
+
+    --surface-raised: rgba(36, 36, 39, 0.985);
+    --quote-border: rgba(255, 255, 255, 0.24);
+    --surface-hover: rgba(255, 255, 255, 0.08);
+    --surface-selected: rgba(255, 255, 255, 0.1);
+    --surface-code: rgba(255, 255, 255, 0.07);
     --border: rgba(255, 255, 255, 0.1);
     --border-strong: rgba(255, 255, 255, 0.18);
-    --shadow: 0 0.6rem 2rem rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
-    --selection: rgba(60, 200, 180, 0.3);
+    --title-rule: rgba(255, 255, 255, 0.1);
+    --link-underline: rgba(255, 255, 255, 0.42);
+    --focus-ring: rgba(255, 255, 255, 0.18);
+    --shadow: 0 0.6rem 2rem rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+    --selection: rgba(255, 255, 255, 0.22);
     --find-match: rgba(255, 200, 0, 0.3);
     --find-active: rgba(255, 150, 0, 0.55);
     --danger: #ff6b6b;
-    --success: #4ade80;
+    --success: #7dd69a;
+    --dialog-scrim: rgba(0, 0, 0, 0.3);
 
     --code-keyword: #d19bff;
     --code-string: #8fd99c;
     --code-number: #ffb86b;
-    --code-comment: rgba(240, 242, 245, 0.42);
+    --code-comment: rgba(255, 255, 255, 0.42);
     --code-title: #82b6ff;
     --code-attr: #f0c674;
-    --harness-backdrop: linear-gradient(135deg, #1d2226, #12171b);
+    --harness-backdrop: linear-gradient(135deg, #2a3a46, #10161b);
+    --harness-material: rgba(52, 54, 58, 0.62);
   }
 }

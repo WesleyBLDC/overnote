@@ -146,3 +146,54 @@ test("Esc hides the panel window, or resigns focus with the setting on", async (
   await expect.poll(async () => (await calls(page, "window.resignFocus")).length).toBe(1);
   expect((await calls(page, "window.hide")).length).toBe(1);
 });
+
+test("⌘K and ⌘P open inside a roomy window without resizing it and scroll within it", async ({ page }) => {
+  await openHarness(page, ["Alpha", "Beta"]);
+  await clearCalls(page);
+  const temporaryReports = async () => (await calls(page, "window.resize")).filter((c) => c.params.temporary);
+  const fitsInside = async () =>
+    page.evaluate(() => {
+      const app = document.querySelector("[data-testid=app]")!.getBoundingClientRect();
+      const panel = document.querySelector("[data-testid=command-panel]")!.getBoundingClientRect();
+      const list = document.querySelector("[data-testid=command-panel] .panel-list") as HTMLElement;
+      return {
+        inside: panel.top >= app.top && panel.bottom <= app.bottom && panel.left >= app.left && panel.right <= app.right,
+        appHeight: app.height,
+        scrolls: getComputedStyle(list).overflowY === "auto",
+        overflowing: list.scrollHeight > list.clientHeight,
+      };
+    });
+
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-panel")).toBeVisible();
+  await page.waitForTimeout(250);
+  expect(await temporaryReports()).toEqual([]);
+  // The root list is longer than the panel, so it scrolls inside the window instead of growing it.
+  expect(await fitsInside()).toEqual({ inside: true, appHeight: 560, scrolls: true, overflowing: true });
+  await page.keyboard.press("Escape");
+
+  await page.keyboard.press("Meta+p");
+  await expect(page.getByTestId("browse-row")).toHaveCount(2);
+  await page.waitForTimeout(250);
+  expect(await temporaryReports()).toEqual([]);
+  expect(await fitsInside()).toMatchObject({ inside: true, appHeight: 560, scrolls: true });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+  expect(await calls(page, "window.resize")).toEqual([]);
+});
+
+test("⌘W is left to the helper's menu item: the editor never swallows it", async ({ page }) => {
+  await openHarness(page, ["Text"]);
+  await page.evaluate(() => {
+    const seen: boolean[] = [];
+    (window as unknown as { __cmdW: boolean[] }).__cmdW = seen;
+    window.addEventListener("keydown", (event) => {
+      if (event.metaKey && event.code === "KeyW") seen.push(event.defaultPrevented);
+    });
+  });
+  await editor(page).focus();
+  await page.keyboard.press("Meta+w");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __cmdW: boolean[] }).__cmdW)).toEqual([false]);
+  await expect(editor(page)).toHaveText("Text");
+  await expect(editor(page)).toBeFocused();
+});

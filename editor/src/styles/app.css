@@ -34,12 +34,15 @@ html[data-harness] body {
   overflow: auto;
 }
 
+/* The harness stands in for the panel: 640 points wide, a translucent material, and the editor's tint on top. */
 html[data-harness] #root {
-  max-width: 34rem;
+  max-width: 640px;
   height: 9.65rem;
-  margin: 2rem auto;
+  margin: 0 auto;
   border-radius: var(--radius-l);
-  background: var(--surface-raised);
+  background: var(--harness-material);
+  -webkit-backdrop-filter: blur(30px) saturate(1.4);
+  backdrop-filter: blur(30px) saturate(1.4);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
@@ -68,6 +71,7 @@ kbd {
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: var(--body-tint);
 }
 
 /* Chrome shows only while the pointer is over the panel (spec/window.md 7). */
@@ -94,8 +98,8 @@ kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 0.95rem;
-  height: 0.95rem;
+  width: var(--close-size);
+  height: var(--close-size);
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -109,10 +113,15 @@ kbd {
 }
 
 .close-button:hover {
-  color: rgba(0, 0, 0, 0.6);
+  color: var(--close-glyph);
 }
 
-/* The helper's invisible drag strip covers the top 12 points; keep it free of controls. */
+/*
+ * The helper's invisible drag strip covers the top 12 points; keep it free of controls.
+ * Close, title, and the right group share one row, centered on the same line. The Close control
+ * starts on the text column's left edge and the last icon glyph ends on its right edge.
+ * Everything in the toolbar that is not a control drags the window (window.setDragRegions).
+ */
 .toolbar {
   flex: none;
   z-index: 5;
@@ -121,15 +130,17 @@ kbd {
   align-items: center;
   gap: 0.5rem;
   min-height: var(--toolbar-height);
-  padding: var(--drag-strip) 0.6rem 0;
+  padding: var(--drag-strip) max(var(--corner-clearance), calc(var(--content-x) - (var(--chrome-hit) - var(--chrome-icon)) / 2)) 0
+    max(var(--corner-clearance), var(--content-x));
   -webkit-user-select: none;
   user-select: none;
 }
 
 .toolbar-title {
   margin: 0;
-  font-size: 0.93rem;
+  font-size: 1.07rem;
   font-weight: 600;
+  line-height: var(--chrome-hit);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -140,13 +151,26 @@ kbd {
 .toolbar-leading {
   display: flex;
   align-items: center;
-  padding-left: 0.45rem;
+  height: var(--chrome-hit);
 }
 
 .toolbar-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 0.15rem;
+  gap: 0.1rem;
+}
+
+.toolbar-actions .icon-button {
+  width: var(--chrome-hit);
+  min-width: var(--chrome-hit);
+  height: var(--chrome-hit);
+  padding: 0;
+}
+
+.toolbar-actions .icon-button .icon {
+  width: var(--chrome-icon);
+  height: var(--chrome-icon);
 }
 
 .icon-button {
@@ -210,7 +234,8 @@ kbd {
   grid-template-columns: 2.3rem 1fr 2.3rem;
   align-items: center;
   min-height: var(--footer-height);
-  padding: 0 0.6rem 0.4rem;
+  /* The toggle stays clear of the helper's 16 pt corner resize square. */
+  padding: 0 max(var(--corner-clearance), calc(var(--content-x) - 0.65rem)) var(--corner-clearance);
   -webkit-user-select: none;
   user-select: none;
 }
@@ -250,17 +275,24 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 0.05rem;
-  height: 1.6rem;
-  padding: 0 0.3rem;
+  height: var(--chrome-hit);
+  min-width: var(--chrome-hit);
+  justify-content: center;
+  padding: 0 0.36rem;
   border: 0;
   border-radius: var(--radius-s);
   background: transparent;
   color: var(--text-secondary);
 }
 
+.format-button .icon {
+  width: var(--chrome-icon);
+  height: var(--chrome-icon);
+}
+
 .format-button .icon + .icon {
-  width: 0.65rem;
-  height: 0.65rem;
+  width: 0.78rem;
+  height: 0.78rem;
 }
 
 .format-button:hover {
@@ -274,7 +306,7 @@ kbd {
 
 .format-divider {
   width: 1px;
-  height: 1rem;
+  height: 1.2rem;
   margin: 0 0.25rem;
   background: var(--border-strong);
 }
@@ -378,7 +410,10 @@ kbd {
   border: 0;
   border-radius: var(--radius-s);
   background: transparent;
-  color: var(--accent);
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--link-underline);
+  text-underline-offset: 0.15em;
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -405,7 +440,7 @@ kbd {
 .link-edit input:focus,
 .find-row input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .find-bar {
@@ -459,7 +494,7 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--dialog-scrim);
 }
 
 .panel {
@@ -586,13 +621,13 @@ kbd {
 .dialog-buttons .is-destructive {
   border-color: transparent;
   background: var(--danger);
-  color: white;
+  color: var(--on-accent);
 }
 
 .dialog-buttons .is-primary {
   border-color: transparent;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
 }
 
 .notices {
@@ -748,5 +783,5 @@ kbd {
 .text-button.is-primary {
   border-color: transparent;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
 }
