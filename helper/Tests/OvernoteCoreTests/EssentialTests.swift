@@ -100,7 +100,7 @@ struct OrderingTests {
             ids += page.items.map(\.id)
             cursor = page.nextCursor
         } while cursor != nil
-        #expect(ids == titleHits.reversed() + textHits.reversed())
+        #expect(ids == Array(titleHits.reversed()) + Array(textHits.reversed()))
     }
 
     @Test func cursorsAreBoundToTheirSource() throws {
