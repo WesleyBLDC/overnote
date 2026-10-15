@@ -1,5 +1,5 @@
 /** Window height and resize churn, zoom, note text size, the plain first line, motion, toolbar layout and drag regions, the accent, the counter, and the format bar. */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { calls, editor, lastSave, openHarness, pauseClock, settle } from "./harness";
 
 test("resize reports follow content, zoom, and overlays", async ({ page }) => {
@@ -282,13 +282,13 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
 
   // Closing leaves an inert copy that fades out, then disappears; the live panel is gone at once.
   // The paused clock holds the fallback timer, so the copy leaves on its own animation end event.
+  // The copy can finish its real animation before a later query runs on a slow machine, so its
+  // attributes are recorded the moment it is inserted.
+  await watchGhost(page);
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
   const ghost = page.locator(".panel-ghost");
-  await expect(ghost).toHaveCount(1);
-  await expect(ghost).toHaveAttribute("aria-hidden", "true");
-  expect(await ghost.locator("[data-testid]").count()).toBe(0);
-  expect(await ghost.locator(".panel").evaluate((el) => getComputedStyle(el).animationDuration)).toBe("0.12s");
+  expect(await ghostSnapshot(page)).toEqual({ ariaHidden: "true", testIds: 0, duration: "0.12s" });
   await expect(ghost).toHaveCount(0);
   await expect(editor(page)).toBeFocused();
 
@@ -297,9 +297,9 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   await page.evaluate(() => document.documentElement.style.setProperty("--motion-fast", "450ms"));
   await page.keyboard.press("Meta+k");
   await expect(page.getByTestId("command-panel")).toBeVisible();
+  await watchGhost(page);
   await page.keyboard.press("Escape");
-  await expect(ghost).toHaveCount(1);
-  expect(await ghost.locator(".panel").evaluate((el) => getComputedStyle(el).animationDuration)).toBe("0.45s");
+  expect((await ghostSnapshot(page)).duration).toBe("0.45s");
   await expect(ghost).toHaveCount(0);
   await page.addStyleTag({ content: ".panel-ghost, .panel-ghost * { animation: none !important; }" });
   await page.keyboard.press("Meta+k");
@@ -764,3 +764,40 @@ test("slash menu and link popover", async ({ page }) => {
   await page.keyboard.press("Meta+l");
   await expect(page.getByTestId("notices")).toContainText("Select text to add a link");
 });
+
+type GhostSnapshot = { ariaHidden: string | null; testIds: number; duration: string };
+
+/** Records the exit ghost's attributes synchronously when it is inserted into the document. */
+async function watchGhost(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __ghost?: unknown; __ghostObserver?: MutationObserver };
+    w.__ghostObserver?.disconnect();
+    w.__ghost = null;
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          const ghost = node.matches(".panel-ghost") ? node : node.querySelector<HTMLElement>(".panel-ghost");
+          if (!ghost) continue;
+          const panel = ghost.querySelector<HTMLElement>(".panel");
+          w.__ghost = {
+            ariaHidden: ghost.getAttribute("aria-hidden"),
+            testIds: ghost.querySelectorAll("[data-testid]").length,
+            duration: panel ? getComputedStyle(panel).animationDuration : "",
+          };
+          observer.disconnect();
+          return;
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    w.__ghostObserver = observer;
+  });
+}
+
+async function ghostSnapshot(page: Page): Promise<GhostSnapshot> {
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __ghost?: unknown }).__ghost ?? null))
+    .not.toBeNull();
+  return page.evaluate(() => (window as unknown as { __ghost: GhostSnapshot }).__ghost);
+}
