@@ -1,1 +1,1 @@
-spec/fixtures/** -text
+packages/core/tests/fixtures/** -text

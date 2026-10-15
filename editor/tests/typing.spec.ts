@@ -1,4 +1,4 @@
-/** Typing and Markdown input rules (spec/editor.md section 2), through the real editor. */
+/** Typing and Markdown input rules, through the real editor. */
 import { expect, test } from "@playwright/test";
 import { blocks, calls, docJSON, editor, openHarness } from "./harness";
 

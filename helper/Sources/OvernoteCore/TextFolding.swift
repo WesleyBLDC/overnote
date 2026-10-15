@@ -1,6 +1,6 @@
 import Foundation
 
-/// Folding used for filter matching (contract section 5, "Filter matching").
+/// Folding used for filter matching (docs/architecture.md section 5, "Filter matching").
 ///
 /// Stored copies (`title_fold`, `text_fold`) and the filter are folded the same way, so a
 /// plain substring test on the folded strings is case and diacritic insensitive for all of
@@ -8,7 +8,7 @@ import Foundation
 public enum TextFolding {
     /// NFKD, then drop every combining mark (nonspacing, spacing, enclosing), then lowercase.
     ///
-    /// This must match the TypeScript side exactly (contract v2.4), so it deliberately avoids
+    /// This must match the TypeScript side exactly (the fold rule in docs/architecture.md section 5), so it deliberately avoids
     /// `String.folding(options:)`, which treats ß and ligatures differently.
     public static func fold(_ value: String) -> String {
         var scalars = String.UnicodeScalarView()

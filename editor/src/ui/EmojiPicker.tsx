@@ -1,4 +1,4 @@
-/** Inline emoji picker: a quick strip, the full picker, and a search grid (spec/editor.md section 5). */
+/** Inline emoji picker: a quick strip, the full picker, and a search grid. */
 import type { Editor } from "@tiptap/core";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CATEGORIES, frequentEmoji, loadEmoji, quickEmoji, searchEmoji, type EmojiEntry } from "../editor/emoji";

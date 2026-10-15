@@ -1,4 +1,4 @@
-/** Code blocks (spec/editor.md section 9). */
+/** Code blocks: fences, the language picker, copy, and highlighting. */
 import { expect, test } from "@playwright/test";
 import { blocks, docJSON, editor, openHarness } from "./harness";
 

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-/** Every location the extension and the helper agree on (contract section 1). */
+/** Every location the extension and the helper agree on (docs/architecture.md section 1). */
 export interface HelperPaths {
   runtimeDir: string;
   socket: string;

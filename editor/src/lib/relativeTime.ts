@@ -1,4 +1,4 @@
-/** "Opened …" times for Browse rows (spec/keymap.md 3.3). */
+/** "Opened …" times for Browse rows. */
 
 const DAY = 24 * 60 * 60 * 1000;
 

@@ -1,4 +1,4 @@
-/** Plain text paste helpers (spec/editor.md 3.1, spec/serialization.md section 8). */
+/** Plain text paste helpers. */
 import type { JSONContent } from "@tiptap/core";
 import { markdownToDoc } from "./markdown";
 

@@ -1,5 +1,5 @@
 /**
- * Data and RPC types (docs/contract.md sections 4 and 5), taken from @overnote/core (its light `text` entry) so the
+ * Data and RPC types (docs/architecture.md sections 4 and 5), taken from @overnote/core (its light `text` entry) so the
  * extension and the editor share one definition. Type-only imports: nothing from core loads here.
  */
 import type { rpc } from "@overnote/core/text";

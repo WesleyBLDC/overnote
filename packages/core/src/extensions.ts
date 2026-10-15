@@ -55,7 +55,7 @@ export function createHeadlessExtensions(options: ExtensionOptions = {}): AnyExt
   ];
 }
 
-/** The default headless extension list (contract section 7). */
+/** The default headless extension list (docs/architecture.md section 7). */
 export const headlessExtensions: AnyExtension[] = createHeadlessExtensions();
 
 let cachedSchema: Schema | undefined;

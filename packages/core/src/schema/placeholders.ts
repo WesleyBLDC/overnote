@@ -1,5 +1,5 @@
 /**
- * Hidden placeholders that keep content this version does not understand (spec/editor.md 1.10).
+ * Hidden placeholders that keep content this version does not understand.
  * They render nothing and are mapped back to the original JSON on save by toStoredDoc.
  */
 import { Mark, Node } from "@tiptap/core";

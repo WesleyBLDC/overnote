@@ -1,0 +1,1 @@
+**bold** __bold__ *it* _it_ ***both***

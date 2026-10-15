@@ -47,7 +47,7 @@ export function loadSqlite(): SqliteModule {
 }
 
 /**
- * Read-only view of the helper's database (contract section 6), for instant lists and search when
+ * Read-only view of the helper's database (docs/architecture.md section 6), for instant lists and search when
  * the helper is not running. Every query is parameterized; nothing here writes.
  */
 export class ReadOnlyNotesDb {

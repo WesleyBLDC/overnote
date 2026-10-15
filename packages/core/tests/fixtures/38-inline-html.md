@@ -1,0 +1,1 @@
+<b>bold</b> <span>plain</span> <custom>kept</custom>

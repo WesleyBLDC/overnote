@@ -1,4 +1,4 @@
-/** The slash formatting menu, anchored at the caret (spec/editor.md section 4). */
+/** The slash formatting menu, anchored at the caret. */
 import type { Editor } from "@tiptap/core";
 import { forwardRef, useImperativeHandle, useLayoutEffect, useState } from "react";
 import type { SlashItem } from "../editor/slash";

@@ -1,4 +1,4 @@
-/** Find and replace bar (spec/editor.md 11.2, spec/keymap.md 1.3). */
+/** Find and replace bar. */
 import type { Editor } from "@tiptap/core";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { findKey, findMatches, replaceAll, replaceOne, selectMatch } from "../editor/find";

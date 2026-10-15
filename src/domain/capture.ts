@@ -13,7 +13,7 @@ export type CaptureSource = "context" | "argument" | "fallbackText" | "selection
 
 /**
  * Picks the text for a new note: launch context text, then the argument, then fallbackText, then
- * the selected text, then empty (contract v2.1, section 8).
+ * the selected text, then empty (docs/architecture.md section 8).
  */
 export async function resolveCaptureText(sources: CaptureSources): Promise<{ text: string; source: CaptureSource }> {
   if (hasText(sources.contextText)) return { text: sources.contextText, source: "context" };

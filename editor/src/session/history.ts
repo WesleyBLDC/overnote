@@ -1,5 +1,5 @@
 /**
- * Back and forward stacks owned by the editor (contract v2, spec/keymap.md section 5).
+ * Back and forward stacks owned by the editor (docs/architecture.md section 5, editor-owned behavior).
  * Stacks are capped; visiting a note clears the forward stack like a browser.
  */
 import type { NoteId } from "@overnote/core";

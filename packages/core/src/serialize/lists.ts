@@ -1,4 +1,4 @@
-/** Shared list numbering and markers for Markdown, clipboard text, and HTML (M4.3, D3). */
+/** Shared list numbering and markers for Markdown, clipboard text, and HTML. */
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { LIST } from "../schema/flatList";
 

@@ -1,4 +1,4 @@
-/** The link popover in view and edit modes (spec/editor.md section 6). */
+/** The link popover in view and edit modes. */
 import { normalizeLinkHref } from "@overnote/core";
 import type { Editor } from "@tiptap/core";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";

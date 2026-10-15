@@ -1,4 +1,4 @@
-/** The slash menu trigger and items (spec/editor.md section 4). */
+/** The slash menu trigger and items. */
 import type { EditorState } from "@tiptap/pm/state";
 
 export interface SlashQuery {

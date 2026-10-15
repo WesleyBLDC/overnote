@@ -1,4 +1,4 @@
-/** Data types shared by every component (docs/contract.md section 4). */
+/** Data types shared by every component (docs/architecture.md section 4). */
 
 /** ULID, 26 chars, Crockford base32, lexicographically sortable. */
 export type NoteId = string;

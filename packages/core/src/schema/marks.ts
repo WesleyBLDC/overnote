@@ -1,4 +1,4 @@
-/** Mark customizations from spec/editor.md 1.4. */
+/** Mark customizations. */
 import { Code } from "@tiptap/extension-code";
 import { Link } from "@tiptap/extension-link";
 import { normalizeLinkHref, looksLikeUrl } from "../link";

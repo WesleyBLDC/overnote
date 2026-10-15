@@ -1,5 +1,5 @@
 /**
- * An in-memory model of the helper's notes service, following docs/contract.md section 5.
+ * An in-memory model of the helper's notes service, following docs/architecture.md section 5.
  * Used by the browser dev harness and the Playwright tests; never shipped in the build.
  */
 import {

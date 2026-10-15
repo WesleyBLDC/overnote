@@ -1,4 +1,4 @@
-/** Code block chrome: a language picker and a copy button above the code (spec/editor.md 9.2). */
+/** Code block chrome: a language picker and a copy button above the code. */
 import type { NodeViewRendererProps } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import type { NodeView } from "@tiptap/pm/view";

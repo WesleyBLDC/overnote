@@ -1,5 +1,5 @@
 /**
- * Loading stored documents into the schema and mapping them back for storage (spec/editor.md 1.10).
+ * Loading stored documents into the schema and mapping them back for storage.
  * Unknown nodes and marks are kept in hidden placeholders so newer content survives a round trip.
  */
 import type { JSONContent } from "@tiptap/core";

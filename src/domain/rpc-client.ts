@@ -64,7 +64,7 @@ export function defaultTimeoutFor(method: string): number {
 }
 
 /**
- * Newline-delimited JSON-RPC over a Unix domain socket (contract section 2).
+ * Newline-delimited JSON-RPC over a Unix domain socket (docs/architecture.md section 2).
  *
  * One connection is reused for every call and many calls can be in flight at once; replies are
  * matched by id. The socket is unref'd while idle so an open connection never keeps a command alive.

@@ -44,9 +44,9 @@ Add `?seed=empty` to the URL to start with no notes.
 | `packages/core/` | `@overnote/core`: the ProseMirror schema, Markdown, HTML, and text serializers, and title rules, shared by the editor and the extension |
 | `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/` |
 | `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository |
-| `scripts/` | Helper build, helper end-to-end, and window end-to-end scripts |
-| `spec/` | Behavioral specs and serialization fixtures |
-| `docs/` | The component contract and the clean-room process |
+| `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
+| `scripts/` | Helper build, the full local suite (`verify.sh`), helper end-to-end, window end-to-end, and release packaging scripts |
+| `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
 | `assets/` | The icon, plus the built editor and helper (generated, not committed) |
 | `media/` | README screenshots |
 
@@ -55,10 +55,10 @@ Add `?seed=empty` to the URL to start with no notes.
 Overnote reproduces the behavior of Raycast Notes without copying its code, so contributions must be clean-room.
 The short version:
 
-- Build only from `PLAN.md`, `docs/`, `spec/`, the public research notes in `research/`, and public library documentation (Tiptap, ProseMirror, AppKit, the Raycast extension API).
+- Build only from [`docs/architecture.md`](docs/architecture.md), the existing code and tests, the public docs in this repository, and public library documentation (Tiptap, ProseMirror, AppKit, the Raycast extension API).
 - Never decompile, disassemble, or read the Raycast app bundle, and never decrypt or read Raycast's databases or keys.
 - Never use the Raycast name, icon, colors, or branding in the product.
-- If you are unsure how something should behave, open an issue so the spec can be clarified, rather than guessing from Raycast's internals.
+- If you are unsure how something should behave, open an issue so the intended behavior can be settled, rather than guessing from Raycast's internals.
 
 Please read [`docs/clean-room.md`](docs/clean-room.md) before your first pull request.
 
@@ -67,7 +67,7 @@ Please read [`docs/clean-room.md`](docs/clean-room.md) before your first pull re
 Overnote has few unit tests and many end-to-end tests.
 
 - Keep unit tests to the essentials.
-  Serialization is covered by the fixture runner over `spec/fixtures/`.
+  Serialization is covered by the fixture runner over `packages/core/tests/fixtures/`.
   Beyond that, unit tests are only for logic end-to-end tests cannot reach cheaply, such as fold rules, ordering and cursor math, trash purge, and the launcher's restart and version logic.
   Do not add a unit test for every function, and remove redundant ones when you touch an area.
 - Every feature closes with end-to-end tests that exercise it the way a person does:
@@ -76,7 +76,18 @@ Overnote has few unit tests and many end-to-end tests.
   - full flows inside real Raycast in development mode (hotkey toggle, panel, typing, persistence across restarts).
 - A feature is done when its end-to-end test passes, not when its unit tests pass.
 
-Run the suites:
+Run the whole suite, in the same order as CI, with one command:
+
+```sh
+npx playwright install webkit chromium   # once
+npm run verify
+```
+
+`npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, and builds the extension, stopping at the first failing step.
+Playwright needs both WebKit (the engine of the native panel, which runs every editor flow) and Chromium (a second engine check of the shipped bundle).
+The panel window check shows the panel briefly and needs a logged in GUI session; set `OVERNOTE_SKIP_WINDOW_E2E=1` to skip it when you have none.
+
+To run one suite at a time:
 
 ```sh
 npm run lint
@@ -84,8 +95,7 @@ npm run typecheck
 npm test                         # extension unit tests and helper socket tests
 npm test -w packages/core        # serialization fixtures and core essentials
 npm test -w editor               # editor unit tests
-npx playwright install webkit    # once
-npm run test:e2e -w editor       # editor end-to-end in WebKit
+npm run test:e2e -w editor       # editor end-to-end (WebKit, plus a Chromium build check)
 bash helper/test.sh              # helper unit tests
 bash scripts/smoke-helper.sh     # helper end-to-end over its socket
 bash scripts/e2e-window.sh       # panel window behavior end-to-end
@@ -102,20 +112,20 @@ If you see one, even outside your change, please fix it or open an issue.
 ## Commit conventions
 
 - Keep the subject short, in the imperative, and in sentence case, for example `Add find and replace to the editor`.
-- Prefix the area when it helps: `Helper: …`, `Editor: …`, `Contract: …`.
+- Prefix the area when it helps: `Helper: …`, `Editor: …`, `Protocol: …`.
 - Explain the why in the body when it is not obvious from the diff.
 - Keep commits focused: one logical change each, with its tests.
 - Never edit generated files by hand (for example the editor build in `assets/editor/` or `raycast-env.d.ts`).
 
-## Proposing contract changes
+## Proposing protocol changes
 
-[`docs/contract.md`](docs/contract.md) is the single source of truth for how the extension, the helper, the editor, and `@overnote/core` talk to each other.
+[`docs/architecture.md`](docs/architecture.md) is the single source of truth for how the extension, the helper, the editor, and `@overnote/core` talk to each other.
 
 1. Open an issue that describes the change, why it is needed, and which components it touches.
-2. Once agreed, update `docs/contract.md` in the same pull request as the code, and add an entry at the top of its Changelog section with the new version and date.
+2. Once agreed, update `docs/architecture.md` in the same pull request as the code, and bump its protocol version as its Protocol versioning section describes.
 3. Update every caller and the mock bridge (`editor/src/dev/`) so both sides match, and cover the change with end-to-end tests.
 
-If behavior itself changes (not just the wire shape), update the relevant file in `spec/` too.
+If user-visible behavior changes, update `README.md` and add a line to `CHANGELOG.md` as well.
 
 ## Questions
 

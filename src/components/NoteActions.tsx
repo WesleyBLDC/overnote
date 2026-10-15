@@ -52,7 +52,7 @@ type CopyFormat = "markdown" | "text" | "html";
 
 const FORMAT_LABEL: Record<CopyFormat, string> = { markdown: "Markdown", text: "Plain Text", html: "HTML" };
 
-/** The Search Notes action set (spec/keymap.md 6.1), shared by the list rows and the pushed detail. */
+/** The Search Notes action set, shared by the list rows and the pushed detail. */
 export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, highlight }: NoteActionsProps) {
   const { pop } = useNavigation();
   const title = summaryTitle(note);
@@ -114,7 +114,7 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, h
       await showToast({ title: "Duplicated Note" });
     });
 
-  // No confirmation (spec/keymap.md 6.1): the note goes to Recently Deleted, and the toast can undo.
+  // No confirmation: the note goes to Recently Deleted, and the toast can undo.
   const remove = () =>
     run("Could not delete the note", async () => {
       await deleteNote(note.id);
@@ -173,7 +173,7 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, h
         />
         {isPinned && pinPosition && !pinPosition.isFirst ? (
           <Action
-            // "Up" matches "Move Down" and the spec; the title-case rule lowercases it as a preposition.
+            // "Up" matches "Move Down"; the title-case rule lowercases it as a preposition.
             // eslint-disable-next-line @raycast/prefer-title-case
             title="Move Up"
             icon={Icon.ArrowUp}

@@ -1,4 +1,4 @@
-/** Code block behavior from spec/editor.md section 9, applied to any CodeBlock based extension. */
+/** Code block behavior (fence input rules, Tab indenting, exits, and select all inside the block), applied to any CodeBlock based extension. */
 import { textblockTypeInputRule, type Node } from "@tiptap/core";
 import type { CodeBlockOptions } from "@tiptap/extension-code-block";
 

@@ -1,7 +1,7 @@
 import { fold } from "@overnote/core/text";
 
 /**
- * The fold rule for filter matching (contract section 5): NFKD, drop marks, root lowercase. It is
+ * The fold rule for filter matching (docs/architecture.md section 5): NFKD, drop marks, root lowercase. It is
  * core's `fold`, which the helper mirrors when it stores `title_fold` and `text_fold`.
  */
 export const foldForMatch = fold;

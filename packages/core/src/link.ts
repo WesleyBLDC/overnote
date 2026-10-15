@@ -1,4 +1,4 @@
-/** One URL normalization rule for typing, paste, the link popover, HTML, and Markdown (spec/editor.md 1.8). */
+/** One URL normalization rule for typing, paste, the link popover, HTML, and Markdown. */
 
 const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
 const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;

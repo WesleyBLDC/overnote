@@ -10,7 +10,7 @@ export interface MenuData {
 const RECENT_COUNT = 10;
 
 /**
- * The menu bar's one side effect, documented in contract section 8: it restarts a dead helper.
+ * The menu bar's one side effect, documented in docs/architecture.md section 8: it restarts a dead helper.
  * It then reads pinned notes and the most recently edited unpinned ones.
  */
 export async function loadMenuData(): Promise<MenuData> {

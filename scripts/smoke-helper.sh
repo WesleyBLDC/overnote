@@ -28,7 +28,7 @@ GUI_MODE=0
 command -v node >/dev/null || { echo "node is required for the smoke client" >&2; exit 1; }
 command -v sqlite3 >/dev/null || { echo "sqlite3 is required" >&2; exit 1; }
 
-TMP="$(mktemp -d /tmp/bn-smoke.XXXXXX)"
+TMP="$(mktemp -d /tmp/overnote-smoke.XXXXXX)"
 SUPPORT="$TMP/support"
 RUN="$TMP/run"
 SOCKET="$RUN/helper.sock"

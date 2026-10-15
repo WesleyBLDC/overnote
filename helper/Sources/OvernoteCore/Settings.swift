@@ -22,7 +22,7 @@ public struct PanelPoint: Equatable, Sendable {
 /// - `height`: the user's height, stored only when `windowAutoSize` is off.
 /// - `displays`: one remembered top left point per display, keyed by
 ///   `"<display uuid>@<width>x<height>"` (the display identity plus its size in points).
-///   Optional, so a v2.1 `{ x, y, width, height? }` value still reads and writes fine.
+///   Optional, so an older `{ x, y, width, height? }` value without it still reads and writes fine.
 public struct PanelFrame: Equatable, Sendable {
     public var x: Double
     public var y: Double
@@ -87,7 +87,7 @@ public struct Settings: Equatable, Sendable {
     public var zoom = 1.0
     public var showFormatBar = false
     public var countMode = CountMode.characters
-    /// Off by default (contract v2.8): the first open uses a roomy fixed size instead.
+    /// Off by default: the first open uses a roomy fixed size instead.
     public var windowAutoSize = false
     public var panelFrame: PanelFrame?
 

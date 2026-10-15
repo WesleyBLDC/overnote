@@ -1,4 +1,4 @@
-/** Lists and tasks (spec/editor.md section 8). */
+/** Lists and tasks. */
 import { expect, test, type Page } from "@playwright/test";
 import { blocks, docJSON, editor, openHarness } from "./harness";
 

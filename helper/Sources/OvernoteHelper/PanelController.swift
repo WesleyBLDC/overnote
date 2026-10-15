@@ -4,14 +4,14 @@ import UniformTypeIdentifiers
 import WebKit
 
 /// Owns the panel and its web view, implements `HelperHost` for the dispatcher, and carries
-/// the window behavior of spec/window.md: three way toggle, no activation, per display
+/// the window behavior: three way toggle, no activation, per display
 /// position memory, content driven height with the top edge fixed, and the user height rule.
 @MainActor
 final class PanelController: NSObject, HelperHost, NSWindowDelegate {
-    /// Auto-height limits at 100% zoom (spec/window.md 6.3); both scale with zoom.
+    /// Auto-height limits at 100% zoom; both scale with zoom.
     static let autoMinimumHeight: CGFloat = 128
     static let autoMaximumHeight: CGFloat = 860
-    /// Height changes this small are ignored (spec/window.md 6.6).
+    /// Height changes this small are ignored.
     static let heightTolerance: CGFloat = 2
 
     private let repository: NotesRepository
@@ -59,7 +59,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     // MARK: - Setup
 
     /// Builds the body, the web view, and the bridge, and starts loading the editor while the
-    /// panel stays hidden, so the first show only orders it in (spec/window.md 3.4).
+    /// panel stays hidden, so the first show only orders it in.
     func prewarm(dispatcher: RPCDispatcher?) {
         let body = PanelBodyView(frame: NSRect(origin: .zero, size: panel.frame.size))
         body.autoresizingMask = [.width, .height]
@@ -142,7 +142,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     private func applyWindowSettings() {
-        // Our own optional setting, default off (spec/window.md 1.6).
+        // Our own optional setting, default off.
         panel.sharingType = settings.hideWhileScreenSharing ? .none : .readOnly
         let zoom = CGFloat(settings.zoom)
         panel.minSize = NSSize(width: NotesPanel.minimumWidth, height: (Self.autoMinimumHeight * zoom).rounded())
@@ -265,7 +265,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     private func setFrame(_ frame: NSRect) {
         guard frame != panel.frame else { return }
-        // No animation: height steps land at once (spec/window.md 6.4).
+        // No animation: height steps land at once.
         panel.setFrame(frame, display: panel.isVisible, animate: false)
         panel.invalidateShadow()
     }
@@ -319,7 +319,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     /// A user made height change turns auto-sizing off and keeps that height; a width only
-    /// change leaves auto-sizing on (spec/window.md 5.6). Called at the end of a drag in the resize
+    /// change leaves auto-sizing on. Called at the end of a drag in the resize
     /// zones; programmatic resizes never get here.
     func userDidResize(from start: NSRect, to end: NSRect) {
         let heightChanged = abs(end.height - start.height) > Self.heightTolerance

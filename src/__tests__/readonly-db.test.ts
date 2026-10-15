@@ -6,7 +6,7 @@ import { foldForMatch, titleMatchesFirst } from "../domain/fold";
 import { ReadOnlyNotesDb, loadSqlite } from "../domain/readonly-db";
 import { shortTempDir } from "./helpers";
 
-// Contract v2 section 6, verbatim apart from comments.
+// docs/architecture.md section 6, verbatim apart from comments.
 const SCHEMA = `
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;

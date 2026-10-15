@@ -1,0 +1,1 @@
+**bold *both* bold** and **[strong link](https://example.org)**

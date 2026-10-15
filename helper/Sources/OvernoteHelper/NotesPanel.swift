@@ -1,17 +1,17 @@
 import AppKit
 import WebKit
 
-/// The floating notes panel (spec/window.md section 11).
+/// The floating notes panel.
 ///
 /// Borderless, so the whole body is ours: no title bar region swallows clicks over the
 /// editor's top bar, and the editor draws its own Close control. Non activating, so showing
 /// it never activates the helper or changes the menu bar, yet it can become key and take
 /// typing. It sits at the modal panel level, one step above ordinary floating windows.
 final class NotesPanel: NSPanel {
-    /// Smallest size a user can drag to, at 100% (spec/window.md 5.3 and the auto-height minimum).
+    /// Smallest size a user can drag to, at 100%, matching the auto-height minimum.
     static let minimumWidth: CGFloat = 396
     static let minimumHeight: CGFloat = 128
-    /// First open size when no frame is stored (contract v2.8): roomy, since auto-sizing is off by default.
+    /// First open size when no frame is stored: roomy, since auto-sizing is off by default.
     static let defaultWidth: CGFloat = 640
     static let defaultHeight: CGFloat = 560
     /// The height of the invisible strip along the top edge that drags the panel.
@@ -40,7 +40,7 @@ final class NotesPanel: NSPanel {
         becomesKeyOnlyIfNeeded = false
         isReleasedWhenClosed = false
         isMovableByWindowBackground = false
-        // Show and hide are instant (spec/window.md 3.1).
+        // Show and hide are instant.
         animationBehavior = .none
         isOpaque = false
         backgroundColor = .clear
@@ -128,8 +128,8 @@ final class PanelBodyView: NSView {
 /// The editor's web view.
 ///
 /// It never takes the first click into an unfocused panel: that click only focuses the
-/// panel, so a click meant to focus never moves the caret or presses a button
-/// (spec/window.md 2.5). The one exception is a drag region, which behaves like a title bar.
+/// panel, so a click meant to focus never moves the caret or presses a button.
+/// The one exception is a drag region, which behaves like a title bar.
 ///
 /// A mouse down inside one of the editor's drag regions (`window.setDragRegions`, the empty
 /// toolbar area) moves the window instead of reaching the page.

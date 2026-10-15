@@ -1,4 +1,4 @@
-/** Find and replace (spec/editor.md 11.2). */
+/** Find and replace. */
 import { expect, test } from "@playwright/test";
 import { editor, openHarness } from "./harness";
 

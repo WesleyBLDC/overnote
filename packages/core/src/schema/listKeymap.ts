@@ -1,4 +1,4 @@
-/** List keys from spec/editor.md section 8 and the list toggles from section 7. */
+/** List keys (Enter, Backspace, Tab, Shift-Tab, moving items) and the list toggles. */
 import { Extension } from "@tiptap/core";
 import type { Command } from "@tiptap/pm/state";
 import {

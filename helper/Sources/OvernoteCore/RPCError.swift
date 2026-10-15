@@ -1,4 +1,4 @@
-/// An error that maps directly onto a JSON-RPC error object (contract section 2).
+/// An error that maps directly onto a JSON-RPC error object (docs/architecture.md section 2).
 public struct RPCError: Error, Equatable, Sendable, CustomStringConvertible {
     public let code: Int
     public let message: String

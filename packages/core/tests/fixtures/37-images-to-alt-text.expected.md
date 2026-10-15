@@ -1,0 +1,3 @@
+diagram
+
+text inline here

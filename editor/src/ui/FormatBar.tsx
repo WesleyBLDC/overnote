@@ -1,4 +1,4 @@
-/** The format bar (spec/editor.md section 7), shown in the bottom bar in place of the counter. */
+/** The format bar, shown in the bottom bar in place of the counter. */
 import type { Editor } from "@tiptap/core";
 import { useEffect, useState } from "react";
 import { activeListKind, isFormatActive, runFormat, type FormatId } from "../editor/commands";

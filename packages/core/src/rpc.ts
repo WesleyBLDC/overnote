@@ -1,5 +1,5 @@
 /**
- * Method names, params, results, and events from docs/contract.md sections 3 and 5.
+ * Method names, params, results, and events from docs/architecture.md sections 3 and 5.
  * Both the socket client (extension) and the bridge client (editor) use these.
  */
 import type { Millis, Note, NoteContent, NoteId, NoteSummary, Settings, WindowData } from "./types";

@@ -1,5 +1,5 @@
 /**
- * Input rules that need list awareness, plus the link rules (spec/editor.md section 2).
+ * Input rules that need list awareness, plus the link rules.
  * Tiptap's own rules cover headings outside lists, quotes, code fences, marks, and typography.
  */
 import { Extension, InputRule } from "@tiptap/core";

@@ -1,5 +1,5 @@
 /**
- * Runs spec/fixtures (see its README). Files are compared byte for byte.
+ * Runs the serialization fixtures in tests/fixtures (see its README). Files are compared byte for byte.
  * Every case also checks that its expected Markdown is a fixed point of parse then serialize,
  * and that the derived title is the first line of the plain text.
  */
@@ -17,20 +17,21 @@ import {
   markdownToDoc,
 } from "../src/index";
 
-const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../../spec/fixtures");
+const FIXTURE_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 
 function read(path: string): string | undefined {
   return existsSync(path) ? readFileSync(path, "utf8") : undefined;
 }
 
-const names = existsSync(FIXTURE_DIR)
-  ? readdirSync(FIXTURE_DIR)
-      .filter((file) => /^\d+-.+\.md$/.test(file) && !file.includes(".expected."))
-      .map((file) => file.slice(0, -".md".length))
-      .sort()
-  : [];
+const names = readdirSync(FIXTURE_DIR)
+  .filter((file) => /^\d+-.+\.md$/.test(file) && !file.includes(".expected."))
+  .map((file) => file.slice(0, -".md".length))
+  .sort();
 
-describe.skipIf(names.length === 0)("spec fixtures", () => {
+describe("serialization fixtures", () => {
+  it("finds the fixture cases", () => {
+    expect(names.length).toBeGreaterThan(0);
+  });
   for (const name of names) {
     const base = join(FIXTURE_DIR, name);
     describe(name, () => {

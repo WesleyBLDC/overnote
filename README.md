@@ -36,19 +36,25 @@ Press it again and it is gone.
   <img src="media/browse-dark.png" width="420" alt="Browse Notes listing pinned notes above the rest" />
 </p>
 
-## Install from source
+## Install
 
-Overnote is not in the Raycast Store yet, so you build it yourself.
-It takes a couple of minutes.
+Overnote is not in the Raycast Store yet.
+You need macOS 14 Sonoma or later, [Raycast](https://www.raycast.com) installed and signed in, and [Node.js](https://nodejs.org) 22 or later.
 
-### Prerequisites
+### Download a release
 
-- [Raycast](https://www.raycast.com), installed and signed in.
-- macOS 14 Sonoma or later.
-- [Node.js](https://nodejs.org) 22 or later.
-- The Xcode Command Line Tools (`xcode-select --install`); full Xcode is not needed.
+This is the quickest way, with nothing to build.
 
-### Steps
+1. Download `overnote-<version>.zip` from the latest release on the [GitHub Releases page](https://github.com/WesleyBLDC/overnote/releases), and unzip it.
+2. In Terminal, go into the unzipped `overnote` folder and run `npm run install-extension`.
+3. Open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it.
+   Overnote ships with no default hotkey, so pick whatever feels natural (for example ⌥N).
+
+[`docs/install.md`](docs/install.md) has the full steps, updating, checksums, and troubleshooting.
+
+### Build from source
+
+Building from source also needs the Xcode Command Line Tools (`xcode-select --install`); full Xcode is not needed.
 
 ```sh
 git clone https://github.com/WesleyBLDC/overnote.git
@@ -59,9 +65,7 @@ npm run dev
 
 `npm run dev` builds the editor and the native helper, then installs the extension into Raycast in development mode.
 Once Raycast shows the Overnote commands you can stop it with ⌃C; the extension stays installed.
-
-Finally, open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it.
-Overnote ships with no default hotkey, so pick whatever feels natural (for example ⌥N).
+Then bind a hotkey to **Toggle Overnote** as in step 3 above.
 
 ## Usage
 
@@ -72,7 +76,7 @@ Press ⌘K at any time to see every action with its shortcut.
 ### Keyboard shortcuts
 
 These work in the Overnote panel.
-The full map lives in [`spec/keymap.md`](spec/keymap.md).
+Press ⌘K in the panel for the full list of actions with their shortcuts.
 
 | Shortcut | Action |
 |---|---|
@@ -176,6 +180,7 @@ npm run dev          # build the editor and helper, then run the extension in Ra
 | `npm run build:helper` | Build the universal helper into `assets/bin/` |
 | `npm run lint` / `npm run fix-lint` | Raycast lint (ESLint and Prettier) |
 | `npm run typecheck` | TypeScript, no emit |
+| `npm run verify` | The full local suite, in the same order as CI |
 | `npm run dev -w editor` | Editor in a browser with a mock helper, for fast UI work |
 
 ### Tests
@@ -187,43 +192,36 @@ Overnote keeps unit tests to the essentials and closes every feature with end-to
 | Extension unit and helper socket tests | `npm test` |
 | Serialization fixtures and core essentials | `npm test -w packages/core` |
 | Editor unit tests | `npm test -w editor` |
-| Editor end-to-end (Playwright in WebKit) | `npm run test:e2e -w editor` |
+| Editor end-to-end (Playwright in WebKit, plus a Chromium build check) | `npm run test:e2e -w editor` |
 | Helper unit tests | `bash helper/test.sh` |
 | Helper end-to-end over its real socket | `bash scripts/smoke-helper.sh` |
 | Panel window behavior end-to-end | `bash scripts/e2e-window.sh` |
 
-Run `npx playwright install webkit` once before the editor end-to-end suite.
+`npm run verify` runs all of them, plus typechecking, lint, and the builds, in the same order as CI.
+Run `npx playwright install webkit chromium` once before the editor end-to-end suite.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
 
 ## Project status and roadmap
 
 Overnote is early and pre-release.
+Feature parity with Raycast Notes (minus AI and sync) is built, and the open-source launch with prebuilt releases is in progress.
 
-| Phase | Scope | Status |
-|---|---|---|
-| 0 | Behavioral spec, written clean-room in `spec/` | Done |
-| 1 | Spikes inside real Raycast: helper, floating panel, socket, SQLite | Done |
-| 2 | Feature parity with Raycast Notes, minus AI and sync | Built; final in-Raycast pass pending |
-| 3 | Open-source launch: docs, CI, releases with a prebuilt helper | In progress |
-| 4 | Our own features: unlimited notes, several notes open at once, tags or folders, ranked search, backlinks, image paste, templates | Planned |
-| 5 | Raycast Store submission | Later |
-| 6 | Add-ons, such as a one-way Markdown mirror folder | Later |
+Planned next:
 
-Details and decisions live in [`PLAN.md`](PLAN.md).
+- Our own features: unlimited notes, several notes open at once, tags or folders, ranked search, backlinks, image paste, and templates.
+- A Raycast Store submission.
+- Add-ons, such as a one-way Markdown mirror folder.
 
 ## Project docs
 
 | File | Contents |
 |---|---|
-| [`PLAN.md`](PLAN.md) | Architecture, phases, testing, and decisions |
-| [`docs/contract.md`](docs/contract.md) | The component contract: paths, socket and bridge protocol, data types, methods |
+| [`docs/architecture.md`](docs/architecture.md) | Architecture and protocol reference: paths, socket and bridge protocol, data types, methods, schema, core API |
+| [`docs/install.md`](docs/install.md) | Installing from a release, updating, and troubleshooting |
+| [`docs/releasing.md`](docs/releasing.md) | How releases are built and published |
 | [`docs/clean-room.md`](docs/clean-room.md) | How the clean-room process works |
-| [`spec/`](spec) | Behavioral specs: editor, keymap, serialization, window, data, visual, plus fixtures |
-| [`research/01-feature-inventory.md`](research/01-feature-inventory.md) | Every Raycast Notes feature and shortcut |
-| [`research/03-open-source-and-api-limits.md`](research/03-open-source-and-api-limits.md) | Existing open-source alternatives and Raycast extension API limits |
-| [`research/04-raycast-extension-publishing.md`](research/04-raycast-extension-publishing.md) | How to create, install privately, and publish a Raycast extension |
-| [`research/05-floating-window-from-extension.md`](research/05-floating-window-from-extension.md) | How an extension can ship a floating editor helper, plus Store precedents |
-| [`research/06-extension-codebase-patterns.md`](research/06-extension-codebase-patterns.md) | How other extensions are built, and what we adopt |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Development setup, project layout, testing policy, and conventions |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
 
 ## License
 

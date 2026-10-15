@@ -1,4 +1,4 @@
-/** The ⌘K action panel with pushed views: Format, Copy As, Export, Browse, Recently Deleted, Settings (spec/keymap.md 2). */
+/** The ⌘K action panel with pushed views: Format, Copy As, Export, Browse, Recently Deleted, Settings. */
 import { displayTitle, type NoteId, type NoteSummary, type rpc, type Settings } from "@overnote/core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../bridge/api";

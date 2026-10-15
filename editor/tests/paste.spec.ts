@@ -1,4 +1,4 @@
-/** Paste and copy (spec/editor.md section 3). */
+/** Paste and copy. */
 import { expect, test, type Page } from "@playwright/test";
 import { blocks, docJSON, editor, openHarness } from "./harness";
 

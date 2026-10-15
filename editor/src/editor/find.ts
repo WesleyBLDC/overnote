@@ -1,4 +1,4 @@
-/** Find and replace (spec/editor.md 11.2): case-insensitive literal matching inside text blocks. */
+/** Find and replace: case-insensitive literal matching inside text blocks. */
 import { Extension } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";

@@ -1,4 +1,4 @@
-/** Emoji picker data and trigger (spec/editor.md section 5). The emoji database loads lazily. */
+/** Emoji picker data and trigger. The emoji database loads lazily. */
 import type { EditorState } from "@tiptap/pm/state";
 
 export interface EmojiEntry {

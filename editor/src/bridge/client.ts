@@ -1,5 +1,5 @@
 /**
- * The web side of the WKWebView bridge (docs/contract.md section 3).
+ * The web side of the WKWebView bridge (docs/architecture.md section 3).
  * Requests go out through window.webkit.messageHandlers.overnote; the native side answers by
  * calling window.overnoteBridge.resolve / reject and pushes events through emit.
  */

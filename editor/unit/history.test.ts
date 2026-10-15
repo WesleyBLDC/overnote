@@ -1,4 +1,4 @@
-/** History stack math (spec/keymap.md section 5): the one editor rule worth a unit test. */
+/** History stack math: the one editor rule worth a unit test. */
 import { describe, expect, it } from "vitest";
 import { NoteHistory } from "../src/session/history";
 

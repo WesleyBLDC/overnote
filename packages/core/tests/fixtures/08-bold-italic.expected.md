@@ -1,0 +1,1 @@
+**bold** **bold** *it* *it* ***both***

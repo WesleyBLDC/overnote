@@ -8,7 +8,7 @@ interface ToolbarProps {
   onNew: () => void;
 }
 
-/** Top bar: the live title in the middle and three buttons on the right (spec/keymap.md section 9). */
+/** Top bar: the live title in the middle and three buttons on the right. */
 export function Toolbar({ title, onClose, onActions, onBrowse, onNew }: ToolbarProps) {
   const keep = (event: React.MouseEvent) => event.preventDefault();
   return (

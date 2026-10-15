@@ -1,4 +1,4 @@
-/** Window shortcuts and the ⌘K panel (spec/keymap.md sections 1 to 5, 8). */
+/** Window shortcuts and the ⌘K panel. */
 import { expect, test } from "@playwright/test";
 import { calls, clearCalls, editor, emit, openHarness, storedNotes } from "./harness";
 

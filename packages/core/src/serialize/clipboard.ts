@@ -1,4 +1,4 @@
-/** The ⌘C / ⌘X clipboard flavors (spec/serialization.md section 6). */
+/** The ⌘C / ⌘X clipboard flavors. */
 import type { JSONContent } from "@tiptap/core";
 import { Fragment, type Mark, type Node as PMNode } from "@tiptap/pm/model";
 import { getNoteSchema } from "../extensions";

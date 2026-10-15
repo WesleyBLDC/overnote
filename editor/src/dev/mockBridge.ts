@@ -33,7 +33,7 @@ interface MockWindow {
   __overnoteMock?: MockControl;
 }
 
-/** The helper's first-open panel height in points when auto-sizing is off (contract section 4). */
+/** The helper's first-open panel height in points when auto-sizing is off (docs/architecture.md section 4). */
 const FIRST_OPEN_HEIGHT = 560;
 
 function seedFromUrl(control: MockControl, search: string): void {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# End to end check of the panel's window behavior (spec/window.md) against the real helper.
+# End to end check of the panel's window behavior against the real helper.
 #
 # Starts the helper in GUI mode with --test-hooks and temp directories, then drives it over
 # its socket. Window state comes from two independent sources: the helper's own view
@@ -50,7 +50,7 @@ fi
 EDITOR_DIR="$ROOT/assets/editor"
 [[ -f "$EDITOR_DIR/index.html" ]] || { echo "Editor not built: assets/editor/index.html is missing" >&2; exit 1; }
 
-TMP="$(mktemp -d /tmp/bn-e2e.XXXXXX)"
+TMP="$(mktemp -d /tmp/overnote-e2e.XXXXXX)"
 finish() {
   local status=$?
   pkill -TERM -f "$TMP/support" 2>/dev/null || true

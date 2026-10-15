@@ -1,0 +1,1 @@
+snake\_case and \[brackets\] and a\\b and 2 &lt; 3 &amp; 4 &gt; 1

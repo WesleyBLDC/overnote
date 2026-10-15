@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import OvernoteCore
 
-// Unit tests are limited to logic end to end tests cannot reach cheaply (CLAUDE.md testing
-// policy): fold rules, ordering and cursor math, pins, trash purge, the update conflict, RPC
+// Unit tests are limited to logic end to end tests cannot reach cheaply (the testing policy in
+// CONTRIBUTING.md): fold rules, ordering and cursor math, pins, trash purge, the update conflict, RPC
 // framing, and the security checks on file names and asset paths. Everything else is covered
 // by scripts/smoke-helper.sh and scripts/e2e-window.sh against the real binary.
 

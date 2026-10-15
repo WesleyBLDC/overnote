@@ -1,4 +1,4 @@
-/** Choosing the range for the link popover (spec/editor.md section 6). */
+/** Choosing the range for the link popover. */
 import { normalizeLinkHref } from "@overnote/core";
 import type { EditorState } from "@tiptap/pm/state";
 

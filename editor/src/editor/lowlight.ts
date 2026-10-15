@@ -1,5 +1,5 @@
 /**
- * Syntax highlighting with lowlight's common grammar set (spec/editor.md 9.1).
+ * Syntax highlighting with lowlight's common grammar set.
  * The grammars load lazily after the editor opens, in their own chunk.
  */
 import type { Editor } from "@tiptap/core";

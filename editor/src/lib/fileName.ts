@@ -1,4 +1,4 @@
-/** Export file names: the display title plus the extension, made safe for macOS (spec/keymap.md 8.3). */
+/** Export file names: the display title plus the extension, made safe for macOS. */
 import { UNTITLED } from "@overnote/core";
 
 export function exportFileName(text: string, extension: "md" | "html" | "txt"): string {

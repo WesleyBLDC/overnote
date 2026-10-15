@@ -1,5 +1,5 @@
 /**
- * Entry point. The bridge is installed before anything is sent (contract section 3).
+ * Entry point. The bridge is installed before anything is sent (docs/architecture.md section 3).
  * In the dev server, a mock native side is installed when no WKWebView handler exists.
  */
 import { StrictMode } from "react";

@@ -1,12 +1,22 @@
-.DS_Store
+# Dependencies and build output
 node_modules/
 dist/
-.raycast-swift-build/
-.swiftpm/
-.build/
-compiled_raycast_swift/
-raycast-env.d.ts
-*.log
 assets/bin/
 assets/editor/
 assets/prebuilt.json
+helper/.build/
+.build/
+.swiftpm/
+.raycast-swift-build/
+compiled_raycast_swift/
+raycast-env.d.ts
+
+# Test output
+playwright-report/
+test-results/
+blob-report/
+
+# Local files
+.DS_Store
+*.log
+CLAUDE.local.md

@@ -149,7 +149,7 @@ public final class PurgeScheduler: @unchecked Sendable {
     }
 }
 
-/// Parsed command line (contract section 1).
+/// Parsed command line (docs/architecture.md section 1).
 public struct HelperArguments: Equatable, Sendable {
     public var supportDir: String
     public var socketPath: String

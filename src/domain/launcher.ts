@@ -41,7 +41,7 @@ export interface LauncherConfig {
   client?: RpcClient;
 }
 
-/** Arguments from contract section 1. */
+/** Arguments from docs/architecture.md section 1. */
 export function helperArgs(paths: HelperPaths, options: EnsureOptions = {}): string[] {
   const args = [
     "--support-dir",

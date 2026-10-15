@@ -169,7 +169,7 @@ export function App({ api }: { api: Api }) {
   sessionRef.current = session;
   const state = useSyncExternalStore(session.subscribe, session.getState);
 
-  // ---- read-only preview of a deleted note (spec/keymap.md 2.5) ----
+  // ---- read-only preview of a deleted note ----
 
   const startPreview = useCallback(
     async (note: rpc.DeletedItem) => {

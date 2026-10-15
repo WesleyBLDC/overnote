@@ -1,6 +1,6 @@
 /**
  * The extension deeplink that opens a note: Toggle Overnote with `{ id }` as launch context
- * (contract section 8). Raycast's documented deeplink parameter for the launch context is `context`.
+ * (docs/architecture.md section 8). Raycast's documented deeplink parameter for the launch context is `context`.
  */
 export const EXTENSION_AUTHOR = "wesleybldc";
 export const EXTENSION_NAME = "overnote";

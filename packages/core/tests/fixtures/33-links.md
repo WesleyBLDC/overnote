@@ -1,0 +1,1 @@
+[site](https://example.com) [titled](https://example.com "Home") [bare](example.com) [mail](mailto:hi@example.com) [relative](/docs) [bad](javascript:alert(1)) <https://auto.example> https://plain.example/x www.example.com

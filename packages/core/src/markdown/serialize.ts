@@ -1,10 +1,14 @@
-/** Document to Markdown (spec/serialization.md section 2, with deviations D3 to D7, D10, D12, D17). */
+/**
+ * Document to Markdown. Output always parses back to the same document: list children are indented
+ * by the marker width, fences and code spans grow past any backtick run inside, link parentheses and
+ * block syntax at the start of a line are escaped, and blocks inside quotes stay tight.
+ */
 import type { Mark, Node as PMNode } from "@tiptap/pm/model";
 import { LIST } from "../schema/flatList";
 import { UNKNOWN_BLOCK } from "../schema/placeholders";
 import { listMarkers, type ListMarker } from "../serialize/lists";
 
-/** Outermost first (M9.2). Code is written around the text itself, inside every other mark. */
+/** Outermost first. Code is written around the text itself, inside every other mark. */
 const MARK_ORDER = ["bold", "italic", "strike", "underline", "link"] as const;
 const DELIMITERS: Record<string, string> = { bold: "**", italic: "*", strike: "~~", underline: "++" };
 const HTML_TAGS: Record<string, string> = { bold: "strong", italic: "em", strike: "s", underline: "u" };
@@ -46,7 +50,7 @@ function closeMark(open: OpenMark): string {
 
 const BACKSLASHED = new Set(["\\", "`", "*", "_", "[", "]", "~"]);
 
-/** Escapes text for Markdown (M11). `lineStart` adds the block syntax escapes of D12. */
+/** Escapes text for Markdown. `lineStart` also escapes text that would otherwise start a block. */
 export function escapeText(raw: string, lineStart: boolean): string {
   let out = "";
   let i = 0;
@@ -82,7 +86,7 @@ export function escapeText(raw: string, lineStart: boolean): string {
   return out;
 }
 
-/** Inline code with a delimiter longer than any backtick run inside (D7). */
+/** Inline code with a delimiter longer than any backtick run inside. */
 export function codeSpan(text: string): string {
   const longest = Math.max(0, ...Array.from(text.matchAll(/`+/g), (m) => m[0].length));
   const fence = "`".repeat(longest + 1);
@@ -223,7 +227,7 @@ function renderListItem(item: PMNode, { marker, width }: ListMarker): string {
   return out;
 }
 
-/** Joins child blocks: a newline between list items, a blank line otherwise (M1.1, D17). */
+/** Joins child blocks: a newline between list items, a blank line otherwise. */
 function renderChildren(parent: PMNode, inContainer: boolean): string {
   const markers = listMarkers(parent, "markdown");
   const parts: string[] = [];

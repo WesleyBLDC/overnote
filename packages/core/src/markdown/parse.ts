@@ -1,7 +1,7 @@
 /**
- * Markdown to document (spec/serialization.md section 7), built on markdown-it so it runs in Node
+ * Markdown to document, built on markdown-it so it runs in Node
  * with no DOM. Custom rules cover single tilde strike, `++underline++`, the four decoded entities,
- * and the inline HTML tags the spec lists.
+ * and the supported inline HTML tags.
  */
 import type { JSONContent } from "@tiptap/core";
 import MarkdownIt, { type MarkdownIt as MarkdownItInstance, type Token } from "markdown-it";

@@ -1,4 +1,4 @@
-/** Semantic HTML export (spec/serialization.md section 5, deviation D18). */
+/** Semantic HTML export: plain ul, ol, and li lists rather than the editor's flat-list markup. */
 import type { JSONContent } from "@tiptap/core";
 import type { Mark, Node as PMNode } from "@tiptap/pm/model";
 import { docToNode } from "../load";
@@ -52,7 +52,7 @@ function listItem(item: PMNode): string {
   return `${out}</li>`;
 }
 
-/** Renders `parent`'s children from `from`, grouping consecutive list items into ul / ol (H1.8). */
+/** Renders `parent`'s children from `from`, grouping consecutive list items into ul / ol. */
 function children(parent: PMNode, from = 0): string {
   const numbers = orderNumbers(parent);
   let out = "";

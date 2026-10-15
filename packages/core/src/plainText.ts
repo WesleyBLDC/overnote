@@ -1,4 +1,4 @@
-/** Derived plain text, title, and counts (spec/editor.md 1.11, 10.1, 10.5). */
+/** Derived plain text, title, and counts. */
 import type { JSONContent } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { docToNode } from "./load";
@@ -17,7 +17,7 @@ function blockText(node: PMNode): string {
   if (node.isTextblock) return inlineText(node);
   if (node.type.name === LIST) return childrenText(node, "\n", "\n");
   if (node.isLeaf) return "";
-  // Blockquote children are joined by single newlines (D11).
+  // Blockquote children are joined by single newlines.
   return childrenText(node, "\n", "\n");
 }
 

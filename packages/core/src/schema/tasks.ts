@@ -1,4 +1,4 @@
-/** Task toggling (spec/editor.md 8.4) on flat-list `list` nodes of kind task. */
+/** Task toggling on flat-list `list` nodes of kind task. */
 import type { Node as PMNode } from "@tiptap/pm/model";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { LIST } from "./flatList";

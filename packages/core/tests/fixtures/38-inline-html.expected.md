@@ -1,0 +1,1 @@
+**bold** plain &lt;custom&gt;kept&lt;/custom&gt;

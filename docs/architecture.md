@@ -1,9 +1,8 @@
-# Component contract (v2)
+# Architecture and protocol
 
-v2 (2026-10-14) applies spec/data.md section 11; see the changelog at the end.
-
-This is the single source of truth for how the four components talk to each other.
-Change it only through the orchestrator; if you need a change, write it in your final report under "Contract change requests" and implement against the current version meanwhile.
+This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
+The current protocol version is v2.8 (see [Protocol versioning](#protocol-versioning)).
+Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
 Raycast extension (src/)  ──socket JSON-RPC──▶  OvernoteHelper (helper/)
@@ -240,7 +239,7 @@ export function buildNoteContent(doc: JSONContent): NoteContent; // rawContent +
 export function noteContentFromMarkdown(markdown: string): NoteContent;
 export function loadDoc(rawContent: string | null, text: string): JSONContent; // stored doc if valid (placeholders preserved), else rebuild from text with a hard break per newline
 export function toStoredDoc(doc: JSONContent): JSONContent;               // inverse of loadDoc's placeholder mapping
-export function docToClipboard(docOrSlice: JSONContent): { text: string; html: string };   // ⌘C/⌘X format (spec/serialization.md section 6)
+export function docToClipboard(docOrSlice: JSONContent): { text: string; html: string };   // ⌘C/⌘X format: plain text plus semantic HTML
 export function derivePreview(text: string): string;                     // first 200 chars, newlines collapsed to spaces
 export function parsePastedText(plain: string, html?: string): JSONContent;
 export function looksLikeMarkdown(plain: string, html?: string): boolean;
@@ -267,22 +266,10 @@ No default hotkeys.
 Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows that note via `window.show`), and `create-note` accepts `launchContext: { text?: string }`.
 This lets deeplinks and quicklinks open a specific note or create one with text.
 
-## Changelog
+## Protocol versioning
 
-- v2.8 (2026-10-15): from the user's visual review, windowAutoSize defaults off with a 640 x 560 pt first-open size; `window.setDragRegions`; ⌘W hides; larger resize hit zones; temporary growth never shrinks or resizes a big-enough panel; editor-owned darker body tint.
-
-- v2.7 (2026-10-14): per-display positions in panelFrame, `window.resize.temporary`, borderless panel with editor-drawn Close, ResizeObserver measuring, test hooks.
-
-- v2.6 (2026-10-14): bridge `app.openURL`; `listDeleted` rows include `rawContent`; editor-driven temporary growth through `window.resize` (no separate minimum-height method); Edit menu and ⇧⌘V paste event. Deferred: ⌘, settings and ⇧⌘L quicklink from inside the panel.
-
-- v2.5 (2026-10-14): from the helper build, panelFrame.y is the top edge, error code details, update timestamp rule, `--headless`, editor-owned zoom and contentHeight measurement, 12 pt drag strip.
-
-- v2.4 (2026-10-14): exact fold rule shared by TS and Swift, charCount in code points, source-bound cursors, displayTitle skips empty lines, light `@overnote/core/text` entry point.
-
-- v2.3 (2026-10-14): from spec/serialization.md, accepted deviations D1 to D19 (fix Raycast's round-trip bugs; headings 4 to 6 become level 3); markdownToDoc mode option; loadDoc nullable with hard-break fallback; docToClipboard returns {text, html}; derivePreview; semantic HTML; no trailing newlines.
-
-- v2.2 (2026-10-14): from spec/editor.md, the flat-list schema, a headless/editor extension split, title skips empty blocks with no cap, and new core helpers (loadDoc, toStoredDoc, docToClipboard, parsePastedText, looksLikeMarkdown, normalizeLinkHref, countCharacters, countWords).
-
-- v2.1 (2026-10-14): from spec/keymap.md, added `windowAutoSize`, a 0.75 to 2.0 zoom range, `panelFrame.height`, bridge `clipboard.copy` and `file.saveAs`, `notes.duplicate` `titleSuffix`, and launch contexts for `toggle-notes` and `create-note`.
-
-- v2 (2026-10-14): split `notes.list` / `notes.browse` with substring `filter` (Unicode and diacritic folding) and removed `notes.search` and FTS5; WindowData now carries neighbor ids and up to 9 pin shortcuts; history moved into the editor (removed `notes.navigate` and history tables); `notes.setCurrent` split into `notes.setCurrentNote` and `notes.touchAccessed`; `notes.windowData` takes an optional `noteId`; pin appends with +1000 keys and gained `movePinnedUp`/`movePinnedDown` (dropped `beforeId`); delete clears pins and steps `updatedAt` by 1 ms; optimistic `expectedUpdatedAt` on update with a conflict result; `permanentlyDelete` only on trashed notes; `listDeleted` unpaged with markdown; `charCount` on NoteSummary; title is the first line of plain text with `displayTitle` fallback.
+The protocol described here is v2.8.
+Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
+The protocol version is not sent on the wire.
+Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.
+Bump the version at the top of this document in the same pull request as the code change, and name the new version in the pull request description.

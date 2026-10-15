@@ -7,7 +7,7 @@ public enum RPCSource: Sendable {
     case bridge
 }
 
-/// The one dispatcher behind both the socket and the WebKit bridge (contract section 5).
+/// The one dispatcher behind both the socket and the WebKit bridge (docs/architecture.md section 5).
 public final class RPCDispatcher: Sendable {
     public let repository: NotesRepository
     public let host: any HelperHost
@@ -241,7 +241,7 @@ public final class RPCDispatcher: Sendable {
     }
 }
 
-/// Turns raw request lines into response lines (contract section 2).
+/// Turns raw request lines into response lines (docs/architecture.md section 2).
 public struct RPCLineHandler: Sendable {
     public let dispatcher: RPCDispatcher
     public let source: RPCSource

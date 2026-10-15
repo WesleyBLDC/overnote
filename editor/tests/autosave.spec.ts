@@ -1,4 +1,4 @@
-/** Autosave, note creation, note switching, and outside changes (contract v2 editor-owned behavior). */
+/** Autosave, note creation, note switching, and outside changes (the editor-owned behavior in docs/architecture.md section 5). */
 import { expect, test } from "@playwright/test";
 import { calls, clearCalls, editor, emit, lastSave, openHarness, storedNotes } from "./harness";
 
