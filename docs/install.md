@@ -8,20 +8,27 @@ You do not need Xcode or the Xcode Command Line Tools.
 
 ## Install
 
-1. Download `overnote-<version>.zip` from the latest release on the [Releases page](https://github.com/WesleyBLDC/overnote/releases).
-2. Unzip it and move the `overnote` folder somewhere stable, for example `~/Applications/Overnote`.
-   Raycast runs the extension from this folder, and updates replace its files in place, so keep it there.
-3. In Terminal, go into that folder and run the installer:
-
-   ```sh
-   cd ~/Applications/Overnote/overnote
-   npm run install-extension
-   ```
-
-   It installs the dependencies, checks the prebuilt helper against its checksum, and registers the extension with Raycast.
+1. Download `overnote-<version>.zip` from the latest release on the [Releases page](https://github.com/WesleyBLDC/overnote/releases), and unzip it.
+2. Open the `overnote` folder and double-click **Install Overnote.command**.
+   Terminal opens, offers to move the folder to `~/Applications/Overnote`, and installs the extension into Raycast.
    It takes about a minute, once.
-4. Open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it (for example ⌥N).
-5. Press your hotkey to open the panel.
+3. Open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it (for example ⌥N).
+4. Press your hotkey to open the panel.
+
+Keep the folder in `~/Applications/Overnote`: updates run in it.
+Your notes are stored elsewhere, so the folder only holds the program.
+
+The first time you open **Install Overnote.command**, macOS may say it cannot verify the developer, because the file is not notarized.
+Click **Done**, open System Settings, go to Privacy & Security, and click **Open Anyway** next to the message about **Install Overnote.command**.
+To use Terminal instead, run the installer yourself:
+
+```sh
+mv ~/Downloads/overnote ~/Applications/Overnote
+cd ~/Applications/Overnote
+npm run install-extension
+```
+
+The installer installs the dependencies, checks the prebuilt helper against its checksum, and registers the extension with Raycast.
 
 macOS marks downloaded files with a quarantine attribute, and Gatekeeper refuses to start a quarantined helper that is not notarized.
 You do not need to do anything about it: the installer and the extension's launcher check the helper against its `.sha256` checksum and only then clear the attribute.
@@ -35,7 +42,7 @@ Run **Check for Updates** in Raycast to see whether a newer release exists.
 If one does, it copies the update command to the clipboard; paste it into Terminal:
 
 ```sh
-cd ~/Applications/Overnote/overnote
+cd ~/Applications/Overnote
 npm run update-extension
 ```
 

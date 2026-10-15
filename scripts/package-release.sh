@@ -6,7 +6,8 @@
 #   scripts/package-release.sh <version> <out-dir>
 #
 # Writes to <out-dir>:
-#   overnote-<version>.zip           the extension, ready for `npm run install-extension`:
+#   overnote-<version>.zip           the extension, ready for `Install Overnote.command` (or
+#                                    `npm run install-extension`):
 #                                    sources plus the PREBUILT helper and editor, so installing
 #                                    needs only Node 22+ and Raycast (no Xcode tools)
 #   OvernoteHelper-<version>.zip     the bare universal helper, executable bit kept
@@ -62,7 +63,7 @@ copy package.json package-lock.json tsconfig.json eslint.config.js .prettierrc L
 copy src packages/core/package.json packages/core/tsconfig.json packages/core/src
 # The editor workspace stays (npm ci needs every workspace in the lockfile), without its tests.
 copy editor/package.json editor/tsconfig.json editor/index.html editor/vite.config.ts editor/src
-copy scripts/prepare-assets.sh scripts/install-extension.sh scripts/update-extension.sh
+copy scripts/prepare-assets.sh scripts/install-extension.sh scripts/update-extension.sh "Install Overnote.command"
 copy assets/extension-icon.png assets/bin/OvernoteHelper assets/bin/OvernoteHelper.sha256 assets/editor
 [[ -d media ]] && copy media
 
@@ -79,7 +80,7 @@ cat > "$PKG/assets/prebuilt.json" <<EOF
 }
 EOF
 
-chmod 755 "$PKG/assets/bin/OvernoteHelper" "$PKG"/scripts/*.sh
+chmod 755 "$PKG/assets/bin/OvernoteHelper" "$PKG"/scripts/*.sh "$PKG/Install Overnote.command"
 rm -f "$OUT/overnote-$VERSION.zip" "$OUT/OvernoteHelper-$VERSION.zip"
 # Info-ZIP keeps Unix permissions, so the helper stays executable; -X drops extra attributes.
 (cd "$STAGE" && zip -q -r -X "$OUT/overnote-$VERSION.zip" overnote)
@@ -90,6 +91,7 @@ cp "$BIN.sha256" "$OUT/OvernoteHelper.sha256"
 for zipfile in "$OUT/overnote-$VERSION.zip" "$OUT/OvernoteHelper-$VERSION.zip"; do
   zipinfo "$zipfile" | grep -E 'OvernoteHelper$' | grep -q '^-rwxr-xr-x' || die "the helper in $(basename "$zipfile") is not executable"
 done
+zipinfo "$OUT/overnote-$VERSION.zip" | grep -E 'Install Overnote\.command$' | grep -q '^-rwxr-xr-x' || die "Install Overnote.command in the zip is not executable"
 CHECK="$STAGE/check"
 mkdir "$CHECK"
 unzip -q "$OUT/OvernoteHelper-$VERSION.zip" -d "$CHECK"

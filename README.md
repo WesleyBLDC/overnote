@@ -52,11 +52,12 @@ Overnote is inspired by Raycast Notes and is not affiliated with Raycast.
 Overnote is not in the Raycast Store yet.
 You need macOS 14 Sonoma or later, [Raycast](https://www.raycast.com) installed and signed in, and [Node.js](https://nodejs.org) 22 or later.
 
-1. Download `overnote-<version>.zip` from the latest [release](https://github.com/WesleyBLDC/overnote/releases), unzip it, and move the `overnote` folder somewhere stable, for example `~/Applications/Overnote`.
-2. In Terminal, go into that folder and run `npm run install-extension`.
+1. Download `overnote-<version>.zip` from the latest [release](https://github.com/WesleyBLDC/overnote/releases) and unzip it.
+2. Double-click **Install Overnote.command** in the `overnote` folder.
+   It moves the folder to `~/Applications/Overnote` and installs the extension into Raycast.
 3. Open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it, for example ⌥N.
 
-To update, run `npm run update-extension` in the same folder; it backs up your notes first.
+To update, run **Check for Updates** in Raycast; the update backs up your notes first.
 [`docs/install.md`](docs/install.md) covers updating, backups, uninstalling, and troubleshooting.
 
 To build from source instead, you also need the Xcode Command Line Tools (`xcode-select --install`):

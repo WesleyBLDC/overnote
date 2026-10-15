@@ -8,7 +8,7 @@
 #   1. Downloads the zip (for a URL) and checks it against SHA256SUMS: the one next to a local
 #      zip, or the one from the same release for a URL.
 #   2. Marks the zip and every extracted file as downloaded by Safari (com.apple.quarantine).
-#   3. Runs `npm run install-extension -- --no-register` in the extracted folder with the Xcode
+#   3. Runs `Install Overnote.command --no-register` in the extracted folder with the Xcode
 #      tools, `open`, and `ray` replaced by stubs that fail and are recorded, so any use of them
 #      fails the check. The prebuilt helper and editor must be used.
 #   4. Quarantines the helper again, then starts it through the extracted extension's own
@@ -153,9 +153,12 @@ exit 97
 EOF
   chmod 755 "$STUBS/$tool"
 done
-log "Installing: npm run install-extension -- --no-register"
+# Through the double-click installer, as a person runs it (without a terminal it never prompts
+# or moves the folder).
+[[ -x "$PKG/Install Overnote.command" ]] || die "the zip has no executable Install Overnote.command"
+log "Installing: Install Overnote.command --no-register"
 INSTALL_LOG="$TOOLS/install.log"
-if ! (cd "$PKG" && PATH="$STUBS:$PATH" npm_config_strict_allow_scripts=true npm run install-extension -- --no-register) >"$INSTALL_LOG" 2>&1; then
+if ! (cd "$PKG" && PATH="$STUBS:$PATH" npm_config_strict_allow_scripts=true "./Install Overnote.command" --no-register) </dev/null >"$INSTALL_LOG" 2>&1; then
   cat "$INSTALL_LOG" >&2
   die "install-extension failed"
 fi
