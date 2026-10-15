@@ -211,17 +211,19 @@ export const headlessExtensions: AnyExtension[];    // schema, input rules, seri
 // unknown nodes/marks are preserved as placeholder nodes/marks
 export function getNoteSchema(): Schema;
 export function emptyDoc(): JSONContent;
-export function markdownToDoc(markdown: string): JSONContent;
+export function markdownToDoc(markdown: string, opts?: { mode?: "import" | "paste" }): JSONContent; // always >= one paragraph; handles inline <strong><b><em><i><u><s><del><code><a><br> without a DOM
 export function docToMarkdown(doc: JSONContent): string;
 export function docToPlainText(doc: JSONContent): string;
-export function docToHTML(doc: JSONContent): string;
+export function docToHTML(doc: JSONContent): string;                     // semantic export HTML (ul/ol/li), no wrapper; empty doc is <p></p>
+// all serializers return no trailing newline; docToMarkdown output is stable under parse then serialize
 export function deriveTitle(doc: JSONContent): string;        // first line of plain text, trimmed
 export function displayTitle(n: { title: string; text: string }): string; // title, else first text line, else "Untitled"
 export function buildNoteContent(doc: JSONContent): NoteContent; // rawContent + markdown + text + title
 export function noteContentFromMarkdown(markdown: string): NoteContent;
-export function loadDoc(rawContent: string, text: string): JSONContent;   // placeholder handling, plain-text fallback for invalid JSON
+export function loadDoc(rawContent: string | null, text: string): JSONContent; // stored doc if valid (placeholders preserved), else rebuild from text with a hard break per newline
 export function toStoredDoc(doc: JSONContent): JSONContent;               // inverse of loadDoc's placeholder mapping
-export function docToClipboard(docOrSlice: JSONContent): { plainText: string; html: string };
+export function docToClipboard(docOrSlice: JSONContent): { text: string; html: string };   // ⌘C/⌘X format (spec/serialization.md section 6)
+export function derivePreview(text: string): string;                     // first 200 chars, newlines collapsed to spaces
 export function parsePastedText(plain: string, html?: string): JSONContent;
 export function looksLikeMarkdown(plain: string, html?: string): boolean;
 export function normalizeLinkHref(input: string): string | null;
@@ -247,6 +249,8 @@ Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows t
 This lets deeplinks and quicklinks open a specific note or create one with text.
 
 ## Changelog
+
+- v2.3 (2026-10-14): from spec/serialization.md, accepted deviations D1 to D19 (fix Raycast's round-trip bugs; headings 4 to 6 become level 3); markdownToDoc mode option; loadDoc nullable with hard-break fallback; docToClipboard returns {text, html}; derivePreview; semantic HTML; no trailing newlines.
 
 - v2.2 (2026-10-14): from spec/editor.md, the flat-list schema, a headless/editor extension split, title skips empty blocks with no cap, and new core helpers (loadDoc, toStoredDoc, docToClipboard, parsePastedText, looksLikeMarkdown, normalizeLinkHref, countCharacters, countWords).
 
