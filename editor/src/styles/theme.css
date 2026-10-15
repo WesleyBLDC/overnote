@@ -36,7 +36,6 @@
   /* ---- motion: short and ease-out, so things arrive fast and settle softly ---- */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
-  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --motion-fast: 120ms;
   --motion: 150ms;
   --motion-slow: 180ms;
@@ -64,7 +63,6 @@
   --surface-code: rgba(12, 12, 14, 0.045);
   --border: rgba(12, 12, 14, 0.08);
   --border-strong: rgba(12, 12, 14, 0.16);
-  --rim: rgba(12, 12, 14, 0.1);
   --link-underline: rgba(12, 12, 14, 0.36);
   --focus-ring: rgba(12, 12, 14, 0.12);
   --shadow: 0 0.6rem 2rem rgba(10, 12, 16, 0.16), 0 0.1rem 0.35rem rgba(10, 12, 16, 0.06), 0 0 0 0.5px rgba(10, 12, 16, 0.12);
@@ -139,7 +137,6 @@
     --surface-code: rgba(255, 255, 255, 0.06);
     --border: rgba(255, 255, 255, 0.08);
     --border-strong: rgba(255, 255, 255, 0.16);
-    --rim: rgba(255, 255, 255, 0.1);
     --link-underline: rgba(255, 255, 255, 0.42);
     --focus-ring: rgba(255, 255, 255, 0.14);
     --shadow: 0 0.6rem 2rem rgba(0, 0, 0, 0.45), 0 0.1rem 0.35rem rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(255, 255, 255, 0.1);

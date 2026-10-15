@@ -722,6 +722,11 @@ kbd {
   animation: pop-out var(--motion-fast) var(--ease-in) forwards;
 }
 
+/* The copy is a still frame: nothing inside it replays its entrance while the whole fades out. */
+.panel-ghost .panel * {
+  animation: none;
+}
+
 .panel-search {
   flex: none;
   height: 2.75rem;

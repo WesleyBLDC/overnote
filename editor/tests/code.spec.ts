@@ -56,6 +56,37 @@ test("language picker, auto detection, and copy", async ({ page }) => {
   expect(copies.at(-1)?.params.text).toBe("def f():\n    return 1");
 });
 
+test("highlighting waits for a pause in typing and ignores edits outside the block", async ({ page }) => {
+  const highlight = () =>
+    page.evaluate(() => {
+      const view = (window as unknown as { __bnEditor: { state: { plugins: { key: string; getState(s: unknown): { stale: boolean } }[] } } }).__bnEditor;
+      const plugin = view.state.plugins.find((p) => p.key.startsWith("noteHighlight$"))!;
+      return { stale: plugin.getState(view.state).stale, tokens: document.querySelectorAll(".code-block [class*=hljs-]").length };
+    });
+  await page.keyboard.type("```python");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("return 1");
+  // Typed text is only highlighted once typing pauses.
+  await expect.poll(async () => (await highlight()).stale).toBe(false);
+  const settled = await highlight();
+  expect(settled.tokens).toBeGreaterThan(0);
+  await expect(editor(page).locator(".hljs-keyword")).toHaveText("return");
+
+  // Prose typed after the block leaves the highlighting untouched and owes no new pass.
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.press("Meta+Enter");
+  await page.keyboard.type("def notes about the code");
+  expect(await highlight()).toEqual(settled);
+
+  // A new line inside the block is highlighted after the next pause.
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("import os");
+  await expect(editor(page).locator(".hljs-keyword")).toHaveText(["return", "import"]);
+  expect((await highlight()).stale).toBe(false);
+});
+
 test("Backspace in an empty code block makes a paragraph", async ({ page }) => {
   await page.keyboard.type("```js ");
   expect(await blocks(page)).toEqual(["codeBlock"]);
