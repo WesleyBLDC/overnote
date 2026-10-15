@@ -1,11 +1,11 @@
 # Overnote: agent instructions
 
-Read `PLAN.md`, `docs/contract.md`, and the private spec-team guide (clean-room rules) before working here.
+Read `PLAN.md`, `docs/contract.md`, and `docs/clean-room.md` before working here.
 
 ## Clean room
 
 - Build work reads only `PLAN.md`, `docs/`, `spec/`, `research/01` and `03` to `06`, and public docs.
-- Never read the private spec-team notes, REA output, the Raycast app bundle, or scratch analysis files while building.
+- Never read reverse-engineering output, the Raycast app bundle, or the maintainer's private spec-team notes while building.
 - In the real Raycast Notes, only ever use the note titled "(a dedicated test note)".
 
 ## Testing policy
