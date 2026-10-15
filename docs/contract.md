@@ -99,10 +99,11 @@ interface NoteSummary {        // list rows: no rawContent or markdown
 interface Settings {
   escapeLosesFocus: boolean;       // default false: Esc hides the panel
   hideWhileScreenSharing: boolean; // default false
-  zoom: number;                    // default 1.0, range 0.5 to 2.0
+  zoom: number;                    // default 1.0, range 0.75 to 2.0, step 0.05
+  windowAutoSize: boolean;         // default true: height follows content; false keeps the user's height
   showFormatBar: boolean;          // default false
   countMode: "characters" | "words"; // default "characters"
-  panelFrame: { x: number; y: number; width: number } | null;
+  panelFrame: { x: number; y: number; width: number; height?: number } | null;
 }
 ```
 
@@ -121,6 +122,8 @@ The helper stores `NoteContent` verbatim.
 | `window.hide` | `{}` | `{ visible: false }` | |
 | `window.resize` (bridge) | `{ contentHeight: number }` | `{}` | Content-driven height; the helper clamps it to screen bounds |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
+| `clipboard.copy` (bridge) | `{ text: string, html?: string }` | `{}` | Writes plain text plus optional HTML to the general pasteboard |
+| `file.saveAs` (bridge) | `{ suggestedName: string, content: string }` | `{ saved: boolean, path?: string }` | Native save panel; the helper sanitizes the suggested name |
 | `notes.create` | `NoteContent & { show?: boolean }` | `Note` | Sets created/updated/lastAccessed to now; becomes the persisted current note; `show` opens the panel on it (emits `note.new`). Callers always send full content built with core |
 | `notes.get` | `{ id }` | `Note` | 404 if missing |
 | `notes.update` | `{ id, expectedUpdatedAt?: Millis } & Partial<NoteContent> & { caretPosition?: number }` | `{ status: "ok", note: Note } \| { status: "conflict", note: Note }` | Content fields set `updatedAt` to now (always, even if unchanged). Caret-only updates never change `updatedAt` and apply only to live notes. If `expectedUpdatedAt` is given and differs from the stored value, nothing is written and `conflict` returns the stored note |
@@ -129,7 +132,7 @@ The helper stores `NoteContent` verbatim.
 | `notes.recover` | `{ id }` | `Note` | Clears `deletedAt` (pin stays cleared), `updatedAt` = old + 1 ms |
 | `notes.permanentlyDelete` | `{ id }` | `{}` | Only affects notes already in the trash; no-op on live notes |
 | `notes.emptyTrash` | `{}` | `{ count }` | |
-| `notes.duplicate` | `{ id }` | `Note` | Fresh created/updated/lastAccessed, no pin, caret 0; becomes current |
+| `notes.duplicate` | `{ id, titleSuffix?: string }` | `Note` | Fresh created/updated/lastAccessed, no pin, caret 0; becomes current |
 | `notes.pin` | `{ id }` | `Note` | Appends to the end of the pinned list: key = max pinned key + 1000 (first pin 1000). Does not change `updatedAt` |
 | `notes.unpin` | `{ id }` | `Note` | Does not change `updatedAt` |
 | `notes.movePinnedUp` / `notes.movePinnedDown` | `{ id }` | `{}` | Swap keys with the neighbor pin; no-op at the ends |
@@ -228,6 +231,11 @@ export * as rpc from "./rpc";   // method name constants and param/result types 
 
 No default hotkeys.
 
+Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows that note via `window.show`), and `create-note` accepts `launchContext: { text?: string }`.
+This lets deeplinks and quicklinks open a specific note or create one with text.
+
 ## Changelog
+
+- v2.1 (2026-10-14): from spec/keymap.md, added `windowAutoSize`, a 0.75 to 2.0 zoom range, `panelFrame.height`, bridge `clipboard.copy` and `file.saveAs`, `notes.duplicate` `titleSuffix`, and launch contexts for `toggle-notes` and `create-note`.
 
 - v2 (2026-10-14): split `notes.list` / `notes.browse` with substring `filter` (Unicode and diacritic folding) and removed `notes.search` and FTS5; WindowData now carries neighbor ids and up to 9 pin shortcuts; history moved into the editor (removed `notes.navigate` and history tables); `notes.setCurrent` split into `notes.setCurrentNote` and `notes.touchAccessed`; `notes.windowData` takes an optional `noteId`; pin appends with +1000 keys and gained `movePinnedUp`/`movePinnedDown` (dropped `beforeId`); delete clears pins and steps `updatedAt` by 1 ms; optimistic `expectedUpdatedAt` on update with a conflict result; `permanentlyDelete` only on trashed notes; `listDeleted` unpaged with markdown; `charCount` on NoteSummary; title is the first line of plain text with `displayTitle` fallback.
