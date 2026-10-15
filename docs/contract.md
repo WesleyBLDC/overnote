@@ -125,6 +125,7 @@ The helper stores `NoteContent` verbatim.
 | `window.hide` | `{}` | `{ visible: false }` | |
 | `window.resize` (bridge) | `{ contentHeight: number }` | `{}` | Content-driven height; the helper clamps it to screen bounds |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
+| `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
 | `clipboard.copy` (bridge) | `{ text: string, html?: string }` | `{}` | Writes plain text plus optional HTML to the general pasteboard |
 | `file.saveAs` (bridge) | `{ suggestedName: string, content: string }` | `{ saved: boolean, path?: string }` | Native save panel; the helper sanitizes the suggested name |
 | `notes.create` | `NoteContent & { show?: boolean }` | `Note` | Sets created/updated/lastAccessed to now; becomes the persisted current note; `show` opens the panel on it (emits `note.new`). Callers always send full content built with core |
@@ -141,7 +142,7 @@ The helper stores `NoteContent` verbatim.
 | `notes.movePinnedUp` / `notes.movePinnedDown` | `{ id }` | `{}` | Swap keys with the neighbor pin; no-op at the ends |
 | `notes.list` | `{ filter?: string, limit?: number (100), cursor?: string }` | `{ items: NoteSummary[], nextCursor: string \| null }` | Live notes. Order: pinned key asc (pinned first), then `updatedAt` desc, then `id` asc. Used by Search Notes |
 | `notes.browse` | `{ filter?: string, limit?: number (100), cursor?: string }` | same shape | Live notes. Order: pinned key asc, then `lastAccessedAt` desc, then `id` asc. With a filter, title matches come before text-only matches (each group in that order). Used by ⌘P |
-| `notes.listDeleted` | `{}` | `{ items: (NoteSummary & { markdown: string })[] }` | All trashed notes, `deletedAt` desc, no paging |
+| `notes.listDeleted` | `{}` | `{ items: (NoteSummary & { markdown: string, rawContent: string })[] }` | All trashed notes, `deletedAt` desc, no paging |
 | `notes.count` | `{}` | `{ count: number }` | Live notes |
 | `notes.setCurrentNote` | `{ noteId: NoteId }` | `{}` | Persists the current note id (settings key `currentNoteId`) |
 | `notes.touchAccessed` | `{ id }` | `{}` | Sets `lastAccessedAt` = now on a live note; no-op otherwise |
@@ -168,6 +169,8 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 
 **Editor-owned behavior (no helper state):**
 - Zoom is applied by the editor in CSS; `window.resize.contentHeight` is in points (CSS px times zoom), measured from the content wrapper (never `documentElement.scrollHeight`).
+- While the ⌘K panel, browse, or a dialog is open the editor reports a larger `contentHeight` (about 34rem; 16rem for small popups) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
+- The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
 - The helper overlays an invisible 12 pt drag strip along the panel's top edge; the editor keeps about 12 pt of non-interactive top padding.
 - Back/forward history is two in-memory stacks in the editor (cap 100). Switching notes pushes the old current note on the back stack (skipping duplicates of the top) and clears forward. When a stack is empty, back goes to `previousNoteId` and forward to `nextNoteId`. Deleted ids are removed from both stacks.
 - Every switch calls `notes.touchAccessed` and `notes.setCurrentNote` after flushing pending edits (a failed flush cancels the switch).
@@ -257,6 +260,8 @@ Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows t
 This lets deeplinks and quicklinks open a specific note or create one with text.
 
 ## Changelog
+
+- v2.6 (2026-10-14): bridge `app.openURL`; `listDeleted` rows include `rawContent`; editor-driven temporary growth through `window.resize` (no separate minimum-height method); Edit menu and ⇧⌘V paste event. Deferred: ⌘, settings and ⇧⌘L quicklink from inside the panel.
 
 - v2.5 (2026-10-14): from the helper build, panelFrame.y is the top edge, error code details, update timestamp rule, `--headless`, editor-owned zoom and contentHeight measurement, 12 pt drag strip.
 
