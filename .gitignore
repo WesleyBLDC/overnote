@@ -7,3 +7,5 @@ dist/
 compiled_raycast_swift/
 raycast-env.d.ts
 *.log
+assets/bin/
+assets/editor/
