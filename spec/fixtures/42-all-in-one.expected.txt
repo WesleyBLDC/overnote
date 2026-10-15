@@ -1,0 +1,13 @@
+Groceries
+
+Weekly list for Saturday.
+
+eggs
+bread
+sourdough
+go
+pay
+
+Remember the bags.
+
+See store.
