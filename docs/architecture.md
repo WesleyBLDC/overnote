@@ -177,6 +177,9 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so ⌘K and browse never resize a roomy window).
 - The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath. Minimum user size is 396 pt wide by 128 pt times zoom.
 - The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 135 pt with the footer at the bottom.
+- With windowAutoSize on and no normal `window.resize` report yet (a cold start, for example `--show`), a show waits with the panel hidden for that first report, up to 1.5 s, and then orders the panel in at the reported height, so it never flashes the default height.
+  A temporary report does not end the wait.
+  While it waits, `window.toggle` cancels the show (result `visible: false`), `window.hide` cancels it too, `window.show { noteId }` still emits `note.open`, and turning windowAutoSize off shows the panel at once.
 - Helper test-only flags: `--test-hooks` enables `test.*` socket methods.
 - The helper overlays an invisible 12 pt drag strip along the panel's top edge; the editor keeps about 12 pt of non-interactive top padding.
 - Back/forward history is two in-memory stacks in the editor (cap 100). Switching notes pushes the old current note on the back stack (skipping duplicates of the top) and clears forward. When a stack is empty, back goes to `previousNoteId` and forward to `nextNoteId`. Deleted ids are removed from both stacks.

@@ -37,7 +37,16 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     /// Bridge methods the editor called and heights it reported, kept only with test hooks.
     private(set) var bridgeMethods: [String] = []
     private(set) var resizeReports: [Double] = []
+    /// The panel height at each order in, kept only with test hooks.
+    private(set) var shownHeights: [Double] = []
     private let recordEvents: Bool
+    /// A show that waits for the editor's first height report while auto-sizing is on, so a
+    /// cold start never flashes the default height before shrinking to the content.
+    private var pendingShow: DispatchWorkItem?
+    /// How long a show waits for that first report before it orders the panel in anyway.
+    static let firstReportTimeout: TimeInterval = 1.5
+    /// Whether a show is waiting for the editor's first height report.
+    var isShowPending: Bool { pendingShow != nil }
 
     init(
         repository: NotesRepository, editorDirectory: String?, logger: FileLogger, recordEvents: Bool = false,
@@ -152,13 +161,45 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     /// Shows the panel on the display under the pointer and makes it key, without activating
     /// the app. The web view becomes first responder so typing goes to the editor.
+    /// With auto-sizing on and no height report from the editor yet (a cold start), the panel
+    /// waits for that report, up to `firstReportTimeout`, so it opens at its content height.
+    /// The editor measures in a ResizeObserver, so it reports while the panel is still hidden.
     func show() {
-        let wasVisible = panel.isVisible
         if let frontmost = NSWorkspace.shared.frontmostApplication,
             frontmost.processIdentifier != ProcessInfo.processInfo.processIdentifier
         {
             previousApp = frontmost
         }
+        if !panel.isVisible, settings.windowAutoSize, contentHeight == nil, temporaryHeight == nil, webView != nil {
+            guard pendingShow == nil else { return }
+            let work = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated { self?.completePendingShow() }
+            }
+            pendingShow = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.firstReportTimeout, execute: work)
+            return
+        }
+        present()
+    }
+
+    /// The first report never came in time (a slow first load, or a page that does not report):
+    /// show at the default height rather than not at all.
+    private func completePendingShow() {
+        guard pendingShow != nil else { return }
+        pendingShow = nil
+        logger.log("No height report from the editor within \(Self.firstReportTimeout) s; showing the panel anyway")
+        present()
+    }
+
+    private func cancelPendingShow() {
+        pendingShow?.cancel()
+        pendingShow = nil
+    }
+
+    /// Orders the panel in at its target height and makes it key; ends any pending show.
+    private func present() {
+        cancelPendingShow()
+        let wasVisible = panel.isVisible
         if !wasVisible {
             placePanel()
         }
@@ -168,6 +209,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
             panel.makeFirstResponder(webView)
         }
         if !wasVisible {
+            if recordEvents { shownHeights.append(Double(panel.frame.height)) }
             emitEvent("window.didShow", [:])
         }
     }
@@ -181,6 +223,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     func hide() {
+        cancelPendingShow()
         guard panel.isVisible else { return }
         saveFrameNow()
         panel.orderOut(nil)
@@ -371,7 +414,13 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     // MARK: - HelperHost
 
     /// Hidden: show and focus. Visible but not key: focus only. Visible and key: hide.
+    /// A toggle while a show waits for the first height report cancels that show, as a second
+    /// press on a visible panel would hide it.
     func toggleWindow() async -> Bool {
+        if pendingShow != nil {
+            cancelPendingShow()
+            return false
+        }
         if !panel.isVisible {
             show()
             return true
@@ -412,6 +461,13 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
             let wasTemporary = temporaryHeight != nil
             temporaryHeight = nil
             contentHeight = rounded
+            if pendingShow != nil {
+                // The report a waiting show was for: order the panel in, placed at this height.
+                heightBeforeTemporary = nil
+                present()
+                return
+            }
+            // Restoring after a temporary growth still needs the height from before it.
             applyHeight(force: wasTemporary)
             heightBeforeTemporary = nil
         }
@@ -452,7 +508,8 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
             savePanel.allowsOtherFileTypes = true
         }
         if !panel.isVisible {
-            show()
+            // A sheet needs a visible window: never wait for a height report here.
+            present()
         }
         let response: NSApplication.ModalResponse = await withCheckedContinuation { continuation in
             savePanel.beginSheetModal(for: panel) { continuation.resume(returning: $0) }
@@ -473,6 +530,11 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
             || newSettings.panelFrame?.height != settings.panelFrame?.height
         settings = newSettings
         applyWindowSettings()
+        if pendingShow != nil, !settings.windowAutoSize {
+            // Auto-sizing went off while a show waited for a height report: nothing to wait for.
+            present()
+            return
+        }
         if geometryChanged {
             applyHeight(force: true)
         }

@@ -15,7 +15,9 @@
 # auxiliary, the dark material under a transparent web view, height clamping (128 to 860
 # scaled by zoom, 2 pt tolerance, top edge fixed), temporary growth that only grows, the user
 # height rule, editor drag regions and the drag strip, first mouse, resize hit zones and real
-# resize drags, ⌘W, per display position memory, and persistence across a restart.
+# resize drags, ⌘W, per display position memory, persistence across a restart, and the first
+# show with auto-sizing on, which waits hidden for the editor's first height report (up to
+# 1.5 s) so a cold start never flashes the default height.
 #
 # Mouse and key events in the drag, resize, and ⌘W checks are built with NSEvent inside the
 # helper and dispatched through its own NSApp.sendEvent and event queue (test hooks). They
@@ -224,10 +226,25 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   };
   const js = (expression) => call("test.js", { expression });
   const shownAndKey = (st) => st.visible && st.key;
+  /**
+   * Waits until key status and app activation have been stable for 250 ms and returns that
+   * state. A key change and the app's activation change land separately, and a makeKey or a
+   * click sent between them can lose to the late activation change on recent macOS versions.
+   */
+  const settle = async () => {
+    let last = null;
+    let stableSince = Date.now();
+    return poll(state, (st) => {
+      const now = `${st.key}/${st.appActive}`;
+      if (now !== last) { last = now; stableSince = Date.now(); }
+      return Date.now() - stableSince >= 250;
+    }, 2_000);
+  };
   /** Takes key status away with the decoy window; returns false when AppKit would not let it go. */
   const resignKey = async () => {
     await call("test.resignKey");
-    return !(await poll(state, (st) => !st.key, 2_000)).key;
+    if ((await poll(state, (st) => !st.key && !st.appActive, 2_000)).key) return false;
+    return !(await settle()).key;
   };
 
   // Prewarmed and hidden: the placeholder editor loads, creates its first note through the
@@ -474,6 +491,7 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   await check("the 12 pt top strip still drags as a fallback", () => assert.equal(stripClick.drags, 1, "drags"));
   if (await resignKey()) {
     const firstClick = await call("test.mouseDown", { x: 60, y: 25 });
+    await settle();
     // Now key: this click reaches the page, and proves the first one did not.
     const barrierClick = await call("test.mouseDown", { x: 70, y: 25 });
     seen = await poll(downs, (list) => list.some(near(70)));
@@ -684,6 +702,127 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   await check("with auto-sizing on, the panel height follows the real editor's report", () => {
     assert.ok(calls.resizes.at(-1) > 0, "no window.resize");
     assert.ok(Math.abs(followed.frame.height - expected) <= 2, `height ${followed.frame.height}, expected ${expected}`);
+  });
+  await stop(helper);
+
+  // Cold start the way the extension's launcher does it, with --show and auto-sizing on: the
+  // panel must open at the editor's content height, never at the default 560 pt first and
+  // then shrink.
+  args = [...argsFor(`${TMP}/support-editor`, EDITOR_DIR), "--show"];
+  helper = await start();
+  visibleSince = Date.now();
+  calls = await poll(() => helper.call("test.bridgeCalls"), (c) => c.shownHeights.length > 0, PAGE_LOAD_MS);
+  const coldState = await poll(editorState, (st) => st.visible && st.key);
+  await check("cold start with --show and auto-sizing on opens at the content height, with no 560 pt flash", () => {
+    assert.equal(coldState.visible, true, "visible");
+    assert.equal(coldState.key, true, "key");
+    assert.ok(calls.resizes.length > 0, `no window.resize before the panel showed (shown heights ${calls.shownHeights.join(", ")})`);
+    const firstReport = Math.min(Math.max(Math.ceil(calls.resizes[0]), 128), Math.floor(Math.min(860, coldState.visibleFrameHeight)));
+    assert.ok(Math.abs(calls.shownHeights[0] - firstReport) <= 2,
+      `first shown height ${calls.shownHeights[0]}, first content report ${firstReport} (reports ${calls.resizes.join(", ")})`);
+  });
+  await stop(helper);
+
+  // The waiting show itself, made deterministic with a page that never reports its height:
+  // the socket stands in for the editor's window.resize through test.asBridge.
+  const quietEditor = `${TMP}/quiet-editor`;
+  fs.mkdirSync(quietEditor, { recursive: true });
+  fs.writeFileSync(`${quietEditor}/index.html`, "<!doctype html><meta charset=\"utf-8\"><title>Quiet</title>");
+  args = argsFor(`${TMP}/support-quiet`, quietEditor);
+  helper = await start();
+  const quiet = async () => (lastState = await helper.call("test.windowState"));
+  await helper.call("settings.set", { windowAutoSize: true });
+  const waitingShow = await helper.call("window.show");
+  s = await quiet();
+  await check("with auto-sizing on and no height report yet, window.show waits with the panel hidden", () => {
+    assert.equal(waitingShow.visible, true, "window.show result");
+    assert.equal(s.showPending, true, "showPending");
+    assert.equal(s.visible, false, "visible");
+  });
+  const cancelToggle = await helper.call("window.toggle");
+  s = await quiet();
+  await check("window.toggle while a show waits cancels it", () => {
+    assert.equal(cancelToggle.visible, false, "window.toggle result");
+    assert.equal(s.showPending, false, "showPending");
+    assert.equal(s.visible, false, "visible");
+  });
+  await helper.call("window.show");
+  await helper.call("window.hide");
+  s = await quiet();
+  await check("window.hide while a show waits cancels it", () => {
+    assert.equal(s.showPending, false, "showPending");
+    assert.equal(s.visible, false, "visible");
+  });
+  const quietNote = await helper.call("notes.create", {
+    rawContent: JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] }), markdown: "", text: "", title: "",
+  });
+  await helper.call("window.show");
+  const eventsBeforeOpen = (await helper.call("test.events")).length;
+  await helper.call("window.show", { noteId: quietNote.id });
+  s = await quiet();
+  const openEvents = (await helper.call("test.events")).slice(eventsBeforeOpen);
+  await check("window.show with a noteId while a show waits still emits note.open and keeps waiting", () => {
+    assert.ok(openEvents.some((e) => e.event === "note.open" && e.payload.id === quietNote.id), JSON.stringify(openEvents));
+    assert.ok(!openEvents.some((e) => e.event === "window.didShow"), JSON.stringify(openEvents));
+    assert.equal(s.showPending, true, "showPending");
+    assert.equal(s.visible, false, "visible");
+  });
+  await helper.call("test.asBridge", { method: "window.resize", params: { contentHeight: 600, temporary: true } });
+  s = await quiet();
+  await check("a temporary height report does not end the wait", () => {
+    assert.equal(s.showPending, true, "showPending");
+    assert.equal(s.visible, false, "visible");
+  });
+  const eventsBeforeReport = (await helper.call("test.events")).length;
+  await helper.call("test.asBridge", { method: "window.resize", params: { contentHeight: 240.4 } });
+  visibleSince = Date.now();
+  s = await poll(quiet, shownAndKey);
+  calls = await helper.call("test.bridgeCalls");
+  const reportEvents = (await helper.call("test.events")).slice(eventsBeforeReport).map((e) => e.event);
+  await check("the first normal height report orders the waiting panel in at that height", () => {
+    assert.equal(s.visible && s.key, true, "visible and key");
+    assert.equal(s.showPending, false, "showPending");
+    assert.deepEqual(calls.shownHeights, [241], "heights at order in");
+    assert.equal(s.frame.height, 241, "height");
+    assert.equal(reportEvents.filter((e) => e === "window.didShow").length, 1, reportEvents.join(", "));
+  });
+  await helper.call("window.hide");
+  markVisible(false);
+  await helper.call("window.show");
+  s = await quiet();
+  markVisible(s.visible);
+  await check("once the editor has reported, a show is immediate", () => {
+    assert.equal(s.visible, true, "visible");
+    assert.equal(s.showPending, false, "showPending");
+  });
+  await stop(helper);
+
+  // A fresh start of the same install: auto-sizing is still on and nothing has reported yet.
+  helper = await start();
+  await helper.call("window.show");
+  const autoSizeOff = Date.now();
+  await helper.call("settings.set", { windowAutoSize: false });
+  s = await poll(quiet, (st) => st.visible);
+  const offAfter = Date.now() - autoSizeOff;
+  markVisible(s.visible);
+  await check("turning auto-sizing off while a show waits shows the panel at once", () => {
+    assert.equal(s.visible, true, "visible");
+    assert.equal(s.showPending, false, "showPending");
+    assert.ok(offAfter < 1_000, `visible after ${offAfter} ms`);
+  });
+  await helper.call("window.hide");
+  markVisible(false);
+  await helper.call("settings.set", { windowAutoSize: true });
+  const timeoutStart = Date.now();
+  await helper.call("window.show");
+  s = await poll(quiet, (st) => st.visible);
+  const shownAfter = Date.now() - timeoutStart;
+  markVisible(s.visible);
+  const quietLog = fs.readFileSync(`${TMP}/support-quiet/helper.log`, "utf8");
+  await check("with no height report at all, a waiting show gives up after 1.5 s and shows anyway", () => {
+    assert.equal(s.visible, true, "visible");
+    assert.ok(shownAfter >= 1_400, `shown after only ${shownAfter} ms`);
+    assert.ok(quietLog.includes("No height report from the editor"), "no timeout line in helper.log");
   });
   await stop(helper);
   helper = null;

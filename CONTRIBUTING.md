@@ -85,7 +85,8 @@ npm run verify
 
 `npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, and builds the extension, stopping at the first failing step.
 Playwright needs both WebKit (the engine of the native panel, which runs every editor flow) and Chromium (a second engine check of the shipped bundle).
-The panel window check shows the panel briefly and needs a logged in GUI session; set `OVERNOTE_SKIP_WINDOW_E2E=1` to skip it when you have none.
+The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so `npm run verify` skips it on a workstation and runs it in CI.
+Set `OVERNOTE_WINDOW_E2E=1` to run it locally, or `OVERNOTE_WINDOW_E2E=0` to skip it even in CI.
 
 To run one suite at a time:
 

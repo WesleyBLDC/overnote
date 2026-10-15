@@ -33,6 +33,7 @@ final class TestHooks {
             let frame = panel.frame
             return [
                 "visible": .bool(panel.isVisible),
+                "showPending": .bool(controller.isShowPending),
                 "key": .bool(panel.isKeyWindow),
                 "appActive": .bool(NSApp.isActive),
                 "level": .int(Int64(panel.level.rawValue)),
@@ -69,6 +70,7 @@ final class TestHooks {
             return [
                 "methods": .array(controller.bridgeMethods.map(JSONValue.string)),
                 "resizes": .array(controller.resizeReports.map(JSONValue.double)),
+                "shownHeights": .array(controller.shownHeights.map(JSONValue.double)),
             ]
         case "test.menuItems":
             let menus = NSApp.mainMenu?.items.compactMap(\.submenu) ?? []
@@ -155,10 +157,14 @@ final class TestHooks {
             return [:]
         case "test.resignKey":
             // Takes key status away from the visible panel, as a click into another app would,
-            // by making a tiny transparent window of ours key for a moment.
+            // by making a tiny transparent window of ours key for a moment. The app is then
+            // deactivated too, as it is while the user works in another app: a panel made key
+            // while the decoy still held the app active lost key again to the deferred
+            // deactivation, which made the focus checks flaky.
             let decoy = KeyDecoyWindow()
             decoy.orderFrontRegardless()
             decoy.makeKey()
+            NSApp.deactivate()
             self.decoy = decoy
             return [:]
         case "test.dropDecoy":

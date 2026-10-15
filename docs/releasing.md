@@ -54,5 +54,5 @@ Notarization would need an Apple Developer ID and repository secrets, which this
 
 - The workflow publishes with the built in `GITHUB_TOKEN`; it needs no secrets.
   If the repository restricts the default token to read only, the workflow's own `permissions: contents: write` still grants what it needs, unless an organization policy forbids it.
-- The CI workflow honors one optional repository variable, `OVERNOTE_SKIP_WINDOW_E2E`.
-  Set it to `1` only if a runner image ever loses its GUI session, which `scripts/e2e-window.sh` needs.
+- The CI workflow honors one optional repository variable, `OVERNOTE_WINDOW_E2E`.
+  Set it to `0` only if a runner image ever loses its GUI session, which `scripts/e2e-window.sh` needs.

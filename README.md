@@ -198,6 +198,7 @@ Overnote keeps unit tests to the essentials and closes every feature with end-to
 | Panel window behavior end-to-end | `bash scripts/e2e-window.sh` |
 
 `npm run verify` runs all of them, plus typechecking, lint, and the builds, in the same order as CI.
+The panel window check shows the panel on screen, so `npm run verify` runs it only in CI or with `OVERNOTE_WINDOW_E2E=1`.
 Run `npx playwright install webkit chromium` once before the editor end-to-end suite.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
 

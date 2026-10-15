@@ -4,11 +4,14 @@
 #   npm run verify
 #
 # Stops at the first failing step and names it. Needs macOS with the Xcode Command Line
-# Tools, Node 22+, the Playwright browsers (npx playwright install webkit chromium), and a
-# logged in GUI session for the window check.
+# Tools, Node 22+, and the Playwright browsers (npx playwright install webkit chromium).
+#
+# The panel window check (scripts/e2e-window.sh) shows the panel on screen and needs a logged
+# in GUI session, so it is opt in on a workstation and on by default in CI.
 #
 # Environment:
-#   OVERNOTE_SKIP_WINDOW_E2E=1  skip scripts/e2e-window.sh (it shows the panel briefly)
+#   OVERNOTE_WINDOW_E2E=1  run scripts/e2e-window.sh (the default when CI=true)
+#   OVERNOTE_WINDOW_E2E=0  skip it, even in CI
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -48,11 +51,15 @@ step "Unit: editor" npm test -w editor
 step "Unit: helper" bash helper/test.sh
 step "End to end: editor (Playwright)" npm run test:e2e -w editor
 step "End to end: helper smoke" bash scripts/smoke-helper.sh
-if [[ "${OVERNOTE_SKIP_WINDOW_E2E:-0}" == "1" ]]; then
-  printf '\n[verify] skipped: End to end: panel window (OVERNOTE_SKIP_WINDOW_E2E=1)\n'
-  STEPS+=("   -   End to end: panel window (skipped)")
-else
+window_e2e="${OVERNOTE_WINDOW_E2E:-}"
+if [[ -z "$window_e2e" ]]; then
+  [[ "${CI:-}" == "true" ]] && window_e2e=1 || window_e2e=0
+fi
+if [[ "$window_e2e" == "1" ]]; then
   step "End to end: panel window" bash scripts/e2e-window.sh
+else
+  printf '\n[verify] skipped: End to end: panel window (shows the panel; set OVERNOTE_WINDOW_E2E=1 to run it)\n'
+  STEPS+=("   -   End to end: panel window (skipped)")
 fi
 step "Build: Raycast extension (ray build -e dist)" npx ray build -e dist -o "$RAY_OUT"
 current=""
