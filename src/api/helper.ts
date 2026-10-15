@@ -1,17 +1,22 @@
 import { environment } from "@raycast/api";
 
 import { HelperLauncher, type EnsureOptions, type EnsureResult } from "../domain/launcher";
-import { resolvePaths, type HelperPaths } from "../domain/paths";
+import { developmentAssetsPath, resolvePaths, type HelperPaths } from "../domain/paths";
 import type { RpcMethod, RpcParams, RpcResult } from "../domain/types";
 
 let launcher: HelperLauncher | null = null;
 
+/** While `npm run dev` runs: the checkout's assets, so the panel follows every new build. */
+function devAssetsPath(): string | null {
+  return environment.isDevelopment ? developmentAssetsPath(environment.assetsPath) : null;
+}
+
 export function helperPaths(): HelperPaths {
-  return resolvePaths({ supportPath: environment.supportPath, assetsPath: environment.assetsPath });
+  return resolvePaths({ supportPath: environment.supportPath, assetsPath: devAssetsPath() ?? environment.assetsPath });
 }
 
 export function getLauncher(): HelperLauncher {
-  launcher ??= new HelperLauncher({ paths: helperPaths() });
+  launcher ??= new HelperLauncher({ paths: helperPaths(), watchEditor: devAssetsPath() !== null });
   return launcher;
 }
 

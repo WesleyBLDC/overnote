@@ -8,6 +8,7 @@ export const environment = {
   supportPath: "/tmp/overnote-test-support",
   assetsPath: "/tmp/overnote-test-assets",
   launchType: "userInitiated",
+  isDevelopment: false,
 };
 
 export enum LaunchType {

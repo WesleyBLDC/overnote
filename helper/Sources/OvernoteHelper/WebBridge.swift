@@ -13,6 +13,8 @@ final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, W
     private let logger: FileLogger
     /// Called with each method the page sends (test hooks only).
     var onMessage: ((String) -> Void)?
+    /// Called when the main frame starts loading our own page (a reload included).
+    var onPageNavigation: (() -> Void)?
 
     init(dispatcher: RPCDispatcher, webView: WKWebView, logger: FileLogger) {
         self.handler = dispatcher
@@ -92,6 +94,9 @@ final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, W
             return
         }
         if url.scheme == EditorSchemeHandler.scheme || url.scheme == "about" {
+            if url.scheme == EditorSchemeHandler.scheme, navigationAction.targetFrame?.isMainFrame == true {
+                onPageNavigation?()
+            }
             decisionHandler(.allow)
             return
         }

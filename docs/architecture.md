@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v2.10 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v2.11 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -25,17 +25,20 @@ Raycast extension (src/)  ──socket JSON-RPC──▶  OvernoteHelper (helper
 | Backups | `~/Library/Application Support/Overnote/backups/` (mode 0700), outside the extension; `OVERNOTE_BACKUP_DIR` overrides it (see [section 9](#9-backups-installs-and-updates)) |
 | Release marker | `assets/prebuilt.json` in a release install: `{ version, schemaVersion, commit, helperVersion, helperSha256 }` |
 | Install location | `assets/install-location.json`: `{ installDir }`, written by `scripts/install-extension.sh` for Check for Updates |
+| Development assets | `assets/dev.json`: `{ assetsDir }`, written by `scripts/dev.sh`; a development build (`environment.isDevelopment`) without `assets/prebuilt.json` runs the helper and editor from that folder |
+| Launch record | `/tmp/overnote-<uid>/helper-launch.json`: `{ pid, key }`, the helper the launcher last started and what it started it with |
 
 Helper command line:
 
 ```
-OvernoteHelper --support-dir <dir> --socket <path> --pid-file <path> --editor-dir <assets/editor> [--show] [--version] [--schema-version]
+OvernoteHelper --support-dir <dir> --socket <path> --pid-file <path> --editor-dir <assets/editor> [--show] [--watch-editor] [--version] [--schema-version]
 ```
 
 `--version` prints the version string and exits.
 `--schema-version` prints the database schema version this helper writes (the latest migration) and exits.
 The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups folder; tests always set it to a temporary folder.
 `--show` shows the panel right after startup.
+`--watch-editor` (development only) checks `<editor-dir>/index.html` twice a second; when a new build has settled it emits `editor.willReload`, and reloads the page itself if the editor has not reloaded within 2 s.
 
 ## 2. Wire protocol (socket)
 
@@ -71,6 +74,7 @@ The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups fold
 | `note.new` | `{ note: Note }` | An external caller created a note and asked to show it |
 | `notes.changed` | `{ ids: string[] }` | Data changed through the socket (so the editor reloads) |
 | `settings.changed` | `Settings` | A setting changed |
+| `editor.willReload` | `{}` | Development only (`--watch-editor`): a new editor build landed; the editor saves, then reloads the page |
 
 ## 4. Data types
 
@@ -122,7 +126,7 @@ The helper stores `NoteContent` verbatim.
 
 | Method | Params | Result | Notes |
 |---|---|---|---|
-| `system.ping` | `{}` | `{ version: string, pid: number }` | Health check; the launcher restarts the helper on a version mismatch |
+| `system.ping` | `{}` | `{ version: string, pid: number }` | Health check; the launcher restarts the helper on a version mismatch, and when the launch record does not match the running pid, the binary's checksum, and the launch arguments |
 | `system.shutdown` | `{}` | `{}` | Graceful exit |
 | `system.status` (socket) | `{}` | `SystemStatus` | Version, schema, note and backup counts, and the restore offer (section 9) |
 | `system.backup` (socket) | `{ reason?: BackupReason }` (default `"manual"`) | `BackupInfo` | Writes a backup now, even of an empty database, then prunes old ones |
@@ -357,7 +361,7 @@ The support, runtime, and backups folders default to the real ones and can be ov
 
 ## Protocol versioning
 
-The protocol described here is v2.10 (v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v2.11 (v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.

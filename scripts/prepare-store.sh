@@ -109,6 +109,8 @@ node -e '
   manifest.description = "An open-source, extensible floating Markdown notepad, one hotkey away, with local notes and daily backups.";
   manifest.commands = manifest.commands.filter((command) => command.name !== "check-for-updates");
   for (const name of ["install-extension", "update-extension", "prepare-store", "verify", "test"]) delete manifest.scripts[name];
+  // scripts/dev.sh (live editor and helper rebuilds) needs the full checkout; plain Raycast development here.
+  Object.assign(manifest.scripts, { predev: "bash scripts/prepare-assets.sh", dev: "ray develop" });
   fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + "\n");' "$COPY/package.json"
 if grep -rqE "check-for-updates|domain/updates" "$COPY/src"; then
   die "src/ still refers to Check for Updates"

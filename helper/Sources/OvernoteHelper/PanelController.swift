@@ -47,6 +47,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     static let firstReportTimeout: TimeInterval = 1.5
     /// Whether a show is waiting for the editor's first height report.
     var isShowPending: Bool { pendingShow != nil }
+    /// Development only (`--watch-editor`): reloads the page when a new editor build lands.
+    private var buildWatcher: EditorBuildWatcher?
+    /// Reloads the page itself when the editor did not reload after `editor.willReload`.
+    private var reloadFallback: DispatchWorkItem?
+    /// How long the editor gets to save and reload on its own.
+    static let reloadFallbackDelay: TimeInterval = 2
 
     init(
         repository: NotesRepository, editorDirectory: String?, logger: FileLogger, recordEvents: Bool = false,
@@ -133,6 +139,34 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         if let url = URL(string: "\(EditorSchemeHandler.scheme)://app/index.html") {
             webView.load(URLRequest(url: url))
         }
+    }
+
+    /// Development only: watches `directory` for new editor builds and reloads the page on each.
+    func watchEditorBuild(directory: String) {
+        let watcher = EditorBuildWatcher(directory: directory) { [weak self] in self?.reloadEditor() }
+        watcher.start()
+        buildWatcher = watcher
+        bridge?.onPageNavigation = { [weak self] in
+            self?.reloadFallback?.cancel()
+            self?.reloadFallback = nil
+        }
+        logger.log("Watching \(directory) for new editor builds")
+    }
+
+    /// Asks the editor to save and reload itself, and reloads it after a moment if it cannot
+    /// (for example when the previous build failed to start).
+    private func reloadEditor() {
+        logger.log("New editor build; reloading the editor")
+        reloadFallback?.cancel()
+        let fallback = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.reloadFallback = nil
+            self.logger.log("The editor did not reload itself; reloading it")
+            self.webView?.reload()
+        }
+        reloadFallback = fallback
+        emitEvent("editor.willReload", [:])
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.reloadFallbackDelay, execute: fallback)
     }
 
     static let material: NSVisualEffectView.Material = .hudWindow

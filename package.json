@@ -130,8 +130,7 @@
   "scripts": {
     "prebuild": "bash scripts/prepare-assets.sh",
     "build": "ray build",
-    "predev": "bash scripts/prepare-assets.sh",
-    "dev": "ray develop",
+    "dev": "bash scripts/dev.sh",
     "build:editor": "npm run build -w editor",
     "build:helper": "bash scripts/build-helper.sh",
     "lint": "ray lint",

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { bundledVersion, prepareBinary } from "./helper-binary";
+import { bundledVersion, prepareBinary, readExpectedChecksum } from "./helper-binary";
 import { ensureRuntimeDir, isErrno, type HelperPaths } from "./paths";
 import { isProcessAlive, isProcessNamed, readPidFile, sleep, terminate, waitForExit } from "./process";
 import { RpcClient, sharedClient } from "./rpc-client";
@@ -36,13 +36,15 @@ export interface EnsureResult {
 
 export interface LauncherConfig {
   paths: HelperPaths;
+  /** Development only: pass `--watch-editor`, so the panel reloads on every new editor build. */
+  watchEditor?: boolean;
   /** How long to wait for a freshly spawned helper to answer `system.ping`. */
   readyTimeoutMs?: number;
   client?: RpcClient;
 }
 
 /** Arguments from docs/architecture.md section 1. */
-export function helperArgs(paths: HelperPaths, options: EnsureOptions = {}): string[] {
+export function helperArgs(paths: HelperPaths, options: EnsureOptions = {}, watchEditor = false): string[] {
   const args = [
     "--support-dir",
     paths.supportDir,
@@ -53,6 +55,7 @@ export function helperArgs(paths: HelperPaths, options: EnsureOptions = {}): str
     "--editor-dir",
     paths.editorDir,
   ];
+  if (watchEditor) args.push("--watch-editor");
   if (options.show) args.push("--show");
   if (options.headless) args.push("--headless");
   return args;
@@ -82,12 +85,16 @@ export class HelperLauncher {
   readonly client: RpcClient;
   private readonly readyTimeoutMs: number;
   private readonly versionCache: string;
+  private readonly launchRecord: string;
+  private readonly watchEditor: boolean;
 
   constructor(config: LauncherConfig) {
     this.paths = config.paths;
     this.client = config.client ?? sharedClient(config.paths.socket);
     this.readyTimeoutMs = config.readyTimeoutMs ?? 3000;
+    this.watchEditor = config.watchEditor ?? false;
     this.versionCache = path.join(config.paths.runtimeDir, "helper-version.json");
+    this.launchRecord = path.join(config.paths.runtimeDir, "helper-launch.json");
   }
 
   /** Answers `system.ping` from a running helper, or null when none answers. Never starts one. */
@@ -107,16 +114,17 @@ export class HelperLauncher {
   async ensure(options: EnsureOptions = {}): Promise<EnsureResult> {
     await ensureRuntimeDir(this.paths.runtimeDir);
     const expected = await this.expectedVersion();
+    const launch = await this.launchKey();
 
     const running = await this.ping();
-    if (running && running.version === expected) {
+    if (running && running.version === expected && (await this.launchedAs(running.pid, launch))) {
       return { client: this.client, ...running, started: false };
     }
 
     return this.withLaunchLock(async () => {
       // Another command may have fixed things while we waited for the lock.
       const current = await this.ping();
-      if (current && current.version === expected) {
+      if (current && current.version === expected && (await this.launchedAs(current.pid, launch))) {
         return { client: this.client, ...current, started: false };
       }
       if (current) await this.stop(current.pid);
@@ -127,8 +135,38 @@ export class HelperLauncher {
       if (ready.version !== expected) {
         throw new HelperLaunchError(`The helper reports version ${ready.version}, expected ${expected}.`);
       }
+      await this.recordLaunch(ready.pid, launch);
       return { client: this.client, ...ready, started: true };
     });
+  }
+
+  /**
+   * What a running helper must have been started with to be reused: the binary (by checksum, so a
+   * rebuild with an unchanged version still counts as new) and the arguments that do not change
+   * per launch. A helper this launcher did not record is restarted once.
+   */
+  private async launchKey(): Promise<string> {
+    const checksum = await readExpectedChecksum(this.paths.binaryChecksum);
+    return JSON.stringify([checksum, this.paths.binary, ...helperArgs(this.paths, {}, this.watchEditor)]);
+  }
+
+  private async launchedAs(pid: number, key: string): Promise<boolean> {
+    try {
+      const record = JSON.parse(await fs.readFile(this.launchRecord, "utf8")) as { pid?: unknown; key?: unknown };
+      return record.pid === pid && record.key === key;
+    } catch {
+      return false;
+    }
+  }
+
+  private async recordLaunch(pid: number, key: string): Promise<void> {
+    const temp = `${this.launchRecord}.${process.pid}.tmp`;
+    try {
+      await fs.writeFile(temp, JSON.stringify({ pid, key }), { mode: 0o600 });
+      await fs.rename(temp, this.launchRecord);
+    } catch {
+      await fs.rm(temp, { force: true });
+    }
   }
 
   /** Graceful shutdown, then SIGTERM if the helper is still alive. */
@@ -167,7 +205,7 @@ export class HelperLauncher {
     await fs.mkdir(this.paths.supportDir, { recursive: true });
     await prepareBinary(this.paths.binary, this.paths.binaryChecksum);
 
-    const child = spawn(this.paths.binary, helperArgs(this.paths, options), {
+    const child = spawn(this.paths.binary, helperArgs(this.paths, options, this.watchEditor), {
       cwd: this.paths.supportDir,
       detached: true,
       stdio: "ignore",

@@ -66,6 +66,14 @@ copy scripts/prepare-assets.sh scripts/install-extension.sh scripts/update-exten
 copy assets/extension-icon.png assets/bin/OvernoteHelper assets/bin/OvernoteHelper.sha256 assets/editor
 [[ -d media ]] && copy media
 
+# scripts/dev.sh rebuilds the editor and helper from sources a release does not carry, so a
+# release keeps plain Raycast development for `npm run dev`.
+node -e '
+  const fs = require("fs");
+  const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  Object.assign(manifest.scripts, { predev: "bash scripts/prepare-assets.sh", dev: "ray develop" });
+  fs.writeFileSync(process.argv[1], JSON.stringify(manifest, null, 2) + "\n");' "$PKG/package.json"
+
 # Marks the assets as prebuilt, so prepare-assets.sh never tries to rebuild them. It also
 # records the release version (Check for Updates, update-extension.sh) and the database schema
 # the helper writes (the rollback guard in update-extension.sh).

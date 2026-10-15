@@ -163,9 +163,11 @@ public struct HelperArguments: Equatable, Sendable {
     public var headless = false
     /// Adds `test.*` socket methods for the end to end window checks. Not part of the contract.
     public var testHooks = false
+    /// Development only: reloads the editor when its build in `--editor-dir` changes.
+    public var watchEditor = false
 
     public static let usage = """
-        Usage: OvernoteHelper --support-dir <dir> [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--headless] [--test-hooks] [--version] [--schema-version]
+        Usage: OvernoteHelper --support-dir <dir> [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--watch-editor] [--headless] [--test-hooks] [--version] [--schema-version]
         """
 
     public struct ParseError: Error, CustomStringConvertible {
@@ -196,6 +198,7 @@ public struct HelperArguments: Equatable, Sendable {
             case "--schema-version": result.schemaVersion = true
             case "--headless": result.headless = true
             case "--test-hooks": result.testHooks = true
+            case "--watch-editor": result.watchEditor = true
             default:
                 // Ignore arguments AppKit or launchd may add, such as -psn_ or -NSDocumentRevisionsDebugMode.
                 if argument.hasPrefix("--") {

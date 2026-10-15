@@ -21,8 +21,16 @@ npm install
 npm run dev
 ```
 
-`npm run dev` builds the editor and the Swift helper, then runs the extension in Raycast development mode with live reload.
+`npm run dev` builds the editor and the Swift helper, then runs the extension in Raycast development mode, with every change live:
+
+- Extension code (`src/`) reloads in Raycast on save.
+- Editor code (`editor/`, `packages/core/`) rebuilds on save, and the open panel saves the note and reloads with the new build within about a second.
+- Helper code (`helper/`) rebuilds when it changes, and the next Raycast command restarts the helper.
+
 Bind a hotkey to **Toggle Overnote** in Raycast Settings to open the panel.
+The panel works on your real notes, as in any install.
+Stop with ⌃C: Raycast keeps the extension, still running this checkout's last build.
+To go back to a release, run `npm run install-extension` in the release folder.
 
 For editor work you often do not need Raycast at all:
 

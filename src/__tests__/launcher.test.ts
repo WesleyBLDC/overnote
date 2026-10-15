@@ -63,6 +63,16 @@ describe("helper launcher", () => {
     expect(isProcessAlive(old.pid)).toBe(false);
   });
 
+  it("restarts the helper when its binary is rebuilt with the same version", async () => {
+    const old = await makeLauncher().ensure();
+    expect((await makeLauncher().ensure()).started).toBe(false);
+    installFakeHelper(paths.binary.replace(/\/bin\/OvernoteHelper$/, ""), "rebuilt");
+    const next = await makeLauncher().ensure();
+    expect(next.started).toBe(true);
+    expect(next.version).toBe("1.0.0");
+    expect(isProcessAlive(old.pid)).toBe(false);
+  });
+
   it("falls back to SIGTERM when the old helper ignores system.shutdown", async () => {
     process.env.FAKE_HELPER_BEHAVIOR = "ignore-shutdown";
     const old = await makeLauncher().ensure();

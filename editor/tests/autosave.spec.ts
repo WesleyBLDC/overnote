@@ -81,6 +81,23 @@ test("hiding saves right away, outside changes rebase, note.new opens the new no
   await expect(editor(page)).toHaveText("Fresh");
 });
 
+test("a new editor build (development) saves the last keystroke, then reloads the page", async ({ page }) => {
+  await openHarness(page, ["Draft"]);
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" kept");
+  // The in-memory mock does not survive the reload, so the page reports what was saved as it unloads.
+  await page.evaluate(() => {
+    const { notes } = (window as unknown as { __overnoteMock: { store: { notes: Map<string, { text: string }> } } })
+      .__overnoteMock.store;
+    window.addEventListener("pagehide", () => console.log(`saved-at-unload:${[...notes.values()][0]?.text}`));
+  });
+  const unloadReport = page.waitForEvent("console", (message) => message.text().startsWith("saved-at-unload:"));
+  const reloaded = page.waitForEvent("load");
+  await emit(page, "editor.willReload", {});
+  expect((await unloadReport).text()).toBe("saved-at-unload:Draft kept");
+  await reloaded;
+});
+
 test("a failed autosave says so once while saving keeps failing, and the next save recovers", async ({ page }) => {
   await page.clock.install();
   await openHarness(page, ["Draft"]);

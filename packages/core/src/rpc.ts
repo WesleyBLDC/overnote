@@ -217,6 +217,7 @@ export const Event = {
   NoteNew: "note.new",
   NotesChanged: "notes.changed",
   SettingsChanged: "settings.changed",
+  EditorWillReload: "editor.willReload",
 } as const;
 export type EventName = (typeof Event)[keyof typeof Event];
 
@@ -230,4 +231,6 @@ export interface Events {
   "note.new": { note: Note };
   "notes.changed": { ids: NoteId[] };
   "settings.changed": Settings;
+  /** Development only (`--watch-editor`): the editor build changed; save, then reload the page. */
+  "editor.willReload": Empty;
 }

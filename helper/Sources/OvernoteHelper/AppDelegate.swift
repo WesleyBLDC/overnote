@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Prewarm: the panel and the web view exist and load now, hidden, so the first
         // toggle only has to order the panel in.
         controller.prewarm(dispatcher: runtime.dispatcher)
+        if runtime.arguments.watchEditor, let editorDir = runtime.arguments.editorDir {
+            controller.watchEditorBuild(directory: editorDir)
+        }
         if runtime.arguments.show {
             controller.show()
         }

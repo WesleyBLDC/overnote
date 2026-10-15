@@ -280,6 +280,9 @@ export function App({ api }: { api: Api }) {
       }),
       api.on("window.didHide", () => session.saveInBackground()),
       api.on("window.didResignKey", () => session.saveInBackground()),
+      // Development only: a new editor build is ready. Save first, so no keystroke is lost; the
+      // reloaded page opens the same note at the saved caret.
+      api.on("editor.willReload", () => void session.flush().finally(() => window.location.reload())),
     ];
     const onHide = () => {
       if (document.visibilityState === "hidden") session.saveInBackground();

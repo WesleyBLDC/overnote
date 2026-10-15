@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -74,4 +75,22 @@ export async function ensureRuntimeDir(dir: string, uid = os.userInfo().uid): Pr
 
 export function isErrno(error: unknown, code: string): boolean {
   return typeof error === "object" && error !== null && (error as NodeJS.ErrnoException).code === code;
+}
+
+/**
+ * The checkout's own `assets/` folder while `npm run dev` runs, so the helper and the editor are
+ * always the latest builds instead of the copies Raycast made at install time. `scripts/dev.sh`
+ * records it in `assets/dev.json`. A release (`assets/prebuilt.json`) never uses it, nor does a
+ * record whose folder has no helper binary.
+ */
+export function developmentAssetsPath(assetsPath: string): string | null {
+  if (existsSync(path.join(assetsPath, "prebuilt.json"))) return null;
+  try {
+    const record = JSON.parse(readFileSync(path.join(assetsPath, "dev.json"), "utf8")) as { assetsDir?: unknown };
+    const dir = record.assetsDir;
+    if (typeof dir !== "string" || !path.isAbsolute(dir)) return null;
+    return existsSync(path.join(dir, "bin", "OvernoteHelper")) ? dir : null;
+  } catch {
+    return null;
+  }
 }

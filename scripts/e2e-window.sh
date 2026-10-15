@@ -837,6 +837,27 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   const log = fs.readFileSync(`${TMP}/support-editor/helper.log`, "utf8");
   await check("every editor asset was served (no 404s)", () => assert.ok(!log.includes("asset not found"), log));
 
+  // Development (npm run dev): with --watch-editor, a new build of the editor reloads the page.
+  // The copy stands in for Vite's output; a changed index.html is what a rebuild produces.
+  const watchedEditor = `${TMP}/watched-editor`;
+  fs.cpSync(EDITOR_DIR, watchedEditor, { recursive: true });
+  args = [...argsFor(`${TMP}/support-watch`, watchedEditor), "--watch-editor"];
+  helper = await start();
+  const readyCount = async () =>
+    (await helper.call("test.bridgeCalls")).methods.filter((m) => m === "system.ready").length;
+  await until("the watched editor loads", readyCount, (n) => n === 1, PAGE_LOAD_MS);
+  fs.appendFileSync(`${watchedEditor}/index.html`, "\n<!-- rebuilt -->\n");
+  const readies = await poll(readyCount, (n) => n === 2, PAGE_LOAD_MS);
+  const watchEvents = (await helper.call("test.events")).map((e) => e.event);
+  const watchLog = fs.readFileSync(`${TMP}/support-watch/helper.log`, "utf8");
+  await check("--watch-editor: a new editor build makes the editor save and reload itself", () => {
+    assert.equal(readies, 2, "system.ready count");
+    assert.ok(watchEvents.includes("editor.willReload"), watchEvents.join(", "));
+    assert.ok(!watchLog.includes("did not reload itself"), "the helper had to reload the page");
+  });
+  await stop(helper);
+  helper = null;
+
   console.log(`[e2e] warm show round trip ${showMs.toFixed(1)} ms; panel visible ${(visibleTotal / 1000).toFixed(1)} s in total`);
   console.log(`[e2e] ${passed} window checks passed`);
 })().catch(async (error) => {
