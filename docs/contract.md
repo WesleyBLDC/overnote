@@ -103,7 +103,7 @@ interface Settings {
   escapeLosesFocus: boolean;       // default false: Esc hides the panel
   hideWhileScreenSharing: boolean; // default false
   zoom: number;                    // default 1.0, range 0.75 to 2.0, step 0.05
-  windowAutoSize: boolean;         // default true: height follows content; false keeps the user's height
+  windowAutoSize: boolean;         // default false (first open uses a roomy 640 x 560 pt panel); true: height follows content
   showFormatBar: boolean;          // default false
   countMode: "characters" | "words"; // default "characters"
   panelFrame: { x: number; y: number; width: number; height?: number;
@@ -126,6 +126,7 @@ The helper stores `NoteContent` verbatim.
 | `window.hide` | `{}` | `{ visible: false }` | |
 | `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped 128 to 860 pt times zoom. `temporary: true` (⌘K, browse, dialogs) applies even when windowAutoSize is off and is restored by the next non-temporary report |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
+| `window.setDragRegions` (bridge) | `{ rects: { x: number, y: number, width: number, height: number }[] }` | `{}` | CSS px rects (top-left origin, before zoom is applied by the helper: send rects already multiplied by zoom, in points) where a mouse down drags the window (empty toolbar area); the helper calls `performDrag(with:)` natively on mouse down inside them |
 | `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
 | `clipboard.copy` (bridge) | `{ text: string, html?: string }` | `{}` | Writes plain text plus optional HTML to the general pasteboard |
 | `file.saveAs` (bridge) | `{ suggestedName: string, content: string }` | `{ saved: boolean, path?: string }` | Native save panel; the helper sanitizes the suggested name |
@@ -172,7 +173,10 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - Zoom is applied by the editor in CSS; `window.resize.contentHeight` is in points (CSS px times zoom), measured from the content wrapper (never `documentElement.scrollHeight`).
 - While the ⌘K panel, browse, or a dialog is open the editor reports a larger `contentHeight` (about 34rem; 16rem for small popups) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
 - The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
-- The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. Minimum user size is 396 pt wide by 128 pt times zoom.
+- The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. ⌘W hides the panel (helper menu item, like closing a window in any app).
+- The helper gives the borderless panel generous resize hit zones: about 8 pt along edges and 16 pt at corners, with the matching resize cursors.
+- Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so ⌘K and browse never resize a roomy window).
+- The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath. Minimum user size is 396 pt wide by 128 pt times zoom.
 - The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 135 pt with the footer at the bottom.
 - Helper test-only flags: `--test-hooks` enables `test.*` socket methods.
 - The helper overlays an invisible 12 pt drag strip along the panel's top edge; the editor keeps about 12 pt of non-interactive top padding.
@@ -264,6 +268,8 @@ Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows t
 This lets deeplinks and quicklinks open a specific note or create one with text.
 
 ## Changelog
+
+- v2.8 (2026-10-15): from the user's visual review, windowAutoSize defaults off with a 640 x 560 pt first-open size; `window.setDragRegions`; ⌘W hides; larger resize hit zones; temporary growth never shrinks or resizes a big-enough panel; editor-owned darker body tint.
 
 - v2.7 (2026-10-14): per-display positions in panelFrame, `window.resize.temporary`, borderless panel with editor-drawn Close, ResizeObserver measuring, test hooks.
 
