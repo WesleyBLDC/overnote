@@ -1,4 +1,6 @@
-# Component contract (v1)
+# Component contract (v2)
+
+v2 (2026-10-14) applies spec/data.md section 11; see the changelog at the end.
 
 This is the single source of truth for how the four components talk to each other.
 Change it only through the orchestrator; if you need a change, write it in your final report under "Contract change requests" and implement against the current version meanwhile.
@@ -73,7 +75,7 @@ interface NoteContent {
   rawContent: string;          // JSON.stringify(ProseMirror doc JSON); canonical
   markdown: string;            // derived by @better-notes/core
   text: string;                // plain text, derived by core
-  title: string;               // derived by core: first non-empty line, trimmed, max 100 chars
+  title: string;               // derived by core: first line of the plain text, trimmed (may be empty)
 }
 
 interface Note extends NoteContent {
@@ -88,9 +90,11 @@ interface Note extends NoteContent {
 
 interface NoteSummary {        // list rows: no rawContent or markdown
   id: NoteId; title: string; preview: string /* first 200 chars of text */;
+  charCount: number;           // characters of text
   pinned: number | null; createdAt: Millis; updatedAt: Millis;
   deletedAt: Millis | null; lastAccessedAt: Millis | null;
 }
+// Display title everywhere: title, else first line of text trimmed, else "Untitled" (core.displayTitle).
 
 interface Settings {
   escapeLosesFocus: boolean;       // default false: Esc hides the panel
@@ -111,44 +115,56 @@ The helper stores `NoteContent` verbatim.
 |---|---|---|---|
 | `system.ping` | `{}` | `{ version: string, pid: number }` | Health check; the launcher restarts the helper on a version mismatch |
 | `system.shutdown` | `{}` | `{}` | Graceful exit |
-| `system.ready` (bridge) | `{}` | `{ settings: Settings, windowData: WindowData }` | Editor finished loading |
+| `system.ready` (bridge) | `{}` | `{ settings: Settings, windowData: WindowData }` | Editor finished loading; windowData is for the persisted current note |
 | `window.toggle` | `{}` | `{ visible: boolean }` | Show and focus, or hide |
 | `window.show` | `{ noteId?: NoteId }` | `{ visible: true }` | Shows the panel, optionally on a note (emits `note.open`) |
 | `window.hide` | `{}` | `{ visible: false }` | |
 | `window.resize` (bridge) | `{ contentHeight: number }` | `{}` | Content-driven height; the helper clamps it to screen bounds |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
-| `notes.create` | `NoteContent & { show?: boolean }` | `Note` | Becomes the current note; `show` opens the panel on it |
+| `notes.create` | `NoteContent & { show?: boolean }` | `Note` | Sets created/updated/lastAccessed to now; becomes the persisted current note; `show` opens the panel on it (emits `note.new`). Callers always send full content built with core |
 | `notes.get` | `{ id }` | `Note` | 404 if missing |
-| `notes.update` | `{ id } & Partial<NoteContent> & { caretPosition?: number }` | `Note` | Bumps `updatedAt` only when content fields change |
-| `notes.delete` | `{ id }` | `{}` | Soft delete (sets `deletedAt`) |
-| `notes.deleteAll` | `{}` | `{ count }` | Soft deletes every non-deleted note |
-| `notes.recover` | `{ id }` | `Note` | Clears `deletedAt` |
-| `notes.permanentlyDelete` | `{ id }` | `{}` | |
+| `notes.update` | `{ id, expectedUpdatedAt?: Millis } & Partial<NoteContent> & { caretPosition?: number }` | `{ status: "ok", note: Note } \| { status: "conflict", note: Note }` | Content fields set `updatedAt` to now (always, even if unchanged). Caret-only updates never change `updatedAt` and apply only to live notes. If `expectedUpdatedAt` is given and differs from the stored value, nothing is written and `conflict` returns the stored note |
+| `notes.delete` | `{ id }` | `{}` | Soft delete: sets `deletedAt` now, clears `pinned`, `updatedAt` = old + 1 ms |
+| `notes.deleteAll` | `{}` | `{ count }` | Same per note for every live note |
+| `notes.recover` | `{ id }` | `Note` | Clears `deletedAt` (pin stays cleared), `updatedAt` = old + 1 ms |
+| `notes.permanentlyDelete` | `{ id }` | `{}` | Only affects notes already in the trash; no-op on live notes |
 | `notes.emptyTrash` | `{}` | `{ count }` | |
-| `notes.duplicate` | `{ id }` | `Note` | The copy becomes current |
-| `notes.pin` | `{ id, beforeId?: NoteId }` | `Note` | Without `beforeId` it is appended to the end of the pinned list |
-| `notes.unpin` | `{ id }` | `Note` | |
-| `notes.list` | `{ limit?: number (50), cursor?: string, includeDeleted?: false }` | `{ items: NoteSummary[], nextCursor: string \| null }` | Order: pinned (by `pinned` asc), then the rest by `lastAccessedAt` desc, then `updatedAt` desc |
-| `notes.listDeleted` | `{ limit?, cursor? }` | same shape | Ordered by `deletedAt` desc |
-| `notes.search` | `{ query: string, limit?: number (50) }` | `{ items: (NoteSummary & { snippet: string })[] }` | FTS5 over title and text, prefix matching, title hits ranked first |
-| `notes.count` | `{}` | `{ count: number }` | Non-deleted notes |
-| `notes.setCurrent` | `{ id }` | `WindowData` | Records a visit in history and touches `lastAccessedAt` |
-| `notes.navigate` | `{ direction: "back" \| "forward" }` | `WindowData` | Moves through the visit history (persisted) |
-| `notes.windowData` | `{}` | `WindowData` | |
+| `notes.duplicate` | `{ id }` | `Note` | Fresh created/updated/lastAccessed, no pin, caret 0; becomes current |
+| `notes.pin` | `{ id }` | `Note` | Appends to the end of the pinned list: key = max pinned key + 1000 (first pin 1000). Does not change `updatedAt` |
+| `notes.unpin` | `{ id }` | `Note` | Does not change `updatedAt` |
+| `notes.movePinnedUp` / `notes.movePinnedDown` | `{ id }` | `{}` | Swap keys with the neighbor pin; no-op at the ends |
+| `notes.list` | `{ filter?: string, limit?: number (100), cursor?: string }` | `{ items: NoteSummary[], nextCursor: string \| null }` | Live notes. Order: pinned key asc (pinned first), then `updatedAt` desc, then `id` asc. Used by Search Notes |
+| `notes.browse` | `{ filter?: string, limit?: number (100), cursor?: string }` | same shape | Live notes. Order: pinned key asc, then `lastAccessedAt` desc, then `id` asc. With a filter, title matches come before text-only matches (each group in that order). Used by ⌘P |
+| `notes.listDeleted` | `{}` | `{ items: (NoteSummary & { markdown: string })[] }` | All trashed notes, `deletedAt` desc, no paging |
+| `notes.count` | `{}` | `{ count: number }` | Live notes |
+| `notes.setCurrentNote` | `{ noteId: NoteId }` | `{}` | Persists the current note id (settings key `currentNoteId`) |
+| `notes.touchAccessed` | `{ id }` | `{}` | Sets `lastAccessedAt` = now on a live note; no-op otherwise |
+| `notes.windowData` | `{ noteId?: NoteId }` | `WindowData` | For that note, or the persisted current note when omitted. If missing or deleted, falls back to the most recently updated live note. `current` is null only when no live notes exist |
 | `settings.get` | `{}` | `Settings` | |
 | `settings.set` | `Partial<Settings>` | `Settings` | Emits `settings.changed` |
 
+**Filter matching:** case-insensitive substring match on title or text, folding case for all of Unicode and removing diacritics (an intentional improvement over ASCII-only folding).
+The helper stores folded copies (`title_fold`, `text_fold`) and matches with an escaped `LIKE`.
+Cursors are opaque strings encoding the keyset (match group, pin key, order timestamp, id).
+
 ```ts
 interface WindowData {
-  current: Note | null;          // null when there are no notes
-  canGoBack: boolean;
-  canGoForward: boolean;
-  pinned: NoteSummary[];         // in pin order, at most 10 (⌘0 through ⌘9)
-  count: number;
+  current: Note | null;              // null only when no live notes exist
+  previousNoteId: NoteId | null;     // newer neighbor in updatedAt desc order
+  nextNoteId: NoteId | null;         // older neighbor in updatedAt desc order
+  pinnedShortcutNoteIds: NoteId[];   // pin order, at most 9 (⌘1 through ⌘9); ⌘0 is reset zoom
 }
 ```
 
-Purge rule: on startup, and every 24 h while running, notes with `deletedAt` older than 60 days are removed permanently.
+Purge rule: on startup, and every 24 h while running, notes with `deletedAt` strictly older than now minus 60 days are removed permanently.
+
+**Editor-owned behavior (no helper state):**
+- Back/forward history is two in-memory stacks in the editor (cap 100). Switching notes pushes the old current note on the back stack (skipping duplicates of the top) and clears forward. When a stack is empty, back goes to `previousNoteId` and forward to `nextNoteId`. Deleted ids are removed from both stacks.
+- Every switch calls `notes.touchAccessed` and `notes.setCurrentNote` after flushing pending edits (a failed flush cancels the switch).
+- ⌘N on a note whose text is blank only shows a "You already have an empty note" notice.
+- When `current` is null the editor creates a note immediately from the empty document.
+- Deleting the current note opens `nextNoteId`, else `previousNoteId`, else creates a fresh empty note. Delete All leaves one fresh empty note and clears history.
+- Content autosave and caret save are debounced 300 ms and flushed on switch, hide, and blur.
 
 ## 6. Database schema (owned by the helper)
 
@@ -163,6 +179,8 @@ CREATE TABLE notes (
   text             TEXT NOT NULL DEFAULT '',
   markdown         TEXT NOT NULL DEFAULT '',
   raw_content      TEXT NOT NULL,
+  title_fold       TEXT NOT NULL DEFAULT '',  -- folded copies for filter matching
+  text_fold        TEXT NOT NULL DEFAULT '',
   pinned           REAL,
   created_at       INTEGER NOT NULL,
   updated_at       INTEGER NOT NULL,
@@ -171,17 +189,8 @@ CREATE TABLE notes (
   caret_position   INTEGER
 ) STRICT, WITHOUT ROWID;
 
-CREATE INDEX notes_active_order ON notes (deleted_at, pinned, last_accessed_at DESC, updated_at DESC);
-
-CREATE VIRTUAL TABLE notes_fts USING fts5 (id UNINDEXED, title, text, tokenize = 'unicode61 remove_diacritics 2');
--- kept in sync by the repository inside the same transaction as each write
-
-CREATE TABLE history (
-  seq      INTEGER PRIMARY KEY AUTOINCREMENT,
-  note_id  TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-  visited_at INTEGER NOT NULL
-);
-CREATE TABLE history_cursor (k INTEGER PRIMARY KEY CHECK (k = 1), seq INTEGER);
+CREATE INDEX notes_list_order   ON notes (deleted_at, pinned, updated_at DESC, id);
+CREATE INDEX notes_browse_order ON notes (deleted_at, pinned, last_accessed_at DESC, id);
 
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
 ```
@@ -199,7 +208,8 @@ export function markdownToDoc(markdown: string): JSONContent;
 export function docToMarkdown(doc: JSONContent): string;
 export function docToPlainText(doc: JSONContent): string;
 export function docToHTML(doc: JSONContent): string;
-export function deriveTitle(doc: JSONContent): string;
+export function deriveTitle(doc: JSONContent): string;        // first line of plain text, trimmed
+export function displayTitle(n: { title: string; text: string }): string; // title, else first text line, else "Untitled"
 export function buildNoteContent(doc: JSONContent): NoteContent; // rawContent + markdown + text + title
 export function noteContentFromMarkdown(markdown: string): NoteContent;
 export type { Note, NoteSummary, NoteContent, Settings, WindowData, NoteId } from "./types";
@@ -212,8 +222,12 @@ export * as rpc from "./rpc";   // method name constants and param/result types 
 |---|---|---|---|
 | `toggle-notes` | Toggle Better Notes | no-view | Launch the helper if needed, then `window.toggle` |
 | `create-note` | Create Note | no-view | Optional `text` argument, then `fallbackText`, then selected text, then empty. `notes.create` with `show: true` |
-| `search-notes` | Search Notes | view | List with markdown detail; reads directly (read-only DB) and writes through the helper |
+| `search-notes` | Search Notes | view | List with markdown detail using `notes.list` with `filter` (or the read-only DB with the same order and matching); title matches are moved first within each page; writes through the helper |
 | `recently-deleted` | Recently Deleted Notes | view | Recover, delete permanently, empty trash |
 | `menu-bar` | Better Notes Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note; restarts a dead helper |
 
 No default hotkeys.
+
+## Changelog
+
+- v2 (2026-10-14): split `notes.list` / `notes.browse` with substring `filter` (Unicode and diacritic folding) and removed `notes.search` and FTS5; WindowData now carries neighbor ids and up to 9 pin shortcuts; history moved into the editor (removed `notes.navigate` and history tables); `notes.setCurrent` split into `notes.setCurrentNote` and `notes.touchAccessed`; `notes.windowData` takes an optional `noteId`; pin appends with +1000 keys and gained `movePinnedUp`/`movePinnedDown` (dropped `beforeId`); delete clears pins and steps `updatedAt` by 1 ms; optimistic `expectedUpdatedAt` on update with a conflict result; `permanentlyDelete` only on trashed notes; `listDeleted` unpaged with markdown; `charCount` on NoteSummary; title is the first line of plain text with `displayTitle` fallback.
