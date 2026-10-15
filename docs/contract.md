@@ -106,7 +106,8 @@ interface Settings {
   windowAutoSize: boolean;         // default true: height follows content; false keeps the user's height
   showFormatBar: boolean;          // default false
   countMode: "characters" | "words"; // default "characters"
-  panelFrame: { x: number; y: number; width: number; height?: number } | null; // y is the panel's TOP edge in AppKit global coordinates
+  panelFrame: { x: number; y: number; width: number; height?: number;
+                displays?: { [key: string]: { x: number; y: number } } } | null; // y is the TOP edge; displays keyed "<display uuid>@<w>x<h>"
 }
 ```
 
@@ -123,7 +124,7 @@ The helper stores `NoteContent` verbatim.
 | `window.toggle` | `{}` | `{ visible: boolean }` | Show and focus, or hide |
 | `window.show` | `{ noteId?: NoteId }` | `{ visible: true }` | Shows the panel, optionally on a note (emits `note.open`) |
 | `window.hide` | `{}` | `{ visible: false }` | |
-| `window.resize` (bridge) | `{ contentHeight: number }` | `{}` | Content-driven height; the helper clamps it to screen bounds |
+| `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped 128 to 860 pt times zoom. `temporary: true` (⌘K, browse, dialogs) applies even when windowAutoSize is off and is restored by the next non-temporary report |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
 | `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
 | `clipboard.copy` (bridge) | `{ text: string, html?: string }` | `{}` | Writes plain text plus optional HTML to the general pasteboard |
@@ -171,6 +172,9 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - Zoom is applied by the editor in CSS; `window.resize.contentHeight` is in points (CSS px times zoom), measured from the content wrapper (never `documentElement.scrollHeight`).
 - While the ⌘K panel, browse, or a dialog is open the editor reports a larger `contentHeight` (about 34rem; 16rem for small popups) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
 - The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
+- The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. Minimum user size is 396 pt wide by 128 pt times zoom.
+- The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 135 pt with the footer at the bottom.
+- Helper test-only flags: `--test-hooks` enables `test.*` socket methods.
 - The helper overlays an invisible 12 pt drag strip along the panel's top edge; the editor keeps about 12 pt of non-interactive top padding.
 - Back/forward history is two in-memory stacks in the editor (cap 100). Switching notes pushes the old current note on the back stack (skipping duplicates of the top) and clears forward. When a stack is empty, back goes to `previousNoteId` and forward to `nextNoteId`. Deleted ids are removed from both stacks.
 - Every switch calls `notes.touchAccessed` and `notes.setCurrentNote` after flushing pending edits (a failed flush cancels the switch).
@@ -260,6 +264,8 @@ Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows t
 This lets deeplinks and quicklinks open a specific note or create one with text.
 
 ## Changelog
+
+- v2.7 (2026-10-14): per-display positions in panelFrame, `window.resize.temporary`, borderless panel with editor-drawn Close, ResizeObserver measuring, test hooks.
 
 - v2.6 (2026-10-14): bridge `app.openURL`; `listDeleted` rows include `rawContent`; editor-driven temporary growth through `window.resize` (no separate minimum-height method); Edit menu and ⇧⌘V paste event. Deferred: ⌘, settings and ⇧⌘L quicklink from inside the panel.
 
