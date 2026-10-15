@@ -1,0 +1,91 @@
+/*
+ * Better Notes theme: every color and size token lives here.
+ * The native panel provides the vibrancy, so the page background stays transparent.
+ */
+:root {
+  color-scheme: light dark;
+  --zoom: 1;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+  --font-size: 14px;
+  --line-height: 1.55;
+
+  --accent: #0d8c7d;
+  --accent-soft: rgba(13, 140, 125, 0.14);
+  --accent-strong: #08715f;
+
+  --text: rgba(20, 22, 26, 0.92);
+  --text-secondary: rgba(20, 22, 26, 0.58);
+  --text-tertiary: rgba(20, 22, 26, 0.38);
+  --text-dimmed: rgba(20, 22, 26, 0.42);
+  --placeholder: rgba(20, 22, 26, 0.3);
+
+  --surface: transparent;
+  --surface-raised: rgba(255, 255, 255, 0.985);
+  --surface-hover: rgba(20, 22, 26, 0.06);
+  --surface-selected: rgba(13, 140, 125, 0.16);
+  --surface-code: rgba(20, 22, 26, 0.05);
+  --border: rgba(20, 22, 26, 0.1);
+  --border-strong: rgba(20, 22, 26, 0.18);
+  --shadow: 0 0.6rem 2rem rgba(10, 12, 16, 0.18), 0 0 0 0.5px rgba(10, 12, 16, 0.12);
+  --selection: rgba(13, 140, 125, 0.22);
+  --find-match: rgba(255, 196, 0, 0.35);
+  --find-active: rgba(255, 140, 0, 0.6);
+  --danger: #d13b3b;
+  --success: #1f9d55;
+
+  --code-keyword: #8b3fbf;
+  --code-string: #1f7a3a;
+  --code-number: #b35900;
+  --code-comment: rgba(20, 22, 26, 0.45);
+  --code-title: #1d5fbf;
+  --code-attr: #9a5b00;
+
+  --drag-strip: 12px;
+  --overlay-min-height: 34rem;
+  --popup-min-height: 16rem;
+  --quote-border: rgba(13, 140, 125, 0.45);
+  --radius-s: 0.3rem;
+  --radius-m: 0.5rem;
+  --radius-l: 0.75rem;
+  --list-gutter: 1.6rem;
+  --content-x: 1.15rem;
+  --harness-backdrop: linear-gradient(135deg, #e9eef2, #d9e4ea);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #3cc8b4;
+    --accent-soft: rgba(60, 200, 180, 0.16);
+    --accent-strong: #5fe0cc;
+
+    --text: rgba(240, 242, 245, 0.92);
+    --text-secondary: rgba(240, 242, 245, 0.58);
+    --text-tertiary: rgba(240, 242, 245, 0.36);
+    --text-dimmed: rgba(240, 242, 245, 0.4);
+    --placeholder: rgba(240, 242, 245, 0.28);
+
+    --surface-raised: rgba(38, 40, 44, 0.985);
+    --quote-border: rgba(60, 200, 180, 0.5);
+    --surface-hover: rgba(255, 255, 255, 0.07);
+    --surface-selected: rgba(60, 200, 180, 0.2);
+    --surface-code: rgba(255, 255, 255, 0.06);
+    --border: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --shadow: 0 0.6rem 2rem rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+    --selection: rgba(60, 200, 180, 0.3);
+    --find-match: rgba(255, 200, 0, 0.3);
+    --find-active: rgba(255, 150, 0, 0.55);
+    --danger: #ff6b6b;
+    --success: #4ade80;
+
+    --code-keyword: #d19bff;
+    --code-string: #8fd99c;
+    --code-number: #ffb86b;
+    --code-comment: rgba(240, 242, 245, 0.42);
+    --code-title: #82b6ff;
+    --code-attr: #f0c674;
+    --harness-backdrop: linear-gradient(135deg, #1d2226, #12171b);
+  }
+}
