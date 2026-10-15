@@ -105,7 +105,7 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, h
       if (direction === "up") await movePinnedUp(note.id);
       else await movePinnedDown(note.id);
       await onChange();
-      await showToast({ title: `Moved Note ${direction}` });
+      await showToast({ title: direction === "up" ? "Moved Note Up" : "Moved Note Down" });
     });
 
   const duplicate = () =>
@@ -150,7 +150,7 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, h
       if (isDetail) pop();
       await showToast({
         style: Toast.Style.Success,
-        title: count === 1 ? "Moved 1 note to Recently Deleted" : `Moved ${count} notes to Recently Deleted`,
+        title: count === 1 ? "Moved 1 Note to Recently Deleted" : `Moved ${count} Notes to Recently Deleted`,
       });
     });
 
@@ -241,6 +241,7 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, h
           onAction={duplicate}
         />
       </ActionPanel.Section>
+      <BackupActionsSection onRestored={onChange} />
       <ActionPanel.Section>
         <Action
           title="Delete Note"
@@ -257,7 +258,6 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, h
           onAction={removeAll}
         />
       </ActionPanel.Section>
-      <BackupActionsSection onRestored={onChange} />
     </ActionPanel>
   );
 }

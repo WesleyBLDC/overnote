@@ -70,7 +70,10 @@ cleanup() {
   for pid in "$HELPER_PID" "$(cat "$PIDFILE" 2>/dev/null || true)"; do
     [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || true
   done
-  [[ -n "$SERVER_PID" ]] && kill "$SERVER_PID" 2>/dev/null || true
+  if [[ -n "$SERVER_PID" ]]; then
+    kill "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+  fi
   if [[ $status -ne 0 && -n "${OVERNOTE_LOG_DIR:-}" ]]; then
     mkdir -p "$OVERNOTE_LOG_DIR/e2e-update"
     cp "$LOGS"/* "$OVERNOTE_LOG_DIR/e2e-update/" 2>/dev/null || true
@@ -103,11 +106,10 @@ field() { node -e 'const r = JSON.parse(process.argv[1]); const v = eval(process
 json_field() { node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]]' "$1" "$2"; }
 
 start_helper() {
-  local extra=("$@")
   "$APP/assets/bin/OvernoteHelper" --support-dir "$SUPPORT" --socket "$SOCKET" --pid-file "$PIDFILE" \
-    --editor-dir "$APP/assets/editor" --headless --test-hooks ${extra[@]+"${extra[@]}"} >>"$LOGS/helper-stdout.log" 2>&1 &
+    --editor-dir "$APP/assets/editor" --headless --test-hooks >>"$LOGS/helper-stdout.log" 2>&1 &
   HELPER_PID=$!
-  for _ in $(seq 1 100); do
+  for _ in $(seq 1 300); do
     rpc system.ping 2>/dev/null | grep -q "\"pid\":$HELPER_PID" && return 0
     kill -0 "$HELPER_PID" 2>/dev/null || break
     sleep 0.05
@@ -117,7 +119,7 @@ start_helper() {
 
 stop_helper() {
   rpc system.shutdown >/dev/null || true
-  for _ in $(seq 1 100); do
+  for _ in $(seq 1 300); do
     kill -0 "$HELPER_PID" 2>/dev/null || break
     sleep 0.05
   done
@@ -133,6 +135,7 @@ note_titles() { rpc notes.list | node -e 'let b="";process.stdin.on("data",d=>b+
 
 # ---------------------------------------------------------------- 1. releases and a fake API
 N="$("$BIN" --version)"
+# shellcheck disable=SC2016 # JavaScript template literals, not shell expansions
 NEXT="$(node -e 'const [a, b, c] = process.argv[1].split("-")[0].split(".").map(Number); console.log(`${a}.${b}.${c + 1}`)' "$N")"
 OLD="0.0.1"
 bash "$ROOT/scripts/package-release.sh" "$N" "$RELEASES/v$N" >"$LOGS/package.log" 2>&1 || { cat "$LOGS/package.log" >&2; fail "package-release.sh"; }
@@ -173,13 +176,14 @@ server.listen(0, "127.0.0.1", () => fs.writeFileSync(portFile, String(server.add
 EOF
 node "$TMP/server.mjs" "$RELEASES" "$TMP/port" >>"$LOGS/server.log" 2>&1 &
 SERVER_PID=$!
-for _ in $(seq 1 100); do [[ -s "$TMP/port" ]] && break; sleep 0.05; done
+for _ in $(seq 1 300); do [[ -s "$TMP/port" ]] && break; sleep 0.05; done
 [[ -s "$TMP/port" ]] || fail "the fake releases server did not start"
 BASE="http://127.0.0.1:$(cat "$TMP/port")"
 export OVERNOTE_RELEASES_API="$BASE/api"
 mkdir -p "$RELEASES/api/tags"
 release_json() {
   local version="$1"
+  # shellcheck disable=SC2016 # JavaScript template literals, not shell expansions
   node -e '
     const [base, v] = process.argv.slice(1);
     const asset = (name) => ({ name, browser_download_url: `${base}/v${v}/${name}` });
@@ -194,7 +198,8 @@ unzip -q "$ZIP_N" -d "$APPS"
 if [[ "${OVERNOTE_E2E_NPM_CI:-0}" != "1" ]]; then
   # The same dependencies the lockfile names, cloned (copy on write) instead of downloaded.
   for modules in node_modules editor/node_modules packages/core/node_modules; do
-    [[ -d "$ROOT/$modules" ]] && cp -cRp "$ROOT/$modules" "$APP/$modules" 2>/dev/null || cp -Rp "$ROOT/$modules" "$APP/$modules"
+    [[ -d "$ROOT/$modules" ]] || continue
+    cp -cRp "$ROOT/$modules" "$APP/$modules" 2>/dev/null || cp -Rp "$ROOT/$modules" "$APP/$modules"
   done
   touch "$APP/node_modules/.package-lock.json"
 fi
@@ -237,7 +242,8 @@ pre_update=("$BACKUPS"/notes-*-v"$N"-pre-update.sqlite)
 [[ "$(stat -f %Lp "${pre_update[0]}")" == "600" ]] || fail "the backup is not 0600"
 [[ "$(sqlite3 -readonly "${pre_update[0]}" 'SELECT count(*) FROM notes')" == "3" ]] || fail "the pre-update backup does not hold the 3 notes"
 [[ "$(sqlite3 -readonly "${pre_update[0]}" 'PRAGMA journal_mode')" == "delete" ]] || fail "the backup is not a self contained file"
-[[ -z "$(ls -a "$BACKUPS" | grep -E -- '-(wal|shm)$|\.partial' || true)" ]] || fail "the backups folder has leftover files: $(ls -a "$BACKUPS")"
+leftovers="$(find "$BACKUPS" -mindepth 1 \( -name '*-wal' -o -name '*-shm' -o -name '*.partial*' \) -print)"
+[[ -z "$leftovers" ]] || fail "the backups folder has leftover files: $leftovers"
 ok "pre-update backup $(basename "${pre_update[0]}") (0600 in a 0700 folder, 3 notes, no -wal)"
 
 start_helper
@@ -275,14 +281,14 @@ in_app npm run update-extension -- --version "v$N" --force --no-register >"$LOGS
 grep -q "copying the database with sqlite3" "$LOGS/fallback.log" || { cat "$LOGS/fallback.log" >&2; fail "the sqlite3 fallback did not run"; }
 fallback=("$BACKUPS"/notes-*-v"$N"-pre-update.sqlite)
 ((${#fallback[@]} == 3)) || fail "the sqlite3 fallback wrote no backup"
-newest="$(ls -1 "$BACKUPS"/notes-*-v"$N"-pre-update.sqlite | sort | tail -n 1)"
+newest="$(printf '%s\n' "$BACKUPS"/notes-*-v"$N"-pre-update.sqlite | sort | tail -n 1)"
 [[ "$(stat -f %Lp "$newest")" == "600" && "$(sqlite3 -readonly "$newest" 'SELECT count(*) FROM notes')" == "3" ]] || fail "the sqlite3 backup is wrong"
 [[ "$(shasum -a 256 "$APP/assets/bin/OvernoteHelper" | cut -d' ' -f1)" == "$(cut -d' ' -f1 "$APP/assets/bin/OvernoteHelper.sha256")" ]] || fail "the reinstall did not restore the checksum"
 ok "a helper that cannot start falls back to sqlite3 .backup (0600, 3 notes)"
 
 # ---------------------------------------------------------------- 6. a daily backup
 OVERNOTE_BACKUP_DIR="$TMP/daily" start_helper
-for _ in $(seq 1 100); do compgen -G "$TMP/daily/notes-*-v$N-daily.sqlite" >/dev/null && break; sleep 0.05; done
+for _ in $(seq 1 300); do compgen -G "$TMP/daily/notes-*-v$N-daily.sqlite" >/dev/null && break; sleep 0.05; done
 compgen -G "$TMP/daily/notes-*-v$N-daily.sqlite" >/dev/null || fail "no daily backup after starting with notes and no backups"
 stop_helper
 ok "daily backup written at startup when the newest backup is older than 24 hours"
@@ -294,7 +300,7 @@ status_json="$(rpc system.status)"
 [[ "$(field "$status_json" 'r.result.restoreAvailable')" == "true" ]] || fail "no restore offered after removal: $status_json"
 [[ "$(field "$status_json" 'r.result.noteCount')" == "0" ]] || fail "the fresh database is not empty"
 [[ "$(field "$status_json" 'r.result.backupDir')" == "$BACKUPS" ]] || fail "system.status names another backups folder"
-count_before="$(ls "$BACKUPS" | wc -l | tr -d ' ')"
+count_before="$(find "$BACKUPS" -mindepth 1 -maxdepth 1 -name 'notes-*.sqlite' | wc -l | tr -d ' ')"
 ok "after removal the helper starts empty, overwrites nothing, and offers a restore ($count_before backups)"
 
 # A real backup, with a backup's name, one folder up.

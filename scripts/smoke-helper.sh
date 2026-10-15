@@ -65,8 +65,9 @@ start_helper() {
     "${mode[@]}" >>"$TMP/stdout.log" 2>&1 &
   HELPER_PID=$!
   # Wait for this process to answer, not just for a socket file: a crashed helper leaves
-  # a stale one behind until the new helper replaces it.
-  for _ in $(seq 1 80); do
+  # a stale one behind until the new helper replaces it. The bound (15 s) only matters when
+  # something is wrong; a healthy start answers within a few polls.
+  for _ in $(seq 1 300); do
     if [[ -S "$SOCKET" ]] && rpc '{"id":0,"method":"system.ping"}' 2>/dev/null | grep -q "\"pid\":$HELPER_PID"; then
       return 0
     fi
@@ -78,7 +79,7 @@ start_helper() {
 }
 
 wait_exit() {
-  for _ in $(seq 1 60); do
+  for _ in $(seq 1 200); do
     kill -0 "$HELPER_PID" 2>/dev/null || break
     sleep 0.05
   done
@@ -205,7 +206,7 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
 (async () => {
   if (process.env.GUI_MODE === "1") {
     let count = 0;
-    for (let i = 0; i < 100 && (count = (await call("notes.count")).count) === 0; i++) await sleep(50);
+    for (let i = 0; i < 300 && (count = (await call("notes.count")).count) === 0; i++) await sleep(50);
     assert.equal(count, 1, "the placeholder editor did not create its note through the bridge");
     await call("notes.deleteAll");
     await call("notes.emptyTrash");

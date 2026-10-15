@@ -800,17 +800,23 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   await stop(helper);
 
   // A fresh start of the same install: auto-sizing is still on and nothing has reported yet.
+  const fallbackLines = () =>
+    fs.readFileSync(`${TMP}/support-quiet/helper.log`, "utf8").split("No height report from the editor").length - 1;
   helper = await start();
+  const fallbacksBefore = fallbackLines();
   await helper.call("window.show");
   const autoSizeOff = Date.now();
   await helper.call("settings.set", { windowAutoSize: false });
   s = await poll(quiet, (st) => st.visible);
   const offAfter = Date.now() - autoSizeOff;
   markVisible(s.visible);
+  // The setting change shows the panel, not the 1.5 s fallback: the helper logs every fallback,
+  // so no new log line proves it without racing the clock on a loaded runner.
+  const fallbacksAfter = fallbackLines();
   await check("turning auto-sizing off while a show waits shows the panel at once", () => {
     assert.equal(s.visible, true, "visible");
     assert.equal(s.showPending, false, "showPending");
-    assert.ok(offAfter < 1_000, `visible after ${offAfter} ms`);
+    assert.equal(fallbacksAfter, fallbacksBefore, `shown by the fallback timer after ${offAfter} ms`);
   });
   await helper.call("window.hide");
   markVisible(false);

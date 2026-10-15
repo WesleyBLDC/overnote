@@ -1,12 +1,13 @@
 /** Autosave, note creation, note switching, and outside changes (the editor-owned behavior in docs/architecture.md section 5). */
 import { expect, test } from "@playwright/test";
-import { calls, clearCalls, editor, emit, lastSave, openHarness, storedNotes } from "./harness";
+import { calls, clearCalls, editor, emit, lastSave, openHarness, pauseClock, storedNotes } from "./harness";
 
 test("an empty store gets a note, typing saves after about 300 ms with derived fields", async ({ page }) => {
-  // A fake clock makes the debounce exact instead of racing real time on slow machines.
+  // A paused fake clock makes the debounce exact instead of racing real time on slow machines.
   await page.clock.install();
   await openHarness(page);
   expect((await calls(page, "notes.create")).length).toBe(1);
+  await pauseClock(page);
   await clearCalls(page);
   await page.keyboard.type("Groceries");
   await page.keyboard.press("Enter");
@@ -39,6 +40,7 @@ test("switching notes flushes the last keystroke and restores the caret", async 
 });
 
 test("hiding saves right away, outside changes rebase, note.new opens the new note", async ({ page }) => {
+  await page.clock.install();
   await openHarness(page, ["Draft"]);
   const [note] = await storedNotes(page);
   await page.keyboard.press("Meta+ArrowDown");
@@ -46,7 +48,8 @@ test("hiding saves right away, outside changes rebase, note.new opens the new no
   await emit(page, "window.didHide", {});
   await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft more");
 
-  await page.waitForTimeout(1100);
+  // Past the typing window (TYPING_WINDOW_MS), so the outside change applies instead of waiting.
+  await page.clock.runFor(1100);
   await page.evaluate((id) => {
     const mock = (window as unknown as { __overnoteMock: { store: { externalUpdate(id: string, c: object): void } } })
       .__overnoteMock;
@@ -76,4 +79,41 @@ test("hiding saves right away, outside changes rebase, note.new opens the new no
   });
   await expect(page.getByTestId("app")).toHaveAttribute("data-note-id", created.id);
   await expect(editor(page)).toHaveText("Fresh");
+});
+
+test("a failed autosave says so once while saving keeps failing, and the next save recovers", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  const failNextSave = () =>
+    page.evaluate(() => {
+      (window as unknown as { __overnoteMock: { failNext: Record<string, number> } }).__overnoteMock.failNext[
+        "notes.update"
+      ] = 500;
+    });
+  const contentSaves = async () => (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params).length;
+  const failures = page.getByTestId("notices").getByText("Could not save note. Try again.");
+  await page.keyboard.press("Meta+ArrowDown");
+
+  await failNextSave();
+  await page.keyboard.type(" one");
+  await page.clock.runFor(350);
+  await expect(failures).toHaveCount(1);
+
+  // Still failing: no second notice for the same problem.
+  await failNextSave();
+  await page.keyboard.type(" two");
+  await page.clock.runFor(350);
+  await expect.poll(contentSaves).toBe(2);
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { __overnoteMock: { failNext: object } }).__overnoteMock.failNext),
+    )
+    .toEqual({});
+  await expect(failures).toHaveCount(1);
+
+  // The edits were kept, so the next save writes all of them.
+  await page.keyboard.type(" three");
+  await page.clock.runFor(350);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft one two three");
 });

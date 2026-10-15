@@ -38,10 +38,11 @@ step() {
   STEPS+=("$(printf '%4ss  %s' $((SECONDS - t0)) "$current")")
 }
 
+step "Check: version" bash scripts/check-version.sh "$(tr -d '[:space:]' <helper/VERSION)"
 step "Typecheck: extension" npx tsc --noEmit
 step "Typecheck: editor" npx tsc --noEmit -p editor
 step "Typecheck: core" npx tsc --noEmit -p packages/core
-step "Lint: ESLint, extension" npx eslint src
+step "Lint: Raycast lint, extension" npx ray lint
 step "Lint: ESLint, editor and core" npx eslint --max-warnings 0 editor packages/core
 step "Lint: Prettier" npx prettier --check src editor packages/core
 step "Build: editor" npm run build:editor
@@ -63,7 +64,8 @@ else
   printf '\n[verify] skipped: End to end: panel window (shows the panel; set OVERNOTE_WINDOW_E2E=1 to run it)\n'
   STEPS+=("   -   End to end: panel window (skipped)")
 fi
-step "Build: Raycast extension (ray build -e dist)" npx ray build -e dist -o "$RAY_OUT"
+step "Build: Raycast extension (ray build -e dist)" npx ray build -e dist -o "$RAY_OUT/raybuild"
+step "Package: Store copy" bash scripts/prepare-store.sh "$RAY_OUT/store"
 current=""
 
 printf '\n[verify] all steps passed in %ss\n' $((SECONDS - started))

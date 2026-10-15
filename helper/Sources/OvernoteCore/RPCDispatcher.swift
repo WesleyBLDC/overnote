@@ -95,17 +95,13 @@ public final class RPCDispatcher: Sendable {
             return ["directory": .string(store.directory), "items": .array(try store.list().map(\.json))]
         case "system.restoreBackup":
             let store = try requireBackups()
-            let path = try store.validatedRestorePath(try p.string("path"))
-            let name = (path as NSString).lastPathComponent
-            guard let restored = try store.list().first(where: { $0.name == name }) else {
-                throw RPCError.notFound("No backup at \(path)")
-            }
-            let safety = try store.create(reason: .preRestore) { try repository.backup(to: $0) }
-            let ids = try repository.restore(from: path)
+            let outcome = try store.restore(
+                try p.string("path"), write: { try repository.backup(to: $0) },
+                restore: { try repository.restore(from: $0) })
             // Every note may have changed, so the editor reloads even when the backup was empty.
-            await host.emit("notes.changed", ["ids": .array(ids.map(JSONValue.string))])
+            await host.emit("notes.changed", ["ids": .array(outcome.result.map(JSONValue.string))])
             return [
-                "restored": restored.json, "preRestoreBackup": safety.json,
+                "restored": outcome.restored.json, "preRestoreBackup": outcome.preRestore.json,
                 "noteCount": .int(Int64(try repository.count())),
             ]
         case "system.dismissRestoreOffer":

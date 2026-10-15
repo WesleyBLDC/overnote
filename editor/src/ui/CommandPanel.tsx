@@ -37,7 +37,8 @@ interface CommandPanelProps {
   onTogglePin: (id: NoteId, pinned: boolean) => Promise<void>;
   onDeleteNote: (id: NoteId) => Promise<void>;
   onRecover: (id: NoteId) => Promise<void>;
-  onPermanentlyDelete: (id: NoteId) => void;
+  /** Settles once the note is deleted or the confirmation is cancelled. */
+  onPermanentlyDelete: (id: NoteId) => Promise<void>;
   onPreview: (note: rpc.DeletedItem) => void;
 }
 
@@ -418,8 +419,7 @@ export function CommandPanel(props: CommandPanelProps) {
                         aria-label="Delete Permanently"
                         onClick={(event) => {
                           event.stopPropagation();
-                          props.onPermanentlyDelete(note.id);
-                          setTimeout(() => setVersion((v) => v + 1), 300);
+                          void props.onPermanentlyDelete(note.id).then(() => setVersion((v) => v + 1));
                         }}
                       >
                         <Icon name="trash" />

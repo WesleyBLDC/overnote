@@ -45,7 +45,7 @@ Add `?seed=empty` to the URL to start with no notes.
 | `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/` |
 | `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository |
 | `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
-| `scripts/` | Helper build, the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, and release packaging and version checks |
+| `scripts/` | Helper build, the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`) |
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
 | `assets/` | The icon, plus the built editor and helper (generated, not committed) |
 | `media/` | README screenshots |
@@ -83,7 +83,7 @@ npx playwright install webkit chromium   # once
 npm run verify
 ```
 
-`npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, and builds the extension, stopping at the first failing step.
+`npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, builds the extension, and assembles the Store copy, stopping at the first failing step.
 Playwright needs both WebKit (the engine of the native panel, which runs every editor flow) and Chromium (a second engine check of the shipped bundle).
 The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so `npm run verify` skips it on a workstation and runs it in CI.
 Set `OVERNOTE_WINDOW_E2E=1` to run it locally, or `OVERNOTE_WINDOW_E2E=0` to skip it even in CI.
@@ -91,7 +91,7 @@ Set `OVERNOTE_WINDOW_E2E=1` to run it locally, or `OVERNOTE_WINDOW_E2E=0` to ski
 To run one suite at a time:
 
 ```sh
-npm run lint
+npm run lint                     # ray lint: manifest, ESLint, and Prettier for the extension
 npx eslint editor packages/core  # editor and core lint
 npm run typecheck
 npm test                         # extension unit tests and helper socket tests
@@ -112,7 +112,7 @@ If you see one, even outside your change, please fix it or open an issue.
 
 ## Style
 
-- Formatting and linting follow `npm run lint` (Raycast's ESLint and Prettier config) for the extension in `src/`.
+- Formatting and linting follow `npm run lint` (`ray lint`: Raycast's manifest checks, ESLint, and Prettier) for the extension in `src/`.
 - The editor and `@overnote/core` use the same Prettier config and the root `eslint.config.js`, with typescript-eslint and the React hooks rules: `npx eslint editor packages/core` and `npx prettier --check editor packages/core`.
 - Markdown files are not formatted by Prettier (`.prettierignore`), and the serialization fixtures are never reformatted.
 - In Markdown docs, put each sentence on its own line, and do not use dashes as punctuation (hyphens in compound words are fine).
@@ -133,7 +133,7 @@ If you see one, even outside your change, please fix it or open an issue.
 2. Once agreed, update `docs/architecture.md` in the same pull request as the code, and bump its protocol version as its Protocol versioning section describes.
 3. Update every caller and the mock bridge (`editor/src/dev/`) so both sides match, and cover the change with end-to-end tests.
 
-If user-visible behavior changes, update `README.md` and add a line to `CHANGELOG.md` as well.
+If user-visible behavior changes, update `README.md` too, and describe the change in the pull request; the maintainer keeps `CHANGELOG.md`.
 
 ## Questions
 

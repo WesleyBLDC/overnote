@@ -150,7 +150,7 @@ final class HelperRuntime {
 
     private func fail(_ message: String) -> Never {
         logger.log(message)
-        FileHandle.standardError.write(Data((message + "\n").utf8))
+        try? FileHandle.standardError.write(contentsOf: Data((message + "\n").utf8))
         server?.stop()
         lock?.release()
         logger.close()

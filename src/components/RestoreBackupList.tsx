@@ -12,75 +12,60 @@ import {
 } from "@raycast/api";
 import { showFailureToast, useCachedPromise } from "@raycast/utils";
 
-import { backUpNow, listBackups, restoreBackup, revealBackupsFolder } from "../api/backups";
+import { listBackups, restoreBackup } from "../api/backups";
 import { backupDate, backupReasonLabel, formatBytes } from "../domain/format";
 import type { BackupInfo } from "../domain/types";
+import { BackUpNowAction, RevealBackupsAction } from "./BackupBasicActions";
 
 export interface RestoreBackupListProps {
   /** Called after a restore, so the caller can reload its notes. */
   onRestored?: () => Promise<unknown> | void;
+  /** True when this list is the command's root view (the menu bar's restore item), not a pushed one. */
+  isRoot?: boolean;
 }
 
 /** Every backup, newest first; restoring one asks for confirmation and backs up the current notes first. */
-export function RestoreBackupList({ onRestored }: RestoreBackupListProps) {
+export function RestoreBackupList({ onRestored, isRoot }: RestoreBackupListProps) {
   const { pop } = useNavigation();
   const { data: backups = [], isLoading, revalidate } = useCachedPromise(listBackups, [], { keepPreviousData: true });
 
   async function restore(backup: BackupInfo) {
+    const confirmed = await confirmAlert({
+      title: "Restore Notes from Backup?",
+      message: `Every note is replaced by the notes from ${backupDate(backup.createdAt)}. Your current notes are backed up first, so this can be undone by restoring that backup.`,
+      icon: { source: Icon.ArrowCounterClockwise, tintColor: Color.Orange },
+      primaryAction: { title: "Restore", style: Alert.ActionStyle.Destructive },
+    });
+    if (!confirmed) return;
+    const toast = await showToast({ style: Toast.Style.Animated, title: "Restoring Notes" });
     try {
-      const confirmed = await confirmAlert({
-        title: "Restore Notes from Backup?",
-        message: `Every note is replaced by the notes from ${backupDate(backup.createdAt)}. Your current notes are backed up first, so this can be undone by restoring that backup.`,
-        icon: { source: Icon.ArrowCounterClockwise, tintColor: Color.Orange },
-        primaryAction: { title: "Restore", style: Alert.ActionStyle.Destructive },
-      });
-      if (!confirmed) return;
-      const toast = await showToast({ style: Toast.Style.Animated, title: "Restoring Notes" });
       const result = await restoreBackup(backup.path);
       toast.style = Toast.Style.Success;
       toast.title = "Restored Notes";
       toast.message = `${result.noteCount === 1 ? "1 note" : `${result.noteCount} notes`} from ${backupDate(backup.createdAt)}`;
       await onRestored?.();
-      pop();
+      if (isRoot) await revalidate();
+      else pop();
     } catch (error) {
+      await toast.hide();
       await showFailureToast(error, { title: "Could not restore the backup" });
     }
   }
 
-  async function backUp() {
-    try {
-      const backup = await backUpNow();
-      await revalidate();
-      await showToast({ style: Toast.Style.Success, title: "Backed Up Notes", message: backup.name });
-    } catch (error) {
-      await showFailureToast(error, { title: "Could not back up the notes" });
-    }
-  }
-
-  async function reveal() {
-    try {
-      await revealBackupsFolder();
-    } catch (error) {
-      await showFailureToast(error, { title: "Could not open the backups folder" });
-    }
-  }
-
   return (
-    <List isLoading={isLoading} navigationTitle="Restore Notes from Backup" searchBarPlaceholder="Filter backups">
+    <List
+      isLoading={isLoading}
+      navigationTitle={isRoot ? undefined : "Restore Notes from Backup"}
+      searchBarPlaceholder="Filter backups"
+    >
       <List.EmptyView
         icon={Icon.HardDrive}
         title="No Backups"
-        description="Overnote backs up your notes every day, and before every update and restore."
+        description="Overnote backs up your notes every day, and before every restore and database upgrade."
         actions={
           <ActionPanel>
-            <Action
-              // "Back Up" is the verb; the title-case rule would lowercase "Up" as a preposition.
-              // eslint-disable-next-line @raycast/prefer-title-case
-              title="Back Up Notes Now"
-              icon={Icon.SaveDocument}
-              onAction={backUp}
-            />
-            <Action title="Reveal Backups Folder" icon={Icon.Finder} onAction={reveal} />
+            <BackUpNowAction onBackedUp={revalidate} />
+            <RevealBackupsAction />
           </ActionPanel>
         }
       />
@@ -96,13 +81,7 @@ export function RestoreBackupList({ onRestored }: RestoreBackupListProps) {
             <ActionPanel>
               <Action title="Restore This Backup" icon={Icon.ArrowCounterClockwise} onAction={() => restore(backup)} />
               <Action.ShowInFinder path={backup.path} />
-              <Action
-                // "Back Up" is the verb; the title-case rule would lowercase "Up" as a preposition.
-                // eslint-disable-next-line @raycast/prefer-title-case
-                title="Back Up Notes Now"
-                icon={Icon.SaveDocument}
-                onAction={backUp}
-              />
+              <BackUpNowAction onBackedUp={revalidate} />
             </ActionPanel>
           }
         />

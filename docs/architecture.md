@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v2.9 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v2.10 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -47,7 +47,7 @@ The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups fold
 - `touchAccessed` on a missing id is a silent no-op; `permanentlyDelete` on a missing id is 404; `window.show {noteId}` is 404 for a missing note and persists it as current.
 - `notes.update` sets `updatedAt` to max(now, old + 1) so same-millisecond edits still change it.
 - The helper also accepts `--headless` (no window) for smoke tests and CI.
-- Clients must time out after 3 s (10 s for `system.shutdown`, 60 s for `system.backup` and `system.restoreBackup`).
+- Clients must time out after 3 s (10 s for `system.shutdown`, 60 s for `system.backup` and `system.restoreBackup`, and 30 min for `file.saveAs`, which waits for the person in a save panel).
 
 ## 3. Bridge protocol (editor ⇄ helper)
 
@@ -138,7 +138,7 @@ The helper stores `NoteContent` verbatim.
 | `window.setDragRegions` (bridge) | `{ rects: { x: number, y: number, width: number, height: number }[] }` | `{}` | Points (CSS px times zoom), top-left origin, relative to the web view. A mouse down inside drags the window natively (title-bar behavior: it also works as the first click into an unfocused panel) |
 | `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
 | `clipboard.copy` (bridge) | `{ text: string, html?: string }` | `{}` | Writes plain text plus optional HTML to the general pasteboard |
-| `file.saveAs` (bridge) | `{ suggestedName: string, content: string }` | `{ saved: boolean, path?: string }` | Native save panel; the helper sanitizes the suggested name |
+| `file.saveAs` (bridge) | `{ suggestedName: string, content: string }` | `{ saved: boolean, path?: string }` | Native save panel; the helper sanitizes the suggested name and keeps it within 240 UTF-8 bytes, extension included |
 | `notes.create` | `NoteContent & { show?: boolean }` | `Note` | Sets created/updated/lastAccessed to now; becomes the persisted current note; `show` opens the panel on it (emits `note.new`). Callers always send full content built with core |
 | `notes.get` | `{ id }` | `Note` | 404 if missing |
 | `notes.update` | `{ id, expectedUpdatedAt?: Millis } & Partial<NoteContent> & { caretPosition?: number }` | `{ status: "ok", note: Note } \| { status: "conflict", note: Note }` | Content fields set `updatedAt` to now (always, even if unchanged). Caret-only updates never change `updatedAt` and apply only to live notes. If `expectedUpdatedAt` is given and differs from the stored value, nothing is written and `conflict` returns the stored note |
@@ -162,8 +162,10 @@ The helper stores `NoteContent` verbatim.
 | `settings.set` | `Partial<Settings>` | `Settings` | Emits `settings.changed` |
 
 **Filter matching:** case-insensitive substring match on title or text, folding case for all of Unicode and removing diacritics (an intentional improvement over ASCII-only folding).
-**Fold rule (exact, identical in TS and Swift):** Unicode NFKD normalization, then remove every scalar whose general category is a mark (Mn, Mc, Me), then lowercase with the root locale (TS `toLowerCase()`, Swift `lowercased()`). Apply the same fold to the query.
-**charCount** is the number of Unicode code points in `text` (SQLite `length(text)`, Swift `unicodeScalars.count`). The editor footer counts grapheme clusters separately.
+**Fold rule (exact, identical in TS and Swift):** Unicode NFKD normalization, then remove every scalar whose general category is a mark (Mn, Mc, Me), then lowercase with the root locale (TS `toLowerCase()`, Swift `lowercased()`).
+Apply the same fold to the query.
+**charCount** is the number of Unicode code points in `text` (SQLite `length(text)`, Swift `unicodeScalars.count`).
+The editor footer counts grapheme clusters separately.
 The helper stores folded copies (`title_fold`, `text_fold`) and matches with an escaped `LIKE`.
 Cursors are opaque strings encoding the keyset (match group, pin key, order timestamp, id); a cursor is only valid for the source that issued it (helper or read-only fallback).
 
@@ -201,20 +203,27 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - While the ⌘K panel, browse, or a dialog is open the editor reports a larger `contentHeight` (about 34rem; 16rem for small popups) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
 - The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
 - The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. ⌘W hides the panel (helper menu item, like closing a window in any app).
-- The helper gives the borderless panel generous resize hit zones: 8 pt along edges and 16 pt squares at corners, with the matching resize cursors. The panel has no `.resizable` style; these zones do all user resizing, and the top 8 pt of the drag strip is a resize zone. Keep interactive controls at least 16 pt from the panel corners.
+- The helper gives the borderless panel generous resize hit zones: 8 pt along edges and 16 pt squares at corners, with the matching resize cursors.
+  The panel has no `.resizable` style; these zones do all user resizing, and the top 8 pt of the drag strip is a resize zone.
+  Keep interactive controls at least 16 pt from the panel corners.
 - Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so ⌘K and browse never resize a roomy window).
-- The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath. Minimum user size is 396 pt wide by 128 pt times zoom.
+- The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath.
+  Minimum user size is 396 pt wide by 128 pt times zoom.
 - The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 139 pt with the footer at the bottom.
 - With windowAutoSize on and no normal `window.resize` report yet (a cold start, for example `--show`), a show waits with the panel hidden for that first report, up to 1.5 s, and then orders the panel in at the reported height, so it never flashes the default height.
   A temporary report does not end the wait.
   While it waits, `window.toggle` cancels the show (result `visible: false`), `window.hide` cancels it too, `window.show { noteId }` still emits `note.open`, and turning windowAutoSize off shows the panel at once.
 - Helper test-only flags: `--test-hooks` enables `test.*` socket methods.
 - The helper overlays an invisible 12 pt drag strip along the panel's top edge; the editor keeps about 12 pt of non-interactive top padding.
-- Back/forward history is two in-memory stacks in the editor (cap 100). Switching notes pushes the old current note on the back stack (skipping duplicates of the top) and clears forward. When a stack is empty, back goes to `previousNoteId` and forward to `nextNoteId`. Deleted ids are removed from both stacks.
+- Back/forward history is two in-memory stacks in the editor (cap 100).
+  Switching notes pushes the old current note on the back stack (skipping duplicates of the top) and clears forward.
+  When a stack is empty, back goes to `previousNoteId` and forward to `nextNoteId`.
+  Deleted ids are removed from both stacks.
 - Every switch calls `notes.touchAccessed` and `notes.setCurrentNote` after flushing pending edits (a failed flush cancels the switch).
 - ⌘N on a note whose text is blank only shows a "You already have an empty note" notice.
 - When `current` is null the editor creates a note immediately from the empty document.
-- Deleting the current note opens `nextNoteId`, else `previousNoteId`, else creates a fresh empty note. Delete All leaves one fresh empty note and clears history.
+- Deleting the current note opens `nextNoteId`, else `previousNoteId`, else creates a fresh empty note.
+  Delete All leaves one fresh empty note and clears history.
 - Content autosave and caret save are debounced 300 ms and flushed on switch, hide, and blur.
 
 ## 6. Database schema (owned by the helper)
@@ -291,7 +300,7 @@ export * as rpc from "./rpc";
 | `search-notes` | Search Notes | view | List with markdown detail using `notes.list` with `filter` (or the read-only DB with the same order and matching); title matches are moved first within each page; writes through the helper |
 | `recently-deleted` | Recently Deleted Notes | view | Recover, delete permanently, empty trash |
 | `menu-bar` | Overnote Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note, the backup actions, and the restore offer; restarts a dead helper |
-| `check-for-updates` | Check for Updates | no-view | Reads the version from `assets/prebuilt.json` (the helper's version in a source checkout), asks `https://api.github.com/repos/WesleyBLDC/overnote/releases/latest` with a 5 s timeout, compares semver, and shows a HUD. When newer, copies `cd '<installDir>' && npm run update-extension` to the clipboard; it never runs it |
+| `check-for-updates` | Check for Updates | no-view | Reads the version from `assets/prebuilt.json` (the helper's version in a source checkout), asks `https://api.github.com/repos/WesleyBLDC/overnote/releases/latest` with a 5 s timeout, compares semver, and shows a HUD. When newer, copies `cd '<installDir>' && npm run update-extension` to the clipboard; it never runs it. Not part of the Store copy |
 
 Search Notes and the menu bar both offer **Back Up Notes Now**, **Restore Notes from Backup** (a list of backups, restored after a `confirmAlert`), and **Reveal Backups Folder**.
 While `system.status` reports `restoreAvailable`, Search Notes shows **Restore Notes from Backup** as its first item (with a Dismiss action), and the menu bar shows it at the top.
@@ -318,6 +327,7 @@ Removing the extension can remove that folder, so backups live outside it.
   `daily` and `pre-migration` skip a database with no notes (live or trashed); the other reasons always write.
 - `pre-migration`: before applying any migration to a database that has notes; if that backup fails, the helper does not migrate and does not start.
 - Retention, after every backup: keep the newest 10, plus the newest backup of each of the last 4 ISO weeks in UTC (the current week and the 3 before it); delete the rest, and partial files older than an hour.
+  A restore holds off pruning until it is done, so its `pre-restore` backup never removes the backup being restored.
 
 **Restore offer.**
 When the helper starts and `notes.sqlite` does not exist while the backups folder holds at least one backup (typically after the extension was removed and installed again), it creates an empty database, overwrites nothing, and stores the settings row `restoreOffer = "1"`.
@@ -327,7 +337,8 @@ When the helper starts and `notes.sqlite` does not exist while the backups folde
 **Release metadata.**
 `scripts/package-release.sh` records `version` (the tag) and `schemaVersion` (`OvernoteHelper --schema-version`) in `assets/prebuilt.json`.
 Releases without `schemaVersion` wrote schema 1.
-On tag builds, `scripts/check-version.sh` checks that the tag, `helper/VERSION`, `HelperVersion.current`, the newest `CHANGELOG.md` heading, and the zip's `prebuilt.json` agree.
+On tag builds, `scripts/check-version.sh` checks that the tag is semver and that the tag, `helper/VERSION`, `HelperVersion.current`, and the zip's `prebuilt.json` agree.
+`scripts/prepare-store.sh` writes the same file into the Raycast Store copy, with `"channel": "store"`.
 
 **Updates.** `npm run update-extension` (`scripts/update-extension.sh`) runs in an installed release folder:
 1. Reads the installed version from `assets/prebuilt.json` (it refuses a folder without one, or a git checkout).
@@ -336,13 +347,17 @@ On tag builds, `scripts/check-version.sh` checks that the tag, `helper/VERSION`,
 4. Backs up with `system.backup { reason: "pre-update" }`, starting the installed helper headless first when none answers; if the helper cannot start, it copies the database with `sqlite3 .backup` into the same folder under the same naming.
 5. Stops the helper with `system.shutdown`, then SIGTERM to the pid in the pid file.
 6. Replaces the folder's files with `rsync --checksum --delete`, excluding `node_modules`, and never touches the support folder or the backups folder (it refuses to run if either is inside the install folder); a changed lockfile forces `npm ci`.
+   `assets/prebuilt.json` is copied last, so an interrupted update still reads as the old version and running it again finishes it.
+   It then stops any helper Raycast started meanwhile, so the next command starts the new one.
 7. Runs the new `scripts/install-extension.sh` and prints the old and new versions.
+
+Only HTTPS is allowed for the API and the downloads (redirects included), unless `OVERNOTE_RELEASES_API` points at a test server.
 
 The support, runtime, and backups folders default to the real ones and can be overridden with `OVERNOTE_SUPPORT_DIR`, `OVERNOTE_RUNTIME_DIR`, and `OVERNOTE_BACKUP_DIR`, which `scripts/e2e-update.sh` points at temporary folders.
 
 ## Protocol versioning
 
-The protocol described here is v2.9 (v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v2.10 (v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.

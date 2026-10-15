@@ -91,6 +91,8 @@ export class NoteSession {
   private lastEditAt = Number.NEGATIVE_INFINITY;
   private loading = false;
   private chain: Promise<boolean> = Promise.resolve(true);
+  /** True after a background save failed, until one succeeds, so the failure is reported once. */
+  private backgroundSaveFailing = false;
   private transition = 0;
 
   constructor(options: SessionOptions) {
@@ -178,8 +180,30 @@ export class NoteSession {
     if (this.timer !== null) this.clearTimer(this.timer);
     this.timer = this.setTimer(() => {
       this.timer = null;
-      void this.flush();
+      this.saveInBackground();
     }, this.debounceMs);
+  }
+
+  /**
+   * Saves without anyone waiting for the result (autosave, hide, blur). The first failure shows a
+   * notice; later ones stay quiet until a save succeeds again, so typing never repeats it.
+   */
+  saveInBackground(): void {
+    void this.flush().then((ok) => {
+      if (!ok && !this.backgroundSaveFailing) this.notify("Could not save note. Try again.", "error");
+      this.backgroundSaveFailing = !ok;
+    });
+  }
+
+  /** Runs a person's action; a failure becomes an error notice instead of an unhandled rejection. */
+  private async guard(what: string, work: () => Promise<boolean>): Promise<boolean> {
+    try {
+      return await work();
+    } catch (error) {
+      console.error(`[session] ${what} failed`, error);
+      this.notify(`Could not ${what}. Try again.`, "error");
+      return false;
+    }
   }
 
   /** Saves pending content and caret now. Resolves false when the save failed. */
@@ -306,7 +330,11 @@ export class NoteSession {
    * Flushes, then switches to `id`. `commit` updates the history stacks once the switch is certain.
    * A newer switch cancels an older one that is still waiting.
    */
-  private async switchTo(id: NoteId, commit: HistoryCommit | null): Promise<boolean> {
+  private switchTo(id: NoteId, commit: HistoryCommit | null): Promise<boolean> {
+    return this.guard("open the note", () => this.switchToNow(id, commit));
+  }
+
+  private async switchToNow(id: NoteId, commit: HistoryCommit | null): Promise<boolean> {
     this.setPaused(false);
     const token = ++this.transition;
     if (!(await this.flush())) {
@@ -382,7 +410,11 @@ export class NoteSession {
   }
 
   /** ⌘N: refuses on a blank note, otherwise creates an empty note. */
-  async newNote(): Promise<boolean> {
+  newNote(): Promise<boolean> {
+    return this.guard("create a note", () => this.newNoteNow());
+  }
+
+  private async newNoteNow(): Promise<boolean> {
     if (this.state.current && this.isBlank()) {
       this.notify("You already have an empty note", "info");
       return false;
@@ -398,7 +430,11 @@ export class NoteSession {
   }
 
   /** ⌘D: the copy becomes current and is pushed onto history. */
-  async duplicate(): Promise<boolean> {
+  duplicate(): Promise<boolean> {
+    return this.guard("duplicate the note", () => this.duplicateNow());
+  }
+
+  private async duplicateNow(): Promise<boolean> {
     const note = this.state.current;
     if (!note || this.isBlank()) return false;
     if (!(await this.flush())) {
@@ -414,7 +450,11 @@ export class NoteSession {
   }
 
   /** ⌃X: no confirmation; opens the older neighbor, else the newer, else a fresh note. */
-  async deleteCurrent(): Promise<boolean> {
+  deleteCurrent(): Promise<boolean> {
+    return this.guard("delete the note", () => this.deleteCurrentNow());
+  }
+
+  private async deleteCurrentNow(): Promise<boolean> {
     const note = this.state.current;
     if (!note) return false;
     const token = ++this.transition;
@@ -439,7 +479,11 @@ export class NoteSession {
   }
 
   /** ⌃⇧X after the UI confirmed: everything goes to the trash, one fresh note remains. */
-  async deleteAll(): Promise<boolean> {
+  deleteAll(): Promise<boolean> {
+    return this.guard("delete all notes", () => this.deleteAllNow());
+  }
+
+  private async deleteAllNow(): Promise<boolean> {
     const token = ++this.transition;
     if (!(await this.flush())) {
       this.notify("Could not save note. Try again.", "error");
@@ -454,7 +498,11 @@ export class NoteSession {
   }
 
   /** ⇧⌘P on the current note. */
-  async togglePin(): Promise<boolean> {
+  togglePin(): Promise<boolean> {
+    return this.guard("pin the note", () => this.togglePinNow());
+  }
+
+  private async togglePinNow(): Promise<boolean> {
     const note = this.state.current;
     if (!note) return false;
     const pinned = note.pinned === null;
@@ -481,7 +529,8 @@ export class NoteSession {
   /** notes.changed: data changed through the socket. */
   async handleNotesChanged(_ids: NoteId[]): Promise<void> {
     // Even when the current note is not among the ids, its neighbors and pins may have changed.
-    await this.refresh();
+    // Nobody asked for this reload, so a failure is logged, not shown; the next change retries.
+    await this.refresh().catch((error: unknown) => console.error("[session] reload failed", error));
   }
 
   /**

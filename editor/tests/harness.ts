@@ -13,6 +13,13 @@ export async function openHarness(page: Page, notes: string[] = []): Promise<voi
   await page.goto(`/?seed=${seed}`);
   await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
   await page.locator(".note-editor").focus();
+  // For 200 ms after a focus, ProseMirror takes a caret that lands on the document start for a
+  // browser reset and puts it back, so a quick ⌘← in the first note would be undone. A person
+  // never types that fast after the panel opens; let that window pass.
+  await page.waitForFunction(() => {
+    const view = (window as unknown as { __bnEditor?: { view: { input?: { lastFocus?: number } } } }).__bnEditor?.view;
+    return Date.now() - (view?.input?.lastFocus ?? 0) > 250;
+  });
 }
 
 export function editor(page: Page) {
@@ -87,3 +94,49 @@ export async function lastSave(page: Page): Promise<Record<string, unknown>> {
 }
 
 export const isMac = process.platform === "darwin";
+
+/**
+ * Freezes the fake clock (installed with `page.clock.install()` before `openHarness`), so timers
+ * fire only through `page.clock.runFor`. CSS animations and transitions still run in real time, so
+ * a test can tell an element removed by its animation end event from one removed by a timer.
+ */
+export async function pauseClock(page: Page): Promise<void> {
+  // The clock keeps flowing until it is paused, so the target can be in the past by the time it
+  // arrives; then try again from the new time.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 20));
+      return;
+    } catch (error) {
+      if (attempt >= 20 || !String(error).includes("to the past")) throw error;
+    }
+  }
+}
+
+/**
+ * Waits until the page is quiet instead of for a fixed time: every finite animation and transition
+ * has finished, the mock bridge has answered, ResizeObserver has delivered, and the recorded calls
+ * stopped changing. For assertions that something did not happen.
+ */
+export async function settle(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const mock = (window as unknown as { __overnoteMock?: { calls: unknown[]; latency: number } }).__overnoteMock;
+    const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const finite = () =>
+      document.getAnimations().filter((animation) => {
+        const iterations = animation.effect?.getComputedTiming().iterations;
+        return animation.playState === "running" && iterations !== Infinity;
+      });
+    let previous = -1;
+    for (let quiet = 0; quiet < 2;) {
+      await Promise.all(finite().map((animation) => animation.finished.catch(() => undefined)));
+      await frame();
+      await frame();
+      // Longer than the mock's reply latency, so a reply and the resize it causes are in.
+      await new Promise((resolve) => setTimeout(resolve, (mock?.latency ?? 0) * 4));
+      const count = mock?.calls.length ?? 0;
+      quiet = count === previous ? quiet + 1 : 0;
+      previous = count;
+    }
+  });
+}

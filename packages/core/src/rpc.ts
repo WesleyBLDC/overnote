@@ -16,6 +16,8 @@ export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 /** Client timeouts in milliseconds. */
 export const TIMEOUT_MS = 3000;
 export const SHUTDOWN_TIMEOUT_MS = 10000;
+/** `file.saveAs` waits for the person in a native save panel. */
+export const SAVE_AS_TIMEOUT_MS = 30 * 60 * 1000;
 
 export const Method = {
   SystemPing: "system.ping",

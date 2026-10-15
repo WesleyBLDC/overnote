@@ -32,7 +32,7 @@ export function escapeNonAscii(html: string): string {
 }
 
 const REASON_LABEL: Record<BackupReason, string> = {
-  manual: "Backed up by hand",
+  manual: "Manual backup",
   daily: "Daily backup",
   "pre-migration": "Before a database upgrade",
   "pre-update": "Before an update",

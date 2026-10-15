@@ -268,10 +268,14 @@ final class Connection: @unchecked Sendable {
             let count = chunk.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
             if count > 0 {
                 buffer.append(contentsOf: chunk[0..<count])
-                if buffer.count > SocketServer.maxLineBytes && !buffer.contains(UInt8(ascii: "\n")) {
-                    log("Closing connection: request line exceeds \(SocketServer.maxLineBytes) bytes")
-                    close()
-                    return
+                if buffer.count > SocketServer.maxLineBytes {
+                    // Answer the complete lines first; what is left is one unfinished line.
+                    drainLines()
+                    if buffer.count > SocketServer.maxLineBytes {
+                        log("Closing connection: request line exceeds \(SocketServer.maxLineBytes) bytes")
+                        close()
+                        return
+                    }
                 }
                 continue
             }

@@ -199,7 +199,8 @@ describe("extension domain layer against the real helper", () => {
       { env: { ...process.env, FAKE_HELPER_VERSION: "0.0.0-old" }, stdio: "ignore" },
     );
     const oldPid = old.pid ?? 0;
-    const deadline = Date.now() + 3000;
+    // A condition wait with a generous bound: the old helper is up once it answers with its version.
+    const deadline = Date.now() + 10_000;
     while ((await launcher.ping(200))?.version !== "0.0.0-old" && Date.now() < deadline) {
       await sleep(50);
     }

@@ -5,10 +5,13 @@
 #   scripts/check-version.sh <version> [overnote-<version>.zip]
 #
 # Checks:
+#   - the version is semver (1.2.3 or 1.2.3-beta.1)
 #   - helper/VERSION and HelperVersion.current (helper/Sources/OvernoteCore/Version.swift)
-#   - the newest CHANGELOG.md entry (the first "## " heading) names the version
 #   - with a zip: its assets/prebuilt.json records the version, the same helper version, and an
 #     integer schemaVersion
+#
+# CHANGELOG.md is not checked: it follows the Raycast Store format (`## [Title] - {PR_MERGE_DATE}`),
+# which is not keyed by version.
 set -euo pipefail
 
 VERSION="${1:?usage: scripts/check-version.sh <version> [release zip]}"
@@ -24,29 +27,37 @@ bad() {
   failures=$((failures + 1))
 }
 
+if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+  ok "$VERSION is a semver version"
+else
+  bad "$VERSION is not a version like 1.2.3 or 1.2.3-beta.1"
+fi
+
 helper_version="$(tr -d '[:space:]' <helper/VERSION)"
-[[ "$helper_version" == "$VERSION" ]] && ok "helper/VERSION is $VERSION" || bad "helper/VERSION is $helper_version, the tag says $VERSION"
+if [[ "$helper_version" == "$VERSION" ]]; then
+  ok "helper/VERSION is $VERSION"
+else
+  bad "helper/VERSION is $helper_version, the tag says $VERSION"
+fi
 
 swift_version="$(sed -n 's/.*static let current = "\(.*\)".*/\1/p' helper/Sources/OvernoteCore/Version.swift)"
-[[ "$swift_version" == "$VERSION" ]] && ok "HelperVersion.current is $VERSION" || bad "HelperVersion.current is ${swift_version:-missing}, the tag says $VERSION"
-
-heading="$(grep -m 1 '^## ' CHANGELOG.md || true)"
-# The version must appear as a whole word, so 0.3.0 does not match 0.3.01 or 10.3.0.
-if [[ -n "$heading" ]] && grep -Eq "(^|[^0-9A-Za-z.])v?${VERSION//./\\.}([^0-9A-Za-z.]|$)" <<<"$heading"; then
-  ok "the newest CHANGELOG.md entry is $heading"
+if [[ "$swift_version" == "$VERSION" ]]; then
+  ok "HelperVersion.current is $VERSION"
 else
-  bad "the newest CHANGELOG.md entry (${heading:-none}) does not name $VERSION; add one such as '## [$VERSION] - {PR_MERGE_DATE}'"
+  bad "HelperVersion.current is ${swift_version:-missing}, the tag says $VERSION"
 fi
 
 if [[ -n "$ZIP" ]]; then
-  prebuilt="$(unzip -p "$ZIP" overnote/assets/prebuilt.json 2>/dev/null)" || bad "$ZIP has no overnote/assets/prebuilt.json"
-  if [[ -n "${prebuilt:-}" ]]; then
+  prebuilt="$(unzip -p "$ZIP" overnote/assets/prebuilt.json 2>/dev/null || true)"
+  if [[ -z "$prebuilt" ]]; then
+    bad "$ZIP has no overnote/assets/prebuilt.json"
+  else
     read -r zip_version zip_helper zip_schema < <(node -e '
       const p = JSON.parse(process.argv[1]);
       console.log([p.version, p.helperVersion, Number.isInteger(p.schemaVersion) ? p.schemaVersion : "missing"].join(" "));' "$prebuilt")
-    [[ "$zip_version" == "$VERSION" ]] && ok "prebuilt.json version is $VERSION" || bad "prebuilt.json version is $zip_version, the tag says $VERSION"
-    [[ "$zip_helper" == "$VERSION" ]] && ok "prebuilt.json helperVersion is $VERSION" || bad "prebuilt.json helperVersion is $zip_helper, the tag says $VERSION"
-    [[ "$zip_schema" =~ ^[0-9]+$ ]] && ok "prebuilt.json schemaVersion is $zip_schema" || bad "prebuilt.json has no integer schemaVersion"
+    if [[ "$zip_version" == "$VERSION" ]]; then ok "prebuilt.json version is $VERSION"; else bad "prebuilt.json version is $zip_version, the tag says $VERSION"; fi
+    if [[ "$zip_helper" == "$VERSION" ]]; then ok "prebuilt.json helperVersion is $VERSION"; else bad "prebuilt.json helperVersion is $zip_helper, the tag says $VERSION"; fi
+    if [[ "$zip_schema" =~ ^[0-9]+$ ]]; then ok "prebuilt.json schemaVersion is $zip_schema"; else bad "prebuilt.json has no integer schemaVersion"; fi
   fi
 fi
 

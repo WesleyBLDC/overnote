@@ -1,6 +1,6 @@
 /** Window shortcuts and the ⌘K panel. */
 import { expect, test } from "@playwright/test";
-import { calls, clearCalls, editor, emit, openHarness, storedNotes } from "./harness";
+import { calls, clearCalls, editor, emit, openHarness, settle, storedNotes } from "./harness";
 
 const title = (page: import("@playwright/test").Page) => page.getByTestId("title");
 
@@ -210,7 +210,7 @@ test("⌘K and ⌘P open inside a roomy window without resizing it and scroll wi
 
   await page.keyboard.press("Meta+k");
   await expect(page.getByTestId("command-panel")).toBeVisible();
-  await page.waitForTimeout(250);
+  await settle(page);
   expect(await temporaryReports()).toEqual([]);
   // The root list is longer than the panel, so it scrolls inside the window instead of growing it.
   expect(await fitsInside()).toEqual({ inside: true, appHeight: 560, scrolls: true, overflowing: true });
@@ -218,11 +218,11 @@ test("⌘K and ⌘P open inside a roomy window without resizing it and scroll wi
 
   await page.keyboard.press("Meta+p");
   await expect(page.getByTestId("browse-row")).toHaveCount(2);
-  await page.waitForTimeout(250);
+  await settle(page);
   expect(await temporaryReports()).toEqual([]);
   expect(await fitsInside()).toMatchObject({ inside: true, appHeight: 560, scrolls: true });
   await page.keyboard.press("Escape");
-  await page.waitForTimeout(150);
+  await settle(page);
   expect(await calls(page, "window.resize")).toEqual([]);
 });
 
@@ -333,4 +333,21 @@ test("⌘, opens Settings: controls write through settings.set and follow settin
   await expect(panel).toHaveAttribute("data-view", "settings");
   await page.keyboard.press("Escape");
   await expect(panel).toHaveAttribute("data-view", "root");
+});
+
+test("an export waits for the save panel longer than the usual request timeout", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["# Report\n\nBody"]);
+  // The save panel stays open: the helper does not answer until the person picks a place.
+  await page.evaluate(() =>
+    (window as unknown as { __overnoteMock: { hang: Set<string> } }).__overnoteMock.hang.add("file.saveAs"),
+  );
+  await page.keyboard.press("Meta+Shift+e");
+  await expect(page.getByTestId("command-panel")).toHaveAttribute("data-view", "export");
+  await page.keyboard.type("markdown");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await calls(page, "file.saveAs")).length).toBe(1);
+  // Well past the 3 s timeout of ordinary requests, the export has not failed.
+  await page.clock.runFor(10_000);
+  await expect(page.getByTestId("notices")).not.toContainText("Could not export");
 });

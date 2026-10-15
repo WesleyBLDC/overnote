@@ -2,7 +2,6 @@ import { Color, Icon, LaunchType, MenuBarExtra, launchCommand, showHUD } from "@
 import { showFailureToast, useCachedPromise } from "@raycast/utils";
 
 import { backUpNow, revealBackupsFolder } from "./api/backups";
-import { contentFromMarkdown } from "./api/content";
 import { loadMenuData } from "./api/menu-data";
 import { createNote, openInOvernote } from "./api/notes";
 import { summaryTitle } from "./domain/format";
@@ -24,6 +23,12 @@ function NoteItem({ note }: { note: NoteSummary }) {
       onAction={() => run("Could not open the note", () => openInOvernote(note.id))}
     />
   );
+}
+
+/** Loads the editor schema only when needed: the menu bar reloads every minute and rarely creates notes. */
+async function newNote() {
+  const { contentFromMarkdown } = await import("./api/content");
+  await createNote(contentFromMarkdown(""), { show: true });
 }
 
 const openRestoreList = () =>
@@ -52,19 +57,11 @@ export default function MenuBar() {
           icon={Icon.AppWindow}
           onAction={() => run("Could not open Overnote", () => openInOvernote())}
         />
-        <MenuBarExtra.Item
-          title="New Note"
-          icon={Icon.Plus}
-          onAction={() =>
-            run("Could not create a note", async () => {
-              await createNote(contentFromMarkdown(""), { show: true });
-            })
-          }
-        />
+        <MenuBarExtra.Item title="New Note" icon={Icon.Plus} onAction={() => run("Could not create a note", newNote)} />
       </MenuBarExtra.Section>
       {error ? (
         <MenuBarExtra.Section>
-          <MenuBarExtra.Item title="Helper unavailable" subtitle={error.message} icon={Icon.ExclamationMark} />
+          <MenuBarExtra.Item title="Could Not Load Notes" subtitle={error.message} icon={Icon.ExclamationMark} />
         </MenuBarExtra.Section>
       ) : null}
       {data && data.pinned.length > 0 ? (
@@ -92,7 +89,7 @@ export default function MenuBar() {
           }
         />
         <MenuBarExtra.Item
-          title="Recently Deleted"
+          title="Recently Deleted Notes"
           icon={Icon.Trash}
           onAction={() =>
             run("Could not open Recently Deleted", () =>

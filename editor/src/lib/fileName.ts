@@ -7,8 +7,8 @@ export function exportFileName(text: string, extension: "md" | "html" | "txt"): 
     .replace(/[/:\\]/g, "-")
     .replace(/\p{Cc}/gu, "")
     .replace(/^\.+/, "")
-    .trim()
-    .slice(0, 200)
     .trim();
-  return `${safe || UNTITLED}.${extension}`;
+  // Whole code points, so a surrogate pair is never split; the helper caps the bytes.
+  const short = Array.from(safe).slice(0, 200).join("").trim();
+  return `${short || UNTITLED}.${extension}`;
 }

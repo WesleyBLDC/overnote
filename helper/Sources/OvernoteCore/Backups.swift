@@ -148,43 +148,67 @@ public final class BackupStore: @unchecked Sendable {
     /// `NotesRepository.backup(to:)`), which is then renamed into place. Prunes old backups after.
     public func create(reason: BackupReason, write: (String) throws -> Void) throws -> BackupInfo {
         try lock.withLock {
-            try prepareDirectory()
-            var createdAt = clock()
-            var name = BackupName.make(createdAt: createdAt, version: version, reason: reason)
-            while FileManager.default.fileExists(atPath: (directory as NSString).appendingPathComponent(name)) {
-                createdAt += 1
-                name = BackupName.make(createdAt: createdAt, version: version, reason: reason)
-            }
-            let path = (directory as NSString).appendingPathComponent(name)
-            let partial = (directory as NSString).appendingPathComponent(".\(name).partial")
-            unlink(partial)
-            let fd = open(partial, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
-            guard fd >= 0 else { throw RPCError.internal("Cannot create \(partial): \(String(cString: strerror(errno)))") }
-            close(fd)
-            // The copy briefly takes the source's WAL header before switching to rollback mode,
-            // which can leave sidecar files behind.
-            func removeSidecars() {
-                unlink(partial + "-wal")
-                unlink(partial + "-shm")
-                unlink(partial + "-journal")
-            }
-            defer { removeSidecars() }
-            do {
-                try write(partial)
-                removeSidecars()
-                chmod(partial, 0o600)
-                guard rename(partial, path) == 0 else {
-                    throw RPCError.internal("Cannot move the backup into place: \(String(cString: strerror(errno)))")
-                }
-            } catch {
-                unlink(partial)
-                throw error
-            }
-            var info = stat()
-            let size = lstat(path, &info) == 0 ? Int64(info.st_size) : 0
+            let backup = try createLocked(reason: reason, write: write)
             _ = pruneLocked()
-            return BackupInfo(path: path, name: name, createdAt: createdAt, version: version, reason: reason, sizeBytes: size)
+            return backup
         }
+    }
+
+    /// Restores the backup at `path` (validated with `validatedRestorePath`): writes a
+    /// `pre-restore` backup of the current notes with `write`, then runs `restore` on the backup's
+    /// real path. The store stays locked throughout, so no other backup can prune the file being
+    /// restored, and pruning waits until the restore is done.
+    public func restore<T>(
+        _ path: String, write: (String) throws -> Void, restore: (String) throws -> T
+    ) throws -> (restored: BackupInfo, preRestore: BackupInfo, result: T) {
+        try lock.withLock {
+            let resolved = try validatedRestorePath(path)
+            let name = (resolved as NSString).lastPathComponent
+            guard let restored = try list().first(where: { $0.name == name }) else {
+                throw RPCError.notFound("No backup at \(path)")
+            }
+            let preRestore = try createLocked(reason: .preRestore, write: write)
+            defer { _ = pruneLocked() }
+            return (restored, preRestore, try restore(resolved))
+        }
+    }
+
+    private func createLocked(reason: BackupReason, write: (String) throws -> Void) throws -> BackupInfo {
+        try prepareDirectory()
+        var createdAt = clock()
+        var name = BackupName.make(createdAt: createdAt, version: version, reason: reason)
+        while FileManager.default.fileExists(atPath: (directory as NSString).appendingPathComponent(name)) {
+            createdAt += 1
+            name = BackupName.make(createdAt: createdAt, version: version, reason: reason)
+        }
+        let path = (directory as NSString).appendingPathComponent(name)
+        let partial = (directory as NSString).appendingPathComponent(".\(name).partial")
+        unlink(partial)
+        let fd = open(partial, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
+        guard fd >= 0 else { throw RPCError.internal("Cannot create \(partial): \(String(cString: strerror(errno)))") }
+        close(fd)
+        // The copy briefly takes the source's WAL header before switching to rollback mode,
+        // which can leave sidecar files behind.
+        func removeSidecars() {
+            unlink(partial + "-wal")
+            unlink(partial + "-shm")
+            unlink(partial + "-journal")
+        }
+        defer { removeSidecars() }
+        do {
+            try write(partial)
+            removeSidecars()
+            chmod(partial, 0o600)
+            guard rename(partial, path) == 0 else {
+                throw RPCError.internal("Cannot move the backup into place: \(String(cString: strerror(errno)))")
+            }
+        } catch {
+            unlink(partial)
+            throw error
+        }
+        var info = stat()
+        let size = lstat(path, &info) == 0 ? Int64(info.st_size) : 0
+        return BackupInfo(path: path, name: name, createdAt: createdAt, version: version, reason: reason, sizeBytes: size)
     }
 
     /// Removes backups outside the retention policy, and partial files left by a crash.

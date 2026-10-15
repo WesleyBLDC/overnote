@@ -47,7 +47,13 @@ export function useSettings(api: Api) {
   const update = useCallback(
     (patch: Partial<Settings>) => {
       setSettings((current) => ({ ...current, ...patch }));
-      void api.settings.set(patch).catch(() => undefined);
+      // On failure, show what is really stored instead of the optimistic value.
+      void api.settings.set(patch).catch(() =>
+        api.settings
+          .get()
+          .then((stored) => setSettings({ ...DEFAULT_SETTINGS, ...stored }))
+          .catch(() => undefined),
+      );
     },
     [api],
   );

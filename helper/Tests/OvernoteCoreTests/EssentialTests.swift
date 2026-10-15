@@ -250,6 +250,13 @@ struct SecurityTests {
         #expect(FileNameSanitizer.sanitize(input) == expected)
     }
 
+    @Test func longSaveAsNamesFitAPFSAndKeepTheirExtension() {
+        let latin = FileNameSanitizer.sanitize(String(repeating: "a", count: 300) + ".md")
+        #expect(latin.hasSuffix(".md") && latin.utf8.count <= 240)
+        let cjk = FileNameSanitizer.sanitize(String(repeating: "笔", count: 200) + ".html")
+        #expect(cjk.hasSuffix("笔.html") && cjk.utf8.count <= 240)
+    }
+
     @Test(arguments: [
         ("https://example.com/a?b=1", true),
         ("http://localhost:3000", true),
@@ -350,5 +357,29 @@ struct BackupTests {
         #expect(code(folder + "/" + BackupName.make(createdAt: 1_792_065_600_002, version: "1.0.0", reason: .manual)) == RPCError.badParams("").code)
         #expect(code(folder + "/missing.sqlite") == RPCError.notFoundCode)
         #expect(code(name) == RPCError.badParams("").code)  // relative
+    }
+
+    @Test func restoringTheOldestKeptBackupIsNotPrunedByThePreRestoreBackup() throws {
+        let fixture = try Fixture()
+        try fixture.make("Kept")
+        let folder = fixture.directory.file("backups")
+        let store = BackupStore(directory: folder, clock: fixture.clock.function)
+        // Ten backups on one day: the oldest is kept only as one of the latest ten, so the
+        // pre-restore backup pushes it out of the retention policy.
+        for _ in 0..<10 {
+            fixture.clock.advance(1000)
+            _ = try store.create(reason: .manual) { try fixture.repository.backup(to: $0) }
+        }
+        let oldest = try #require(try store.list().last)
+        fixture.clock.advance(1000)
+        let outcome = try store.restore(
+            oldest.path, write: { try fixture.repository.backup(to: $0) },
+            restore: { try fixture.repository.restore(from: $0) })
+        #expect(outcome.restored.name == oldest.name)
+        #expect(outcome.preRestore.reason == .preRestore)
+        #expect(outcome.result.count == 1)
+        // Pruning runs once the restore is done.
+        #expect(try store.list().count == 10)
+        #expect(!FileManager.default.fileExists(atPath: oldest.path))
     }
 }

@@ -77,6 +77,18 @@ function sliceJSON(editor: Editor): JSONContent | null {
 
 export function App({ api }: { api: Api }) {
   const { notices, notify, remove: dismissNotice } = useNotices();
+  /** Runs a panel action; a failure shows an error notice, and the promise always settles. */
+  const attempt = useCallback(
+    async (what: string, work: () => Promise<void>) => {
+      try {
+        await work();
+      } catch (error) {
+        console.error(`[app] ${what} failed`, error);
+        notify(`Could not ${what}. Try again.`, "error");
+      }
+    },
+    [notify],
+  );
   const { settings, setSettings, update: updateSettings } = useSettings(api);
   // The app element as state, so popups and hooks get it as a value instead of reading a ref while rendering.
   const [app, setApp] = useState<HTMLDivElement | null>(null);
@@ -187,7 +199,7 @@ export function App({ api }: { api: Api }) {
       if (transaction.docChanged && !transaction.getMeta("bnLoad")) session.contentChanged();
     };
     const onSelectionUpdate = () => session.selectionChanged();
-    const onBlur = () => void session.flush();
+    const onBlur = () => session.saveInBackground();
     editor.on("update", onUpdate);
     editor.on("selectionUpdate", onSelectionUpdate);
     editor.on("blur", onBlur);
@@ -266,13 +278,13 @@ export function App({ api }: { api: Api }) {
       api.on("window.didShow", () => {
         if (!editor.isDestroyed) editor.commands.focus(undefined, { scrollIntoView: true });
       }),
-      api.on("window.didHide", () => void session.flush()),
-      api.on("window.didResignKey", () => void session.flush()),
+      api.on("window.didHide", () => session.saveInBackground()),
+      api.on("window.didResignKey", () => session.saveInBackground()),
     ];
     const onHide = () => {
-      if (document.visibilityState === "hidden") void session.flush();
+      if (document.visibilityState === "hidden") session.saveInBackground();
     };
-    const onUnload = () => void session.flush();
+    const onUnload = () => session.saveInBackground();
     document.addEventListener("visibilitychange", onHide);
     window.addEventListener("pagehide", onUnload);
     window.addEventListener("beforeunload", onUnload);
@@ -367,7 +379,7 @@ export function App({ api }: { api: Api }) {
   }, [session]);
 
   const hide = useCallback(() => {
-    void session.flush();
+    session.saveInBackground();
     if (settings.escapeLosesFocus) void api.window.resignFocus().catch(() => undefined);
     else void api.window.hide().catch(() => undefined);
   }, [api, session, settings.escapeLosesFocus]);
@@ -761,7 +773,7 @@ export function App({ api }: { api: Api }) {
         title={title}
         untitled={blank}
         onClose={() => {
-          void session.flush();
+          session.saveInBackground();
           void api.window.hide().catch(() => undefined);
         }}
         onActions={() => setPanel(panel ? null : "root")}
@@ -857,35 +869,48 @@ export function App({ api }: { api: Api }) {
           onSettings={updateSettings}
           onClose={closePanel}
           onOpenNote={(id: NoteId) => void session.open(id)}
-          onTogglePin={async (id, pin) => {
-            if (pin) await api.notes.pin(id);
-            else await api.notes.unpin(id);
-            notify(pin ? "Note pinned" : "Note unpinned");
-            await session.refresh();
-          }}
-          onDeleteNote={async (id) => {
-            if (id === currentId) await session.deleteCurrent();
-            else {
-              await api.notes.delete(id);
-              session.history.remove(id);
-              notify("Note deleted");
+          onTogglePin={(id, pin) =>
+            attempt(pin ? "pin the note" : "unpin the note", async () => {
+              if (pin) await api.notes.pin(id);
+              else await api.notes.unpin(id);
+              notify(pin ? "Note pinned" : "Note unpinned");
               await session.refresh();
-            }
-          }}
-          onRecover={async (id) => {
-            await api.notes.recover(id);
-            notify("Note restored");
-            await session.refresh();
-          }}
+            })
+          }
+          onDeleteNote={(id) =>
+            attempt("delete the note", async () => {
+              if (id === currentId) await session.deleteCurrent();
+              else {
+                await api.notes.delete(id);
+                session.history.remove(id);
+                notify("Note deleted");
+                await session.refresh();
+              }
+            })
+          }
+          onRecover={(id) =>
+            attempt("restore the note", async () => {
+              await api.notes.recover(id);
+              notify("Note restored");
+              await session.refresh();
+            })
+          }
           onPreview={(note) => void startPreview(note)}
           onPermanentlyDelete={(id) =>
-            setConfirm({
-              title: "Permanently Delete Note?",
-              message: "This note will be deleted forever. This cannot be undone.",
-              confirm: "Delete",
-              destructive: true,
-              onConfirm: () => void api.notes.permanentlyDelete(id).then(() => notify("Note permanently deleted")),
-            })
+            new Promise<void>((settle) =>
+              setConfirm({
+                title: "Permanently Delete Note?",
+                message: "This note will be deleted forever. This cannot be undone.",
+                confirm: "Delete",
+                destructive: true,
+                onConfirm: () =>
+                  void attempt("delete the note", async () => {
+                    await api.notes.permanentlyDelete(id);
+                    notify("Note permanently deleted");
+                  }).then(settle),
+                onCancel: settle,
+              }),
+            )
           }
         />
       ) : null}

@@ -43,7 +43,7 @@ function DeletedNoteActions({ note, onChange }: { note: DeletedNoteSummary; onCh
       if (!confirmed) return;
       await permanentlyDeleteNote(note.id);
       await onChange();
-      await showToast({ title: "Note permanently deleted" });
+      await showToast({ title: "Permanently Deleted Note", message: title });
     });
 
   const empty = () =>
@@ -57,7 +57,7 @@ function DeletedNoteActions({ note, onChange }: { note: DeletedNoteSummary; onCh
       if (!confirmed) return;
       const count = await emptyTrash();
       await onChange();
-      await showToast({ title: count === 1 ? "Deleted 1 note" : `Deleted ${count} notes` });
+      await showToast({ title: count === 1 ? "Permanently Deleted 1 Note" : `Permanently Deleted ${count} Notes` });
     });
 
   return (

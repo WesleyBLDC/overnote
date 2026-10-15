@@ -1,6 +1,6 @@
 /** Window height and resize churn, zoom, note text size, the plain first line, motion, toolbar layout and drag regions, the accent, the counter, and the format bar. */
-import { expect, test, type Page } from "@playwright/test";
-import { calls, editor, lastSave, openHarness } from "./harness";
+import { expect, test } from "@playwright/test";
+import { calls, editor, lastSave, openHarness, pauseClock, settle } from "./harness";
 
 test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await openHarness(page);
@@ -11,7 +11,7 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
 
   // Auto-sizing is off by default: the panel opens roomy (560 points) and content is not reported.
   expect(await appHeight()).toBe(560);
-  await page.waitForTimeout(200);
+  await settle(page);
   expect(await reports()).toEqual([]);
 
   // With auto-sizing on, a one-line note is about 139 points (one 120% line between the bars), footer at the bottom.
@@ -48,7 +48,7 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await page.keyboard.press("Meta+Shift+Slash");
   const count = (await reports()).length;
   for (let i = 0; i < 3; i++) await page.keyboard.press("Enter");
-  await page.waitForTimeout(200);
+  await settle(page);
   expect((await reports()).length).toBe(count);
   await page.keyboard.press("Meta+p");
   await expect.poll(last).toMatchObject({ temporary: true });
@@ -198,7 +198,7 @@ test("decorations, chrome, and panels never churn window.resize reports", async 
   const count = async () => (await calls(page, "window.resize")).length;
   await page.keyboard.press("Meta+Shift+Slash");
   await expect.poll(count).toBeGreaterThan(0);
-  await page.waitForTimeout(150);
+  await settle(page);
 
   // Typing on the first line reports no more than typing the same text on another line (none: no line wraps).
   const typeOn = async (line: number) => {
@@ -218,7 +218,7 @@ test("decorations, chrome, and panels never churn window.resize reports", async 
     const before = await count();
     await page.keyboard.type(" more words");
     for (let i = 0; i < 11; i++) await page.keyboard.press("Backspace");
-    await page.waitForTimeout(150);
+    await settle(page);
     return (await count()) - before;
   };
   const onFirst = await typeOn(0);
@@ -232,7 +232,7 @@ test("decorations, chrome, and panels never churn window.resize reports", async 
   await page.mouse.move(320, 700);
   await page.mouse.move(320, 60);
   await page.mouse.move(320, 700);
-  await page.waitForTimeout(250);
+  await settle(page);
   expect(await count()).toBe(quiet);
 
   // Toggling the format bar keeps the footer height.
@@ -242,12 +242,12 @@ test("decorations, chrome, and panels never churn window.resize reports", async 
   await expect(page.getByTestId("format-bar")).toBeVisible();
   expect(await footer()).toBe(footerBefore);
   await page.keyboard.press("Alt+Meta+Comma");
-  await page.waitForTimeout(200);
+  await settle(page);
   expect(await count()).toBe(quiet);
 
   // In a panel already tall enough (the roomy first-open size), opening and closing panels never resizes.
   await openHarness(page, ["First line\n\nSecond line"]);
-  await page.waitForTimeout(150);
+  await settle(page);
   const roomy = await count();
   for (const keys of ["Meta+k", "Meta+p", "Meta+Comma"]) {
     await page.keyboard.press(keys);
@@ -255,45 +255,14 @@ test("decorations, chrome, and panels never churn window.resize reports", async 
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("command-panel")).toHaveCount(0);
   }
-  await page.waitForTimeout(250);
+  await settle(page);
   expect(await count()).toBe(roomy);
 });
 
-/** Records when the first element matching `selector` appears, when it gains `attribute`, and when it is removed. */
-async function recordLifetime(page: Page, selector: string, attribute?: string): Promise<void> {
-  await page.evaluate(
-    ([sel, attr]) => {
-      const times: { added?: number; marked?: number; removed?: number } = {};
-      (window as unknown as { __lifetime: typeof times }).__lifetime = times;
-      let tracked: Element | null = null;
-      const observer = new MutationObserver(() => {
-        const now = performance.now();
-        const found = document.querySelector(sel as string);
-        if (!tracked && found) {
-          tracked = found;
-          times.added = now;
-        }
-        if (tracked && attr && times.marked === undefined && tracked.hasAttribute(attr)) times.marked = now;
-        if (tracked && !tracked.isConnected) {
-          times.removed = now;
-          observer.disconnect();
-        }
-      });
-      observer.observe(document.querySelector("[data-testid=app]")!, {
-        childList: true,
-        subtree: true,
-        attributes: Boolean(attr),
-      });
-    },
-    [selector, attribute ?? ""] as const,
-  );
-}
-
-async function lifetime(page: Page): Promise<{ added?: number; marked?: number; removed?: number }> {
-  return page.evaluate(() => (window as unknown as { __lifetime: Record<string, number> }).__lifetime);
-}
-
 test("motion: short ease-out transitions, a fading panel exit, and none with reduced motion", async ({ page }) => {
+  // A fake clock owns every timer, so the notice timing is exact. CSS animations still run in real
+  // time, which tells an exit that ends on its animation event from one ended by a fallback timer.
+  await page.clock.install();
   await openHarness(page, ["Motion"]);
   const timing = () =>
     page.evaluate(() => {
@@ -309,8 +278,10 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   const normal = await timing();
   expect(normal.chrome).toMatch(/^0\.15s cubic-bezier/);
   expect(normal.panel).toBe("pop-in 0.18s");
+  await pauseClock(page);
+
   // Closing leaves an inert copy that fades out, then disappears; the live panel is gone at once.
-  await recordLifetime(page, ".panel-ghost");
+  // The paused clock holds the fallback timer, so the copy leaves on its own animation end event.
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
   const ghost = page.locator(".panel-ghost");
@@ -320,35 +291,45 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   expect(await ghost.locator(".panel").evaluate((el) => getComputedStyle(el).animationDuration)).toBe("0.12s");
   await expect(ghost).toHaveCount(0);
   await expect(editor(page)).toBeFocused();
-  // The copy lives as long as its exit animation (--motion-fast), not a fixed time.
-  let times = await lifetime(page);
-  expect(times.removed! - times.added!).toBeGreaterThanOrEqual(100);
-  expect(times.removed! - times.added!).toBeLessThan(500);
+
+  // The animation follows the --motion-fast token, and so does the fallback timer when no animation
+  // end event comes: the token plus 100 ms.
   await page.evaluate(() => document.documentElement.style.setProperty("--motion-fast", "450ms"));
   await page.keyboard.press("Meta+k");
   await expect(page.getByTestId("command-panel")).toBeVisible();
-  await recordLifetime(page, ".panel-ghost");
   await page.keyboard.press("Escape");
-  await expect(page.locator(".panel-ghost")).toHaveCount(1);
-  await expect(page.locator(".panel-ghost")).toHaveCount(0);
-  times = await lifetime(page);
-  expect(times.removed! - times.added!).toBeGreaterThanOrEqual(420);
-  expect(times.removed! - times.added!).toBeLessThan(900);
-  await page.evaluate(() => document.documentElement.style.removeProperty("--motion-fast"));
+  await expect(ghost).toHaveCount(1);
+  expect(await ghost.locator(".panel").evaluate((el) => getComputedStyle(el).animationDuration)).toBe("0.45s");
+  await expect(ghost).toHaveCount(0);
+  await page.addStyleTag({ content: ".panel-ghost, .panel-ghost * { animation: none !important; }" });
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-panel")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(ghost).toHaveCount(1);
+  await page.clock.runFor(540);
+  await expect(ghost).toHaveCount(1);
+  await page.clock.runFor(20);
+  await expect(ghost).toHaveCount(0);
+  await page.evaluate(() => {
+    document.documentElement.style.removeProperty("--motion-fast");
+    document.querySelectorAll("style").forEach((style) => {
+      if (style.textContent?.includes(".panel-ghost, .panel-ghost *")) style.remove();
+    });
+  });
 
-  // A notice stays for NOTICE_MS, is marked as leaving, and is removed when its fade (--motion-slow) ends.
-  await recordLifetime(page, ".notice", "data-leaving");
+  // A notice stays for NOTICE_MS (2 s), is marked as leaving, and is removed when its fade
+  // (--motion-slow) ends: the paused clock holds the fallback timer, so the transition end does it.
   await page.keyboard.press("Meta+Shift+d");
+  await page.clock.runFor(10);
   const notice = page.locator(".notice");
   await expect(notice).toHaveText("Copied deeplink");
   expect(await notice.evaluate((el) => getComputedStyle(el).animationDelay)).toBe("0s");
   expect(await notice.evaluate((el) => getComputedStyle(el).transitionDuration)).toBe("0.18s, 0.18s");
-  await expect(notice).toHaveCount(0, { timeout: 4000 });
-  times = await lifetime(page);
-  expect(times.marked! - times.added!).toBeGreaterThanOrEqual(1950);
-  expect(times.marked! - times.added!).toBeLessThan(2600);
-  expect(times.removed! - times.marked!).toBeGreaterThanOrEqual(150);
-  expect(times.removed! - times.marked!).toBeLessThan(600);
+  await page.clock.runFor(1980);
+  await expect(notice).not.toHaveAttribute("data-leaving");
+  await page.clock.runFor(20);
+  await expect(notice).toHaveAttribute("data-leaving", "true");
+  await expect(notice).toHaveCount(0);
 
   // Checking a task plays its check animation once; the next edit clears it, and a loaded note has none.
   await page.keyboard.press("Meta+ArrowDown");
@@ -370,20 +351,20 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   const reduced = await timing();
   expect(reduced.chrome).toMatch(/^0s /);
   expect(reduced.panel).toBe("pop-in 0s");
-  // With reduced motion no copy is made at all, and a leaving notice goes at once.
-  await recordLifetime(page, ".panel-ghost");
+  // With reduced motion no copy is made at all: the copy would render in the same commit that
+  // removes the panel, so there is nothing to wait for.
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
-  await page.waitForTimeout(200);
-  expect((await lifetime(page)).added).toBeUndefined();
+  await expect(ghost).toHaveCount(0);
 
-  await recordLifetime(page, ".notice", "data-leaving");
+  // A leaving notice goes at once: removed at the same instant it is marked as leaving.
   await page.keyboard.press("Meta+Shift+d");
-  await expect(page.locator(".notice")).toHaveText("Copied deeplink");
-  await expect(page.locator(".notice")).toHaveCount(0, { timeout: 4000 });
-  times = await lifetime(page);
-  expect(times.removed! - times.added!).toBeGreaterThanOrEqual(1950);
-  expect(times.removed! - times.added!).toBeLessThan(2150);
+  await page.clock.runFor(10);
+  await expect(notice).toHaveText("Copied deeplink");
+  await page.clock.runFor(1980);
+  await expect(notice).toHaveCount(1);
+  await page.clock.runFor(20);
+  await expect(notice).toHaveCount(0);
 });
 
 test("opening a note never flashes: hidden until ready, caret and scroll restored in the first frame", async ({
@@ -442,7 +423,9 @@ test("opening a note never flashes: hidden until ready, caret and scroll restore
   await page.keyboard.type("Long");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("title")).toHaveText("Long");
-  await page.waitForTimeout(300);
+  // Sample a good run of frames after the switch (any jump would show up in them).
+  const sampled = async () => (await frames()).filter((frame) => frame.text.startsWith("Long")).length;
+  await expect.poll(sampled, { timeout: 10_000 }).toBeGreaterThanOrEqual(15);
   const switched = (await frames()).filter((frame) => frame.text.startsWith("Long"));
   expect(switched.length).toBeGreaterThan(0);
   const finalTop = switched.at(-1)!.top;
@@ -632,7 +615,7 @@ test("toolbar drag regions cover the empty toolbar and exclude every button", as
   // Hover chrome changes resend nothing new: the buttons are excluded whether shown or not.
   await page.mouse.move(260, 700);
   await page.mouse.move(260, 30);
-  await page.waitForTimeout(250);
+  await settle(page);
   await verify();
 });
 

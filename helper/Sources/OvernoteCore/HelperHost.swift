@@ -123,11 +123,11 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
 }
 
 /// Makes a user supplied file name safe for a save panel: drops path separators and
-/// control characters, trims whitespace, caps the length, never starts with a dot, and
-/// falls back to "Untitled".
+/// control characters, trims whitespace, caps the length in UTF-8 bytes (APFS allows 255 per
+/// name) while keeping a short extension, never starts with a dot, and falls back to "Untitled".
 public enum FileNameSanitizer {
     public static let fallback = "Untitled"
-    static let maxLength = 200
+    static let maxBytes = 240
 
     public static func sanitize(_ name: String) -> String {
         let forbidden: Set<Character> = ["/", "\\", ":"]
@@ -137,8 +137,15 @@ public enum FileNameSanitizer {
                     && !character.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
             })
         cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        if cleaned.count > maxLength {
-            cleaned = String(cleaned.prefix(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.utf8.count > maxBytes {
+            let ext = (cleaned as NSString).pathExtension
+            let keepsExtension = !ext.isEmpty && ext.count <= 10 && ext.allSatisfy { $0.isLetter || $0.isNumber }
+            var base = keepsExtension ? (cleaned as NSString).deletingPathExtension : cleaned
+            let budget = maxBytes - (keepsExtension ? ext.utf8.count + 1 : 0)
+            // Whole characters only, so a multi-byte character or emoji is never split.
+            while base.utf8.count > budget { base.removeLast() }
+            base = base.trimmingCharacters(in: .whitespacesAndNewlines)
+            cleaned = keepsExtension ? base + "." + ext : base
         }
         if cleaned.isEmpty || cleaned.allSatisfy({ $0 == "." }) {
             return fallback

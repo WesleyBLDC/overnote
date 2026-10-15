@@ -39,9 +39,10 @@ cd ~/Applications/Overnote/overnote
 npm run update-extension
 ```
 
-The update downloads the latest release and its `SHA256SUMS`, checks the zip, backs up your notes, stops the helper, replaces the files in the folder (keeping `node_modules`), and runs the installer again.
+The update downloads the latest release and its `SHA256SUMS`, checks the zip, backs up your notes, stops Overnote, replaces the files in the folder (keeping `node_modules`), and runs the installer again.
 It prints the old and new versions, and where the backup went.
 Your notes are never in this folder, so an update cannot remove them.
+If an update is interrupted, run `npm run update-extension` again to finish it.
 
 To install a specific release, or to go back to an older one, name it:
 

@@ -92,10 +92,10 @@ public final class FileLogger: @unchecked Sendable {
         let line = "\(formatter.string(from: Date())) [\(getpid())] \(message)\n"
         lock.withLock {
             if mirrorToStderr {
-                FileHandle.standardError.write(Data(line.utf8))
+                try? FileHandle.standardError.write(contentsOf: Data(line.utf8))
             }
             guard let handle = openIfNeeded() else { return }
-            handle.write(Data(line.utf8))
+            try? handle.write(contentsOf: Data(line.utf8))
             var info = stat()
             if fstat(handle.fileDescriptor, &info) == 0 && UInt64(info.st_size) >= maxBytes {
                 rotate()

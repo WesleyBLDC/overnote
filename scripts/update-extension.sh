@@ -115,6 +115,7 @@ main() {
       --version)
         TARGET_TAG="${2:?--version needs a release, for example v0.3.0}"
         [[ "$TARGET_TAG" == v* ]] || TARGET_TAG="v$TARGET_TAG"
+        [[ "$TARGET_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "--version needs a release like v0.3.0, not $2"
         shift
         ;;
       --force) FORCE=1 ;;
@@ -137,6 +138,9 @@ main() {
   NAME="$(json_field package.json name overnote)"
 
   local API="${OVERNOTE_RELEASES_API:-https://api.github.com/repos/WesleyBLDC/overnote/releases}"
+  # Only HTTPS, redirects included, unless a test points the API at a local server.
+  CURL=(curl -fsSL --retry 2 --connect-timeout 15)
+  [[ -n "${OVERNOTE_RELEASES_API:-}" ]] || CURL+=(--proto "=https" --proto-redir "=https")
   local SUPPORT="${OVERNOTE_SUPPORT_DIR:-$HOME/Library/Application Support/com.raycast.macos/extensions/$NAME}"
   local RUNTIME="${OVERNOTE_RUNTIME_DIR:-/tmp/overnote-$(id -u)}"
   SOCKET="$RUNTIME/helper.sock"
@@ -158,7 +162,7 @@ main() {
   # ------------------------------------------------------------ 2. the target release
   local url release
   if [[ -n "$TARGET_TAG" ]]; then url="$API/tags/$TARGET_TAG"; else url="$API/latest"; fi
-  release="$(curl -fsSL --max-time 30 --retry 2 -H 'Accept: application/vnd.github+json' -H 'User-Agent: overnote-update' "$url")" ||
+  release="$("${CURL[@]}" --max-time 30 -H 'Accept: application/vnd.github+json' -H 'User-Agent: overnote-update' "$url")" ||
     die "Could not read the release from $url"
   local TAG TARGET ZIP_URL SUMS_URL
   read -r TAG ZIP_URL SUMS_URL < <(node -e '
@@ -187,8 +191,8 @@ main() {
   mkdir -p "$DOWNLOAD" "$EXTRACT"
   local ZIP_NAME="overnote-$TARGET.zip"
   log "Downloading $ZIP_NAME"
-  curl -fsSL --max-time 300 --retry 2 -o "$DOWNLOAD/$ZIP_NAME" "$ZIP_URL" || die "Could not download $ZIP_URL"
-  curl -fsSL --max-time 60 --retry 2 -o "$DOWNLOAD/SHA256SUMS" "$SUMS_URL" || die "Could not download $SUMS_URL"
+  "${CURL[@]}" --max-time 300 -o "$DOWNLOAD/$ZIP_NAME" "$ZIP_URL" || die "Could not download $ZIP_URL"
+  "${CURL[@]}" --max-time 60 -o "$DOWNLOAD/SHA256SUMS" "$SUMS_URL" || die "Could not download $SUMS_URL"
   local expected actual
   expected="$(awk -v name="$ZIP_NAME" '$2 == name || $2 == "*" name { print $1 }' "$DOWNLOAD/SHA256SUMS")"
   [[ -n "$expected" ]] || die "SHA256SUMS has no line for $ZIP_NAME."
@@ -250,13 +254,21 @@ main() {
   old_lock="$(shasum -a 256 package-lock.json 2>/dev/null | cut -d' ' -f1 || true)"
   new_lock="$(shasum -a 256 "$NEW/package-lock.json" | cut -d' ' -f1)"
   log "Replacing the files in $ROOT (keeping node_modules)"
-  # --checksum: zip keeps times to 2 s, so a changed file of the same size can look unchanged.
-  rsync -a --checksum --delete --exclude node_modules "$NEW/" "$ROOT/"
   # A changed lockfile always reinstalls the dependencies, whatever the file times say.
   [[ "$old_lock" == "$new_lock" ]] || rm -f node_modules/.package-lock.json
+  # --checksum: zip keeps times to 2 s, so a changed file of the same size can look unchanged.
+  # assets/prebuilt.json goes last, so an interrupted copy still reads as the old version and
+  # running the update again finishes it.
+  rsync -a --checksum --delete --exclude node_modules --exclude /assets/prebuilt.json "$NEW/" "$ROOT/" ||
+    die "Copying the new files failed. Run npm run update-extension again to finish the update."
+  cp "$NEW/assets/prebuilt.json" "$ROOT/assets/prebuilt.json"
+  # Raycast may have started the old helper again while the files were copied; stop it so the
+  # next command starts the new one.
+  stop_helper "$PIDFILE"
 
   # ------------------------------------------------------------ 7. install
-  bash "$ROOT/scripts/install-extension.sh" ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"}
+  bash "$ROOT/scripts/install-extension.sh" ${INSTALL_ARGS[@]+"${INSTALL_ARGS[@]}"} ||
+    die "The files are updated to $TARGET, but installing failed (output above). Run npm run install-extension in $ROOT to finish."
   log "Updated Overnote from $CURRENT to $(json_field "$ROOT/assets/prebuilt.json" version)."
   [[ -z "$BACKUP_PATH" ]] || log "Your notes were backed up first to $BACKUP_PATH"
 }
@@ -267,7 +279,8 @@ start_helper() {
   local bin="$1" support="$2" runtime="$3" pidfile="$4" editor="$5"
   [[ -x "$bin" && -f "$bin.sha256" ]] || return 1
   [[ "$(shasum -a 256 "$bin" | cut -d' ' -f1)" == "$(cut -d' ' -f1 "$bin.sha256")" ]] || return 1
-  mkdir -p -m 700 "$runtime"
+  mkdir -p "$runtime"
+  chmod 700 "$runtime"
   log "Starting the helper headless to back up the notes"
   "$bin" --support-dir "$support" --socket "$SOCKET" --pid-file "$pidfile" --editor-dir "$editor" --headless >/dev/null 2>&1 &
   STARTED_PID=$!
@@ -284,17 +297,25 @@ start_helper() {
 
 # Copies the database with sqlite3's online backup into the backups folder: sqlite_backup <db> <dir> <version>
 sqlite_backup() {
-  local db="$1" dir="$2" version="$3" stamp dest
+  local db="$1" dir="$2" version="$3" stamp name dest
   stamp="$(node -e 'const d = new Date().toISOString(); console.log(d.replace(/[-:]/g, ""))')"
   mkdir -p "$dir"
   chmod 700 "$dir"
-  dest="$dir/notes-$stamp-v$version-pre-update.sqlite"
+  # The name has only safe characters (the version passed semver_cmp), and the copy runs inside
+  # the folder, so the path never needs quoting inside the sqlite3 command.
+  name="notes-$stamp-v$version-pre-update.sqlite"
+  dest="$dir/$name"
+  [[ "$db" == /* ]] || db="$PWD/$db"
   (
     umask 077
-    sqlite3 "$db" ".backup '$dest'" && sqlite3 "$dest" 'PRAGMA journal_mode = DELETE' >/dev/null
-  ) || return 1
-  rm -f "$dest-wal" "$dest-shm"
-  chmod 600 "$dest"
+    cd "$dir" && sqlite3 "$db" ".backup '.$name.partial'" &&
+      sqlite3 ".$name.partial" 'PRAGMA journal_mode = DELETE' >/dev/null &&
+      rm -f ".$name.partial-wal" ".$name.partial-shm" &&
+      chmod 600 ".$name.partial" && mv ".$name.partial" "$name"
+  ) || {
+    rm -f "$dir/.$name.partial"*
+    return 1
+  }
   echo "$dest"
 }
 
@@ -322,6 +343,7 @@ stop_helper() {
   die "Could not stop the helper (pid $pid). Nothing was replaced."
 }
 
+# shellcheck disable=SC2329 # called by the EXIT trap
 cleanup() {
   # A helper this script started (and did not stop yet) runs headless, with no window, so it
   # must not outlive a failed update.

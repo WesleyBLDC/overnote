@@ -1,7 +1,7 @@
 # Overnote
 
-A floating markdown notepad, one hotkey away.
-Overnote is an open-source Raycast extension: press your hotkey and a small notes panel floats over whatever you are doing, ready for typing, without pulling focus away from the app underneath.
+A floating Markdown notepad for Raycast, one hotkey away.
+Press your hotkey and a small notes panel floats over whatever you are doing, ready for typing, without pulling focus away from the app underneath.
 Press it again and it is gone.
 
 <p align="center">
@@ -11,7 +11,16 @@ Press it again and it is gone.
   </picture>
 </p>
 
-> Inspired by Raycast Notes; not affiliated with Raycast.
+## Why Overnote
+
+Overnote works like the notes you already know from Raycast, and adds what a built-in tool cannot:
+
+- **Open source.** MIT licensed, with every part of it in this repository.
+- **Extensible.** Every note has a deeplink for quicklinks and scripts, and the code is built to take add-ons, such as a Markdown mirror folder.
+- **Your data, on your Mac.** Notes live in one local SQLite file, with automatic daily backups you can restore from Raycast.
+- **Updates you control.** Check for Updates tells you when a new release is out, and one command installs it after backing up your notes. <!-- store:remove-line -->
+
+Overnote is inspired by Raycast Notes and is not affiliated with Raycast.
 
 ## Features
 
@@ -20,15 +29,16 @@ Press it again and it is gone.
 - **Markdown as you type.**
   Shortcuts like `#`, `-`, `1.`, `[ ]`, `>`, and fenced code turn into formatting on the spot, and a `/` slash menu inserts any block.
 - **Task lists** with ⌘↩ to check and uncheck, including nested tasks.
-- **Code blocks with syntax highlighting.**
+- **Code blocks** with syntax highlighting.
 - **Find and replace** inside a note with ⌘F.
 - **Pins:** pin notes with ⇧⌘P and jump to the first nine with ⌘1 to ⌘9.
 - **History:** go back and forward through the notes you opened with ⌘[ and ⌘].
 - **Browse** every note with ⌘P, searching titles and text.
 - **Recently Deleted:** deleted notes stay restorable for 60 days.
 - **Export and copy** a note, or just the selection, as Markdown, HTML, or plain text.
-- **Raycast commands:** Search Notes (with a rendered preview), Create Note (from an argument, the search bar, or selected text), and Recently Deleted Notes.
-- **Menu bar command** with pinned and recent notes, one click away.
+- **Backups:** one a day, and one before every restore and database upgrade, kept outside the extension.
+- **Raycast commands:** Search Notes with a rendered preview, Create Note from an argument, the search bar, or the selected text, and Recently Deleted Notes.
+- **Menu bar** with pinned and recent notes, one click away.
 - **Deeplinks and quicklinks** that open a specific note from anywhere.
 
 <p align="center">
@@ -36,27 +46,20 @@ Press it again and it is gone.
   <img src="media/browse-dark.png" width="420" alt="Browse Notes listing pinned notes above the rest" />
 </p>
 
+<!-- store:remove -->
 ## Install
 
 Overnote is not in the Raycast Store yet.
 You need macOS 14 Sonoma or later, [Raycast](https://www.raycast.com) installed and signed in, and [Node.js](https://nodejs.org) 22 or later.
 
-### Download a release
+1. Download `overnote-<version>.zip` from the latest [release](https://github.com/WesleyBLDC/overnote/releases), unzip it, and move the `overnote` folder somewhere stable, for example `~/Applications/Overnote`.
+2. In Terminal, go into that folder and run `npm run install-extension`.
+3. Open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it, for example ⌥N.
 
-This is the quickest way, with nothing to build.
+To update, run `npm run update-extension` in the same folder; it backs up your notes first.
+[`docs/install.md`](docs/install.md) covers updating, backups, uninstalling, and troubleshooting.
 
-1. Download `overnote-<version>.zip` from the latest release on the [GitHub Releases page](https://github.com/WesleyBLDC/overnote/releases), and unzip it.
-2. In Terminal, go into the unzipped `overnote` folder and run `npm run install-extension`.
-3. Open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it.
-   Overnote ships with no default hotkey, so pick whatever feels natural (for example ⌥N).
-
-To update later, run `npm run update-extension` in the same folder; it backs up your notes first.
-The **Check for Updates** command tells you when a new release is out.
-[`docs/install.md`](docs/install.md) has the full steps for installing, updating, backing up and restoring, and uninstalling.
-
-### Build from source
-
-Building from source also needs the Xcode Command Line Tools (`xcode-select --install`); full Xcode is not needed.
+To build from source instead, you also need the Xcode Command Line Tools (`xcode-select --install`):
 
 ```sh
 git clone https://github.com/WesleyBLDC/overnote.git
@@ -65,20 +68,16 @@ npm install
 npm run dev
 ```
 
-`npm run dev` builds the editor and the native helper, then installs the extension into Raycast in development mode.
-Once Raycast shows the Overnote commands you can stop it with ⌃C; the extension stays installed.
-Then bind a hotkey to **Toggle Overnote** as in step 3 above.
+Once Raycast lists the Overnote commands, stop `npm run dev` with ⌃C; the extension stays installed.
+<!-- /store:remove -->
 
 ## Usage
 
-Press your hotkey to show the panel, type, and press it again (or ⎋) to hide it.
+Bind a hotkey to **Toggle Overnote** in Raycast Settings, then press it to show the panel, type, and press it again (or ⎋) to hide it.
 Everything saves automatically.
-Press ⌘K at any time to see every action with its shortcut.
+Press ⌘K in the panel to see every action with its shortcut.
 
-### Keyboard shortcuts
-
-These work in the Overnote panel.
-Press ⌘K in the panel for the full list of actions with their shortcuts.
+### Panel shortcuts
 
 | Shortcut | Action |
 |---|---|
@@ -102,7 +101,7 @@ Press ⌘K in the panel for the full list of actions with their shortcuts.
 | ⌘= / ⌘- / ⌘0 | Zoom in / zoom out / actual size (75% to 200%) |
 | ⎋ or ⌘W | Hide the panel |
 
-Formatting inside the editor:
+### Formatting shortcuts
 
 | Shortcut | Action |
 |---|---|
@@ -127,115 +126,60 @@ Formatting inside the editor:
 |---|---|
 | Toggle Overnote | Shows or hides the floating panel. Bind your hotkey here. |
 | Create Note | Creates a note from its argument, the Raycast search text, or the selected text, and opens it. |
-| Search Notes | Lists notes grouped by date, with a preview and actions to open, pin, copy, duplicate, and delete, plus Back Up Notes Now, Restore Notes from Backup, and Reveal Backups Folder. |
+| Search Notes | Lists notes by date with a preview, and opens, pins, copies, duplicates, deletes, backs up, and restores them. |
 | Recently Deleted Notes | Restores deleted notes or removes them for good. |
 | Overnote Menu Bar | Pinned and recent notes in the menu bar, plus the backup actions. Off by default; enable it in Raycast Settings. |
-| Check for Updates | Compares your version with the latest GitHub release and, when a newer one exists, copies the update command to the clipboard. |
+| Check for Updates | Compares your version with the latest release and, when a newer one exists, copies the update command. <!-- store:remove-line --> |
 
-Copy Deeplink (⇧⌘D in the panel, or from Search Notes) gives you a `raycast://` link that opens that exact note.
+Copy Deeplink (⇧⌘D in the panel, or in Search Notes) gives you a `raycast://` link that opens that exact note.
 Create Quicklink in Search Notes saves it as a Raycast quicklink.
 
-## How it works
+## Your data
 
-A Raycast extension cannot draw its own windows, so Overnote ships a small native helper that owns the floating panel and the database.
+- Notes live in one SQLite file in the extension's Raycast support folder, and never leave your Mac.
+- Backups go to `~/Library/Application Support/Overnote/backups`, outside the extension, so they survive removing it.
+  Overnote writes one a day, and one before every restore and database upgrade, and keeps the latest 10 plus one per week for the last 4 weeks.
+  `npm run update-extension` also writes one before it updates. <!-- store:remove-line -->
+- **Back Up Notes Now**, **Restore Notes from Backup**, and **Reveal Backups Folder** are in Search Notes and the menu bar.
+  A restore backs up the current notes first, so it can be undone.
+- After a reinstall, Search Notes offers to restore your latest backup.
+- Deleted notes are purged after 60 days.
+- Overnote has no account and no analytics, and the notes panel cannot make network connections.
+- The only network request is Check for Updates, which asks GitHub for the latest release when you run it. <!-- store:remove-line -->
 
-```
-Raycast
- └─ Overnote extension (TypeScript)
-      Toggle · Create Note · Search Notes · Recently Deleted · Menu Bar
-      │
-      │  JSON-RPC over a Unix socket
-      ▼
- OvernoteHelper (Swift, no Dock icon)
-   ├─ floating NSPanel (non-activating, all Spaces, over full-screen apps)
-   │    └─ WKWebView ── Tiptap editor (React, ProseMirror)
-   │                     ⇅ message bridge, same methods as the socket
-   └─ SQLite database (single writer, WAL)
-
- @overnote/core: schema and Markdown / HTML / text serializers,
-                 shared by the editor and the extension
-```
-
-- The extension starts the helper on demand and talks to it over a Unix socket.
-  Toggling a warm panel is near instant.
-- The editor runs inside the panel's web view and calls the same note methods through a message bridge.
-- Notes are stored as ProseMirror JSON, with Markdown and plain text derived on every save.
-
-### Your data
-
-- Notes live in a SQLite database, `notes.sqlite`, inside the extension's Raycast support directory (`environment.supportPath`), next to the helper's log.
-- Backups are separate copies in `~/Library/Application Support/Overnote/backups`, outside the extension, so they survive removing it: one a day while Overnote runs, and one before every update, database upgrade, and restore.
-  The latest 10 are kept, plus one per week for the last 4 weeks.
-- Everything stays on your Mac.
-  Overnote has no account and sends no analytics, and the editor runs under a content security policy that blocks network connections.
-  The only network request is the one you start with Check for Updates or `npm run update-extension`, which asks GitHub for the latest release.
-- Deleted notes are purged automatically after 60 days.
-
+<!-- store:remove -->
 ## Development
 
-```sh
-npm install
-npm run dev          # build the editor and helper, then run the extension in Raycast
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the project layout, the test suites, and the clean-room rule.
+In short: `npm install`, then `npm run dev` to run the extension in Raycast, `npm run dev -w editor` to work on the editor in a browser, and `npm run verify` to run every check in the same order as CI.
 
-| Script | Purpose |
+| Doc | Contents |
 |---|---|
-| `npm run dev` | Build everything and start Raycast development mode |
-| `npm run build` | Production build of the extension (`ray build`) |
-| `npm run build:editor` | Build the editor into `assets/editor/` |
-| `npm run build:helper` | Build the universal helper into `assets/bin/` |
-| `npm run lint` / `npm run fix-lint` | Raycast lint (ESLint and Prettier) |
-| `npm run typecheck` | TypeScript, no emit |
-| `npm run verify` | The full local suite, in the same order as CI |
-| `npm run dev -w editor` | Editor in a browser with a mock helper, for fast UI work |
+| [`docs/architecture.md`](docs/architecture.md) | How the parts fit together, and the protocol reference |
+| [`docs/install.md`](docs/install.md) | Installing from a release, updating, backups, and uninstalling |
+| [`docs/releasing.md`](docs/releasing.md) | How releases are built and published |
+| [`docs/clean-room.md`](docs/clean-room.md) | The clean-room process |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
 
-### Tests
+## Roadmap
 
-Overnote keeps unit tests to the essentials and closes every feature with end-to-end tests that use the product the way a person does.
-
-| Suite | Command |
-|---|---|
-| Extension unit and helper socket tests | `npm test` |
-| Serialization fixtures and core essentials | `npm test -w packages/core` |
-| Editor unit tests | `npm test -w editor` |
-| Editor end-to-end (Playwright in WebKit, plus a Chromium build check) | `npm run test:e2e -w editor` |
-| Helper unit tests | `bash helper/test.sh` |
-| Helper end-to-end over its real socket | `bash scripts/smoke-helper.sh` |
-| Panel window behavior end-to-end | `bash scripts/e2e-window.sh` |
-| Install, update, backups, and restore end-to-end (headless, temporary folders) | `bash scripts/e2e-update.sh` |
-
-`npm run verify` runs all of them, plus typechecking, lint, and the builds, in the same order as CI.
-The panel window check shows the panel on screen, so `npm run verify` runs it only in CI or with `OVERNOTE_WINDOW_E2E=1`.
-Run `npx playwright install webkit chromium` once before the editor end-to-end suite.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
-
-## Project status and roadmap
-
-Overnote is early and pre-release.
-Feature parity with Raycast Notes (minus AI and sync) is built, and the open-source launch with prebuilt releases is in progress.
-
-Planned next:
+Overnote covers what Raycast Notes does, minus AI and sync, and ships as GitHub releases.
+Next:
 
 - Our own features: unlimited notes, several notes open at once, tags or folders, ranked search, backlinks, image paste, and templates.
 - A Raycast Store submission.
 - Add-ons, such as a one-way Markdown mirror folder.
+<!-- /store:remove -->
 
-## Project docs
+## Source and builds
 
-| File | Contents |
-|---|---|
-| [`docs/architecture.md`](docs/architecture.md) | Architecture and protocol reference: paths, socket and bridge protocol, data types, methods, schema, core API |
-| [`docs/install.md`](docs/install.md) | Installing from a release, updating, backing up and restoring, and uninstalling |
-| [`docs/releasing.md`](docs/releasing.md) | How releases are built and published |
-| [`docs/clean-room.md`](docs/clean-room.md) | How the clean-room process works |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Development setup, project layout, testing policy, and conventions |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
+Overnote ships a small native macOS app that draws the floating panel and keeps the notes database.
+Its Swift sources are in [`helper/`](https://github.com/WesleyBLDC/overnote/tree/main/helper), and `scripts/build-helper.sh` builds the universal binary with only the Xcode Command Line Tools.
+The extension checks that binary against its `assets/bin/OvernoteHelper.sha256` before every start.
 
 ## License
 
 [MIT](LICENSE) © 2026 WesleyBLDC.
 
-## Acknowledgements
-
-Overnote is inspired by Raycast Notes and follows its behavior and layout closely, built clean-room from written behavior specs (see [`docs/clean-room.md`](docs/clean-room.md)).
+Overnote follows the behavior and layout of Raycast Notes, built clean-room from written behavior specs (see [`docs/clean-room.md`](docs/clean-room.md)).
 It is not affiliated with or endorsed by Raycast, and it uses its own name, icon, colors, and design.

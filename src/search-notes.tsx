@@ -70,7 +70,7 @@ type SearchContext = { restore?: unknown };
 
 export default function SearchNotes(props: LaunchProps<{ launchContext?: SearchContext }>) {
   // The menu bar's "Restore Notes from Backup" opens straight into the backup list.
-  if (props.launchContext?.restore === true) return <RestoreBackupList />;
+  if (props.launchContext?.restore === true) return <RestoreBackupList isRoot />;
   return <SearchNotesList />;
 }
 

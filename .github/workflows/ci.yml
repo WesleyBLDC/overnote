@@ -53,6 +53,10 @@ jobs:
         # esbuild's approved install script swaps its JS shim for the native binary.
         run: node_modules/.bin/esbuild --version
 
+      # helper/VERSION and HelperVersion.current name the same semver version.
+      - name: Check the version
+        run: bash scripts/check-version.sh "$(tr -d '[:space:]' < helper/VERSION)"
+
       - name: Typecheck extension
         run: npx tsc --noEmit
 
@@ -62,10 +66,9 @@ jobs:
       - name: Typecheck core
         run: npx tsc --noEmit -p packages/core
 
-      # `ray lint` also validates the author handle against the Store, which fails until the
-      # extension is published, so CI runs the same ESLint and Prettier checks directly.
-      - name: ESLint, extension
-        run: npx eslint src
+      # Raycast's own checks: the manifest, the author handle, icons, ESLint, and Prettier.
+      - name: Raycast lint, extension
+        run: npx ray lint
 
       # The editor and @overnote/core: typescript-eslint and the React hooks rules (eslint.config.js).
       - name: ESLint, editor and core
@@ -137,6 +140,10 @@ jobs:
 
       - name: Build Raycast extension
         run: npx ray build -e dist -o "$RUNNER_TEMP/raybuild"
+
+      # The Store copy (prebuilt assets, no update channel) still assembles from this tree.
+      - name: Prepare the Store copy
+        run: bash scripts/prepare-store.sh "$RUNNER_TEMP/store"
 
       - name: Upload Playwright report
         if: failure()

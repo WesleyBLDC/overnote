@@ -10,7 +10,7 @@ let arguments: HelperArguments
 do {
     arguments = try HelperArguments.parse(Array(CommandLine.arguments.dropFirst()))
 } catch {
-    FileHandle.standardError.write(Data("\(error)\n\(HelperArguments.usage)\n".utf8))
+    try? FileHandle.standardError.write(contentsOf: Data("\(error)\n\(HelperArguments.usage)\n".utf8))
     exit(64)
 }
 

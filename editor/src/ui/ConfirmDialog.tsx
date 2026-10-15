@@ -6,13 +6,19 @@ export interface ConfirmRequest {
   confirm: string;
   destructive?: boolean;
   onConfirm: () => void;
+  /** Called when the dialog closes without confirming. */
+  onCancel?: () => void;
 }
 
 export function ConfirmDialog({ request, onClose }: { request: ConfirmRequest; onClose: () => void }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   useEffect(() => cancelRef.current?.focus(), []);
+  const cancel = () => {
+    onClose();
+    request.onCancel?.();
+  };
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" onMouseDown={cancel}>
       <div
         className="dialog"
         role="alertdialog"
@@ -24,14 +30,14 @@ export function ConfirmDialog({ request, onClose }: { request: ConfirmRequest; o
           if (event.key === "Escape") {
             event.preventDefault();
             event.stopPropagation();
-            onClose();
+            cancel();
           }
         }}
       >
         <h2 id="dialog-title">{request.title}</h2>
         <p>{request.message}</p>
         <div className="dialog-buttons">
-          <button type="button" ref={cancelRef} onClick={onClose}>
+          <button type="button" ref={cancelRef} onClick={cancel}>
             Cancel
           </button>
           <button

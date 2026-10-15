@@ -79,7 +79,12 @@ export class BridgeClient implements BridgeReceiver {
         reject(new BridgeError(rpc.ErrorCode.Internal, "Native bridge is not available", method));
         return;
       }
-      const timeout = method === rpc.Method.SystemShutdown ? rpc.SHUTDOWN_TIMEOUT_MS : this.timeoutMs;
+      const timeout =
+        method === rpc.Method.SystemShutdown
+          ? rpc.SHUTDOWN_TIMEOUT_MS
+          : method === rpc.Method.FileSaveAs
+            ? rpc.SAVE_AS_TIMEOUT_MS
+            : this.timeoutMs;
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new BridgeError(TIMEOUT_CODE, `${method} timed out after ${timeout} ms`, method));

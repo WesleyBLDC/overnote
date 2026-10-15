@@ -26,6 +26,9 @@ cd "$ROOT"
 log() { printf '[package] %s\n' "$*"; }
 die() { printf '[package] %s\n' "$*" >&2; exit 1; }
 
+VERSION="${VERSION#v}"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "$VERSION is not a version like 1.2.3 or 1.2.3-beta.1"
+
 BIN="assets/bin/OvernoteHelper"
 [[ -x "$BIN" && -f "$BIN.sha256" ]] || die "Helper not built: run scripts/build-helper.sh first"
 [[ -f assets/editor/index.html ]] || die "Editor not built: run npm run build:editor first"
@@ -41,7 +44,7 @@ COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
-STAGE="$(mktemp -d)"
+STAGE="$(mktemp -d "${TMPDIR:-/tmp}/overnote-package.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 PKG="$STAGE/overnote"
 mkdir -p "$PKG"
@@ -87,10 +90,10 @@ cp "$BIN.sha256" "$OUT/OvernoteHelper.sha256"
 for zipfile in "$OUT/overnote-$VERSION.zip" "$OUT/OvernoteHelper-$VERSION.zip"; do
   zipinfo "$zipfile" | grep -E 'OvernoteHelper$' | grep -q '^-rwxr-xr-x' || die "the helper in $(basename "$zipfile") is not executable"
 done
-CHECK="$(mktemp -d)"
+CHECK="$STAGE/check"
+mkdir "$CHECK"
 unzip -q "$OUT/OvernoteHelper-$VERSION.zip" -d "$CHECK"
 [[ "$(shasum -a 256 "$CHECK/OvernoteHelper" | cut -d' ' -f1)" == "$HELPER_SHA" ]] || die "the zipped helper does not match its checksum"
-rm -rf "$CHECK"
 
 (cd "$OUT" && shasum -a 256 "overnote-$VERSION.zip" "OvernoteHelper-$VERSION.zip" OvernoteHelper.sha256 > SHA256SUMS)
 
@@ -98,13 +101,13 @@ FILES="$(cd "$STAGE" && find overnote -type f | sort)"
 cat > "$OUT/release-notes.md" <<EOF
 ## Install
 
-1. Download \`overnote-$VERSION.zip\` below and unzip it.
-2. In Terminal: \`cd overnote\` (in the unzipped folder), then \`npm run install-extension\`.
-3. In Raycast Settings, bind a hotkey to **Toggle Overnote**.
+1. Download \`overnote-$VERSION.zip\` below, unzip it, and move the \`overnote\` folder somewhere stable, for example \`~/Applications/Overnote\`.
+2. In Terminal, go into that folder and run \`npm run install-extension\`.
+3. In Raycast Settings, record a hotkey for **Toggle Overnote**.
 
-Already installed? Run \`npm run update-extension\` in your Overnote folder instead; it backs up your notes first.
+Already installed? Run \`npm run update-extension\` in your Overnote folder; it backs up your notes first.
 
-You need macOS 14+, Node.js 22+, and a signed-in Raycast. The Xcode tools are not needed: the zip carries a prebuilt helper and editor.
+You need macOS 14 or later, Node.js 22 or later, and a signed-in Raycast; the Xcode tools are not needed.
 Full steps: [docs/install.md](https://github.com/${GITHUB_REPOSITORY:-WesleyBLDC/overnote}/blob/$COMMIT/docs/install.md).
 
 ## Source summary

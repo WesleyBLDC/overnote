@@ -47,7 +47,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      # helper/VERSION, HelperVersion.current, and the newest CHANGELOG entry must all name the tag.
+      # The tag must be semver, and helper/VERSION and HelperVersion.current must name it.
       - name: Check the version
         run: bash scripts/check-version.sh "${{ steps.version.outputs.version }}"
 
