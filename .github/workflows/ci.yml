@@ -122,7 +122,8 @@ jobs:
       # step (and only this step) until it is back. The same variable and value make
       # scripts/verify.sh skip it, which otherwise runs it whenever CI is true.
       - name: End to end, panel window
-        if: vars.OVERNOTE_WINDOW_E2E != '0'
+        # format() turns an unset variable (null) into '' so it compares as a string, not the number 0.
+        if: format('{0}', vars.OVERNOTE_WINDOW_E2E) != '0'
         run: bash scripts/e2e-window.sh
 
       - name: Build Raycast extension
