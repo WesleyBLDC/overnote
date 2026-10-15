@@ -1,10 +1,10 @@
+import { fold } from "@better-notes/core/text";
+
 /**
- * The folding rule for filter matching (contract v2): NFKD, strip combining marks, lowercase.
- * The helper stores `title_fold` and `text_fold` with the same rule.
+ * The fold rule for filter matching (contract section 5): NFKD, drop marks, root lowercase. It is
+ * core's `fold`, which the helper mirrors when it stores `title_fold` and `text_fold`.
  */
-export function foldForMatch(value: string): string {
-  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
-}
+export const foldForMatch = fold;
 
 /** A `LIKE` pattern that matches `query` as a literal substring, for use with `ESCAPE '\'`. */
 export function likeSubstringPattern(query: string): string {

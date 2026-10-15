@@ -1,4 +1,4 @@
-import { docToHTML, noteContentFromMarkdown } from "@better-notes/core";
+import { docToClipboard, docToHTML, loadDoc, noteContentFromMarkdown } from "@better-notes/core";
 
 import type { Note, NoteContent } from "../domain/types";
 
@@ -7,11 +7,12 @@ export function contentFromMarkdown(markdown: string): NoteContent {
   return noteContentFromMarkdown(markdown);
 }
 
-/** Renders a stored note to HTML from its canonical ProseMirror JSON. */
-export function noteToHTML(note: Pick<Note, "rawContent" | "markdown">): string {
-  try {
-    return docToHTML(JSON.parse(note.rawContent));
-  } catch {
-    return docToHTML(JSON.parse(noteContentFromMarkdown(note.markdown).rawContent));
-  }
+/** Renders a stored note to HTML from its canonical document (falling back to its text). */
+export function noteToHTML(note: Pick<Note, "rawContent" | "text">): string {
+  return docToHTML(loadDoc(note.rawContent, note.text));
+}
+
+/** The text and HTML clipboard flavors for Copy Content (same as the editor's ⌘C). */
+export function noteClipboard(note: Pick<Note, "rawContent" | "text">): { text: string; html: string } {
+  return docToClipboard(loadDoc(note.rawContent, note.text));
 }

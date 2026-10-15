@@ -22,6 +22,8 @@ export class HelperLaunchError extends Error {
 export interface EnsureOptions {
   /** Pass `--show` when the helper has to be started, so the panel opens right away. */
   show?: boolean;
+  /** Pass `--headless` (no window), for end-to-end tests and CI only. */
+  headless?: boolean;
 }
 
 export interface EnsureResult {
@@ -52,6 +54,7 @@ export function helperArgs(paths: HelperPaths, options: EnsureOptions = {}): str
     paths.editorDir,
   ];
   if (options.show) args.push("--show");
+  if (options.headless) args.push("--headless");
   return args;
 }
 

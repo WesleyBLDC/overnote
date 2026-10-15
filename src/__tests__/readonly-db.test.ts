@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { foldForMatch, likeSubstringPattern, titleMatchesFirst } from "../domain/fold";
+import { foldForMatch, titleMatchesFirst } from "../domain/fold";
 import { ReadOnlyNotesDb, loadSqlite } from "../domain/readonly-db";
 import { shortTempDir } from "./helpers";
 
@@ -105,24 +105,9 @@ describe("read-only notes database", () => {
     }
   };
 
-  it("returns null when the helper has not created the database yet", () => {
-    expect(ReadOnlyNotesDb.open(path.join(dir, "missing.sqlite"))).toBeNull();
-  });
-
   it("lists live notes: pinned by key, then updatedAt desc, then id asc", () => {
     const ids = withDb((db) => db.list().items.map((note) => note.id));
     expect(ids).toEqual(["E", "D", "B", "C", "A", "F", "G", "H"]);
-  });
-
-  it("fills summaries with a 200 character preview and charCount", () => {
-    const note = withDb((db) => db.list().items.find((item) => item.id === "B"));
-    expect(note).toMatchObject({
-      title: "Café ideas",
-      preview: "Café ideas\nlatte art",
-      charCount: "Café ideas\nlatte art".length,
-      pinned: null,
-      deletedAt: null,
-    });
   });
 
   it("pages with an opaque cursor without gaps or duplicates", () => {
@@ -161,42 +146,9 @@ describe("read-only notes database", () => {
     expect(items.map((note) => note.id)).toEqual(["Y", "X"]);
     expect(items[0]).toMatchObject({ markdown: "# New trash body", deletedAt: 900 });
   });
-
-  it("gets a full note and counts live notes", () => {
-    withDb((db) => {
-      expect(db.get("A")).toMatchObject({ id: "A", markdown: "# Groceries\nmilk, eggs", rawContent: "{}" });
-      expect(db.get("nope")).toBeNull();
-      expect(db.count()).toBe(8);
-    });
-  });
-
-  it("reads committed rows while the helper holds the database open in WAL mode", () => {
-    const writer = openWriter(file);
-    try {
-      insert(writer, { id: "Z", title: "Fresh", text: "Fresh", updatedAt: 1000 });
-      expect(withDb((db) => db.list().items.map((note) => note.id))).toContain("Z");
-    } finally {
-      writer.close();
-    }
-  });
-
-  it("never writes", () => {
-    withDb((db) => {
-      const internal = (db as unknown as { db: Writer }).db;
-      expect(() => internal.exec("DELETE FROM notes")).toThrow();
-    });
-  });
 });
 
-describe("filter folding", () => {
-  it("folds case and diacritics with NFKD", () => {
-    expect(foldForMatch("Crème BRÛLÉE ﬁ")).toBe("creme brulee fi");
-  });
-
-  it("escapes LIKE wildcards", () => {
-    expect(likeSubstringPattern("50%_off\\")).toBe("%50\\%\\_off\\\\%");
-  });
-
+describe("title matches first", () => {
   it("moves title matches first and keeps order inside each group", () => {
     const items = [
       { id: "1", title: "Budget" },

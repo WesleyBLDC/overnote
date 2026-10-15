@@ -1,4 +1,4 @@
-import { displayTitle } from "@better-notes/core";
+import { displayTitle } from "@better-notes/core/text";
 
 export { displayTitle };
 

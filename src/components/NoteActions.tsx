@@ -15,7 +15,7 @@ import {
 } from "@raycast/api";
 import { showFailureToast } from "@raycast/utils";
 
-import { contentFromMarkdown, noteToHTML } from "../api/content";
+import { contentFromMarkdown, noteClipboard, noteToHTML } from "../api/content";
 import {
   createNote,
   deleteAllNotes,
@@ -70,7 +70,8 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition }:
   const copyContent = () =>
     run("Could not copy the note", async () => {
       const full = await loadFull();
-      await Clipboard.copy({ html: escapeNonAscii(noteToHTML(full)), text: full.text });
+      const flavors = noteClipboard(full);
+      await Clipboard.copy({ html: escapeNonAscii(flavors.html), text: flavors.text });
       await showHUD("Copied to Clipboard");
     });
 
