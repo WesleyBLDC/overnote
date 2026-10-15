@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the universal (arm64 + x86_64) BetterNotesHelper with only the Xcode Command Line
+# Builds the universal (arm64 + x86_64) OvernoteHelper with only the Xcode Command Line
 # Tools, ad-hoc signs it, and installs it to assets/bin with a .sha256 file.
 #
 # `swift build --arch arm64 --arch x86_64` needs XCBuild, which ships only with full Xcode,
@@ -12,8 +12,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PACKAGE="$ROOT/helper"
 OUT_DIR="$ROOT/assets/bin"
-OUT="$OUT_DIR/BetterNotesHelper"
-PRODUCT=BetterNotesHelper
+OUT="$OUT_DIR/OvernoteHelper"
+PRODUCT=OvernoteHelper
 MIN_MACOS=14.0
 ARCHES=(arm64 x86_64)
 
@@ -45,7 +45,7 @@ else
   log "Signing ad-hoc with the hardened runtime"
   # The hardened runtime does not stop WKWebView: JavaScript JIT runs in WebKit's own
   # WebContent process, which carries its own entitlements.
-  codesign --force --sign - --options runtime --identifier "dev.better-notes.helper" "$STAGING/$PRODUCT"
+  codesign --force --sign - --options runtime --identifier "dev.overnote.helper" "$STAGING/$PRODUCT"
   codesign --verify --strict "$STAGING/$PRODUCT"
   # Install atomically so a running helper's binary is never half written.
   cp "$STAGING/$PRODUCT" "$OUT.tmp"

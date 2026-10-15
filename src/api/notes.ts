@@ -71,7 +71,7 @@ export async function requireNote(id: NoteId): Promise<Note> {
 }
 
 /** Closes Raycast, then shows the floating panel, optionally on one note. */
-export async function openInBetterNotes(noteId?: NoteId): Promise<void> {
+export async function openInOvernote(noteId?: NoteId): Promise<void> {
   await closeMainWindow();
   await callHelper("window.show", noteId ? { noteId } : {});
 }

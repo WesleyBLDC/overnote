@@ -1,4 +1,4 @@
-import { docToClipboard, docToHTML, loadDoc, noteContentFromMarkdown } from "@better-notes/core";
+import { docToClipboard, docToHTML, loadDoc, noteContentFromMarkdown } from "@overnote/core";
 
 import type { Note, NoteContent } from "../domain/types";
 

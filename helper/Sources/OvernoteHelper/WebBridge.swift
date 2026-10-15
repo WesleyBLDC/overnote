@@ -1,12 +1,12 @@
 import AppKit
-import BetterNotesCore
+import OvernoteCore
 import WebKit
 
-/// The editor side of the RPC: receives `betterNotes` script messages, runs them through the
-/// shared dispatcher, and answers with `window.betterNotesBridge.resolve/reject`.
+/// The editor side of the RPC: receives `overnote` script messages, runs them through the
+/// shared dispatcher, and answers with `window.overnoteBridge.resolve/reject`.
 @MainActor
 final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
-    static let handlerName = "betterNotes"
+    static let handlerName = "overnote"
 
     private let handler: RPCDispatcher
     private weak var webView: WKWebView?
@@ -73,7 +73,7 @@ final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, W
     /// JSON text is valid JavaScript, so arguments are embedded as JSON literals.
     private func call(_ function: String, _ first: String, _ second: String) {
         guard let webView else { return }
-        let script = "window.betterNotesBridge && window.betterNotesBridge.\(function)(\(first), \(second));"
+        let script = "window.overnoteBridge && window.overnoteBridge.\(function)(\(first), \(second));"
         webView.evaluateJavaScript(script) { [logger] _, error in
             if let error {
                 logger.log("Bridge \(function) failed: \(error.localizedDescription)")

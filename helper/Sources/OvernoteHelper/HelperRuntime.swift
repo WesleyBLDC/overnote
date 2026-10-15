@@ -1,4 +1,4 @@
-import BetterNotesCore
+import OvernoteCore
 import Darwin
 import Foundation
 
@@ -36,7 +36,7 @@ final class HelperRuntime {
 
     /// Takes the instance lock and opens the database. Call before creating any UI.
     func acquire() -> StartOutcome {
-        logger.log("Starting BetterNotesHelper \(HelperVersion.current) (pid \(getpid()))")
+        logger.log("Starting OvernoteHelper \(HelperVersion.current) (pid \(getpid()))")
         installSignalHandlers()
         do {
             try SocketPaths.prepareDirectory(for: arguments.pidFile)

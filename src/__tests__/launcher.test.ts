@@ -54,7 +54,7 @@ describe("helper launcher", () => {
 
   it("restarts the helper when the bundled version changes", async () => {
     const old = await makeLauncher().ensure();
-    installFakeHelper(paths.binary.replace(/\/bin\/BetterNotesHelper$/, ""), "version-two");
+    installFakeHelper(paths.binary.replace(/\/bin\/OvernoteHelper$/, ""), "version-two");
     process.env.FAKE_HELPER_VERSION = "2.0.0";
     const next = await makeLauncher().ensure();
     expect(next.started).toBe(true);
@@ -67,7 +67,7 @@ describe("helper launcher", () => {
     process.env.FAKE_HELPER_BEHAVIOR = "ignore-shutdown";
     const old = await makeLauncher().ensure();
     delete process.env.FAKE_HELPER_BEHAVIOR;
-    installFakeHelper(paths.binary.replace(/\/bin\/BetterNotesHelper$/, ""), "version-three");
+    installFakeHelper(paths.binary.replace(/\/bin\/OvernoteHelper$/, ""), "version-three");
     process.env.FAKE_HELPER_VERSION = "3.0.0";
     const next = await makeLauncher().ensure();
     expect(next.version).toBe("3.0.0");

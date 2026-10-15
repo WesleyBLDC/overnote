@@ -1,4 +1,4 @@
-import { fold } from "@better-notes/core/text";
+import { fold } from "@overnote/core/text";
 
 /**
  * The fold rule for filter matching (contract section 5): NFKD, drop marks, root lowercase. It is

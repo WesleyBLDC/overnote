@@ -11,7 +11,7 @@ import {
   type Note,
   type NoteId,
   type WindowData,
-} from "@better-notes/core";
+} from "@overnote/core";
 import type { Api } from "../bridge/api";
 import { NoteHistory } from "./history";
 

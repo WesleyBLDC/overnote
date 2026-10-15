@@ -1,5 +1,5 @@
 /** Small React hooks for notices, settings, and content-driven window height. */
-import { DEFAULT_SETTINGS, type rpc, type Settings } from "@better-notes/core";
+import { DEFAULT_SETTINGS, type rpc, type Settings } from "@overnote/core";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type { Api } from "../bridge/api";
 

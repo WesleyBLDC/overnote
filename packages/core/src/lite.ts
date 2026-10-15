@@ -1,5 +1,5 @@
 /**
- * The light entry point `@better-notes/core/text`: types, rpc constants, and text helpers with no
+ * The light entry point `@overnote/core/text`: types, rpc constants, and text helpers with no
  * Tiptap or ProseMirror imports, for callers that only list and display notes.
  */
 export * from "./types";

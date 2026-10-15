@@ -24,7 +24,7 @@ export class RpcTimeoutError extends Error {
     readonly method: string,
     readonly timeoutMs: number,
   ) {
-    super(`Better Notes helper did not answer ${method} within ${timeoutMs} ms`);
+    super(`Overnote helper did not answer ${method} within ${timeoutMs} ms`);
     this.name = "RpcTimeoutError";
   }
 }
@@ -155,7 +155,7 @@ export class RpcClient {
     if (this.socket !== socket) return;
     this.socket = null;
     this.buffer = "";
-    this.failAll(new RpcConnectionError("Better Notes helper closed the connection"));
+    this.failAll(new RpcConnectionError("Overnote helper closed the connection"));
   }
 
   private onData(chunk: string): void {

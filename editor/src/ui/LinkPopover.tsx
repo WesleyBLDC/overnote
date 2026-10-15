@@ -1,5 +1,5 @@
 /** The link popover in view and edit modes (spec/editor.md section 6). */
-import { normalizeLinkHref } from "@better-notes/core";
+import { normalizeLinkHref } from "@overnote/core";
 import type { Editor } from "@tiptap/core";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { LinkTarget } from "../editor/linkRange";

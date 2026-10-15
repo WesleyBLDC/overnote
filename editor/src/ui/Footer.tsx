@@ -1,4 +1,4 @@
-import type { CountMode } from "@better-notes/core";
+import type { CountMode } from "@overnote/core";
 import type { Editor } from "@tiptap/core";
 import { characterLabel, wordLabel } from "../lib/relativeTime";
 import { FormatBar } from "./FormatBar";

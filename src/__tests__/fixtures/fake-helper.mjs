@@ -1,4 +1,4 @@
-// A stand-in for BetterNotesHelper used by the launcher tests. It speaks the contract's socket
+// A stand-in for OvernoteHelper used by the launcher tests. It speaks the contract's socket
 // protocol for the few methods the launcher needs, and records how it was started.
 import fs from "node:fs";
 import net from "node:net";

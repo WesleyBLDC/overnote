@@ -6,9 +6,9 @@ This is the single source of truth for how the four components talk to each othe
 Change it only through the orchestrator; if you need a change, write it in your final report under "Contract change requests" and implement against the current version meanwhile.
 
 ```
-Raycast extension (src/)  ──socket JSON-RPC──▶  BetterNotesHelper (helper/)
+Raycast extension (src/)  ──socket JSON-RPC──▶  OvernoteHelper (helper/)
                                                    │  WKScriptMessageHandler bridge
-@better-notes/core (packages/core/)  ◀── used by ──┴─ editor (editor/) running in WKWebView
+@overnote/core (packages/core/)  ◀── used by ──┴─ editor (editor/) running in WKWebView
 ```
 
 ## 1. Files and paths
@@ -16,18 +16,18 @@ Raycast extension (src/)  ──socket JSON-RPC──▶  BetterNotesHelper (hel
 | Thing | Path |
 |---|---|
 | Extension root | repo root (`package.json` is the Raycast manifest) |
-| Helper binary (built) | `assets/bin/BetterNotesHelper` (universal, ad-hoc signed) plus `assets/bin/BetterNotesHelper.sha256` |
+| Helper binary (built) | `assets/bin/OvernoteHelper` (universal, ad-hoc signed) plus `assets/bin/OvernoteHelper.sha256` |
 | Editor build | `assets/editor/` (`index.html` plus relative assets; Vite `base: "./"`) |
 | Data dir | `environment.supportPath` of the extension, passed to the helper as `--support-dir` |
 | Database | `<support-dir>/notes.sqlite` (WAL) |
-| Socket | `/tmp/better-notes-<uid>/helper.sock`; the directory is created with mode 0700 by whoever starts first |
-| PID file | `/tmp/better-notes-<uid>/helper.pid` |
+| Socket | `/tmp/overnote-<uid>/helper.sock`; the directory is created with mode 0700 by whoever starts first |
+| PID file | `/tmp/overnote-<uid>/helper.pid` |
 | Helper log | `<support-dir>/helper.log` (rotated at 1 MB) |
 
 Helper command line:
 
 ```
-BetterNotesHelper --support-dir <dir> --socket <path> --pid-file <path> --editor-dir <assets/editor> [--show] [--version]
+OvernoteHelper --support-dir <dir> --socket <path> --pid-file <path> --editor-dir <assets/editor> [--show] [--version]
 ```
 
 `--version` prints the version string and exits.
@@ -47,14 +47,14 @@ BetterNotesHelper --support-dir <dir> --socket <path> --pid-file <path> --editor
 
 ## 3. Bridge protocol (editor ⇄ helper)
 
-- Web to native: `window.webkit.messageHandlers.betterNotes.postMessage({ id, method, params })`.
-- Native to web replies: the helper calls `window.betterNotesBridge.resolve(id, result)` or `window.betterNotesBridge.reject(id, { code, message })`.
-- Native to web events: `window.betterNotesBridge.emit(event, payload)`.
-- The editor must define `window.betterNotesBridge` before it sends anything.
+- Web to native: `window.webkit.messageHandlers.overnote.postMessage({ id, method, params })`.
+- Native to web replies: the helper calls `window.overnoteBridge.resolve(id, result)` or `window.overnoteBridge.reject(id, { code, message })`.
+- Native to web events: `window.overnoteBridge.emit(event, payload)`.
+- The editor must define `window.overnoteBridge` before it sends anything.
   When it is ready it calls `system.ready`.
 - **The same method names and shapes as the socket**, served by one dispatcher in the helper.
   Bridge-only methods are marked (bridge) below.
-- Assets are served from the custom scheme `betternotes://app/` (for example `betternotes://app/index.html`), mapped to `--editor-dir`.
+- Assets are served from the custom scheme `overnote://app/` (for example `overnote://app/index.html`), mapped to `--editor-dir`.
 
 ### Events (native to web)
 
@@ -76,7 +76,7 @@ type Millis = number;          // Unix epoch milliseconds
 
 interface NoteContent {
   rawContent: string;          // JSON.stringify(ProseMirror doc JSON); canonical
-  markdown: string;            // derived by @better-notes/core
+  markdown: string;            // derived by @overnote/core
   text: string;                // plain text, derived by core
   title: string;               // derived by core: first line of the plain text (empty blocks skipped), trimmed, no length cap (may be empty)
 }
@@ -219,7 +219,7 @@ CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
 The extension may open the database **read-only** (`node:sqlite`, `readOnly: true`) for instant lists and search when the helper is not running.
 All writes go through the helper.
 
-## 7. @better-notes/core API (TypeScript, runs in the browser and in Node 22 with no DOM)
+## 7. @overnote/core API (TypeScript, runs in the browser and in Node 22 with no DOM)
 
 ```ts
 export const headlessExtensions: AnyExtension[];    // schema, input rules, serializers; runs in Node with no DOM (schema source of truth)
@@ -249,18 +249,18 @@ export function countCharacters(text: string): number;                   // grap
 export function countWords(text: string): number;                        // Intl.Segmenter word segments
 export type { Note, NoteSummary, NoteContent, Settings, WindowData, NoteId } from "./types";
 export * as rpc from "./rpc";
-// Light entry point `@better-notes/core/text` exports types, rpc, displayTitle, derivePreview, countCharacters, countWords and fold, with no Tiptap import (for list commands and the menu bar)   // method name constants and param/result types from section 5
+// Light entry point `@overnote/core/text` exports types, rpc, displayTitle, derivePreview, countCharacters, countWords and fold, with no Tiptap import (for list commands and the menu bar)   // method name constants and param/result types from section 5
 ```
 
 ## 8. Extension commands (package.json)
 
 | name | title | mode | notes |
 |---|---|---|---|
-| `toggle-notes` | Toggle Better Notes | no-view | Launch the helper if needed, then `window.toggle` |
+| `toggle-notes` | Toggle Overnote | no-view | Launch the helper if needed, then `window.toggle` |
 | `create-note` | Create Note | no-view | Optional `text` argument, then `fallbackText`, then selected text, then empty. `notes.create` with `show: true` |
 | `search-notes` | Search Notes | view | List with markdown detail using `notes.list` with `filter` (or the read-only DB with the same order and matching); title matches are moved first within each page; writes through the helper |
 | `recently-deleted` | Recently Deleted Notes | view | Recover, delete permanently, empty trash |
-| `menu-bar` | Better Notes Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note; restarts a dead helper |
+| `menu-bar` | Overnote Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note; restarts a dead helper |
 
 No default hotkeys.
 
@@ -277,7 +277,7 @@ This lets deeplinks and quicklinks open a specific note or create one with text.
 
 - v2.5 (2026-10-14): from the helper build, panelFrame.y is the top edge, error code details, update timestamp rule, `--headless`, editor-owned zoom and contentHeight measurement, 12 pt drag strip.
 
-- v2.4 (2026-10-14): exact fold rule shared by TS and Swift, charCount in code points, source-bound cursors, displayTitle skips empty lines, light `@better-notes/core/text` entry point.
+- v2.4 (2026-10-14): exact fold rule shared by TS and Swift, charCount in code points, source-bound cursors, displayTitle skips empty lines, light `@overnote/core/text` entry point.
 
 - v2.3 (2026-10-14): from spec/serialization.md, accepted deviations D1 to D19 (fix Raycast's round-trip bugs; headings 4 to 6 become level 3); markdownToDoc mode option; loadDoc nullable with hard-break fallback; docToClipboard returns {text, html}; derivePreview; semantic HTML; no trailing newlines.
 

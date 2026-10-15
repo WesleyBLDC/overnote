@@ -21,6 +21,6 @@ export default async function ToggleNotes(props: LaunchProps<{ launchContext?: T
     const { client, started } = await ensureHelper({ show: true });
     if (!started) await client.call("window.toggle", {});
   } catch (error) {
-    await showHUD(`Better Notes: ${errorMessage(error)}`);
+    await showHUD(`Overnote: ${errorMessage(error)}`);
   }
 }

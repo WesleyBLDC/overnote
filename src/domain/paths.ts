@@ -25,7 +25,7 @@ export interface PathInputs {
 }
 
 export function runtimeDirFor(uid: number, runtimeRoot = "/tmp"): string {
-  return path.join(runtimeRoot, `better-notes-${uid}`);
+  return path.join(runtimeRoot, `overnote-${uid}`);
 }
 
 export function databasePath(supportPath: string): string {
@@ -35,7 +35,7 @@ export function databasePath(supportPath: string): string {
 export function resolvePaths(inputs: PathInputs): HelperPaths {
   const uid = inputs.uid ?? os.userInfo().uid;
   const runtimeDir = runtimeDirFor(uid, inputs.runtimeRoot);
-  const binary = path.join(inputs.assetsPath, "bin", "BetterNotesHelper");
+  const binary = path.join(inputs.assetsPath, "bin", "OvernoteHelper");
   return {
     runtimeDir,
     socket: path.join(runtimeDir, "helper.sock"),

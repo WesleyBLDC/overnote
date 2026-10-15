@@ -1,12 +1,12 @@
-import BetterNotesCore
+import OvernoteCore
 import Foundation
 import WebKit
 
-/// Serves the editor build from `--editor-dir` over `betternotes://app/`.
+/// Serves the editor build from `--editor-dir` over `overnote://app/`.
 /// Without an `index.html` there, a built in placeholder editor is served instead.
 @MainActor
 final class EditorSchemeHandler: NSObject, WKURLSchemeHandler {
-    static let scheme = "betternotes"
+    static let scheme = "overnote"
 
     private let assets: EditorAssets?
     private let logger: FileLogger

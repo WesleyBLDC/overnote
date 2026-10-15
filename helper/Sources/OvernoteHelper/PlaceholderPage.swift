@@ -7,7 +7,7 @@ enum PlaceholderPage {
         <html>
         <head>
         <meta charset="utf-8">
-        <title>Better Notes</title>
+        <title>Overnote</title>
         <style>
           :root { color-scheme: light dark; }
           html, body { margin: 0; background: transparent; font: 14px -apple-system, system-ui, sans-serif; }
@@ -26,7 +26,7 @@ enum PlaceholderPage {
         (function () {
           const pending = new Map();
           let nextId = 1;
-          window.betterNotesBridge = {
+          window.overnoteBridge = {
             resolve(id, result) { const p = pending.get(id); if (p) { pending.delete(id); p.resolve(result); } },
             reject(id, error) { const p = pending.get(id); if (p) { pending.delete(id); p.reject(error); } },
             emit(event, payload) { onEvent(event, payload); }
@@ -35,7 +35,7 @@ enum PlaceholderPage {
             return new Promise((resolve, reject) => {
               const id = nextId++;
               pending.set(id, { resolve, reject });
-              window.webkit.messageHandlers.betterNotes.postMessage({ id, method, params: params || {} });
+              window.webkit.messageHandlers.overnote.postMessage({ id, method, params: params || {} });
             });
           }
           const editor = document.getElementById("editor");

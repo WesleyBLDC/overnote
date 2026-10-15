@@ -1,5 +1,5 @@
 /** Export file names: the display title plus the extension, made safe for macOS (spec/keymap.md 8.3). */
-import { UNTITLED } from "@better-notes/core";
+import { UNTITLED } from "@overnote/core";
 
 export function exportFileName(text: string, extension: "md" | "html" | "txt"): string {
   const firstLine = (text.split("\n").find((line) => line.trim()) ?? "").trim();

@@ -9,7 +9,7 @@ export type Millis = number;
 export interface NoteContent {
   /** JSON.stringify(ProseMirror doc JSON); canonical. */
   rawContent: string;
-  /** Derived by @better-notes/core. */
+  /** Derived by @overnote/core. */
   markdown: string;
   /** Plain text, derived by core. */
   text: string;

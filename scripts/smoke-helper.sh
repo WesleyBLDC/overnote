@@ -1,7 +1,7 @@
 #!/bin/bash
 # End to end tests of the built helper binary over its real socket.
 #
-# Starts assets/bin/BetterNotesHelper (or $HELPER) with temp directories and drives it the
+# Starts assets/bin/OvernoteHelper (or $HELPER) with temp directories and drives it the
 # way the extension and the editor do. This is where the helper's behavior is tested; the
 # unit suite (helper/test.sh) only keeps pure logic that is hard to reach from here.
 #
@@ -20,7 +20,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HELPER="${HELPER:-$ROOT/assets/bin/BetterNotesHelper}"
+HELPER="${HELPER:-$ROOT/assets/bin/OvernoteHelper}"
 GUI_MODE=0
 [[ "${1:-}" == "--gui" ]] && GUI_MODE=1
 

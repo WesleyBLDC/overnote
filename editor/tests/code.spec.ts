@@ -51,7 +51,7 @@ test("language picker, auto detection, and copy", async ({ page }) => {
   await block.locator(".code-block-copy").click();
   await expect(block.locator(".code-block-copy")).toHaveText("Copied");
   const copies = await page.evaluate(() =>
-    (window as unknown as { __betterNotesMock: { callsTo(m: string): { params: { text: string } }[] } }).__betterNotesMock.callsTo("clipboard.copy"),
+    (window as unknown as { __overnoteMock: { callsTo(m: string): { params: { text: string } }[] } }).__overnoteMock.callsTo("clipboard.copy"),
   );
   expect(copies.at(-1)?.params.text).toBe("def f():\n    return 1");
 });

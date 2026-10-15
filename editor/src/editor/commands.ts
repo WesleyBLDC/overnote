@@ -1,5 +1,5 @@
 /** Formatting actions shared by the slash menu, the format bar, and the Format action. */
-import { toggleListKind, type ListKind } from "@better-notes/core";
+import { toggleListKind, type ListKind } from "@overnote/core";
 import type { Editor } from "@tiptap/core";
 import { liftTarget } from "@tiptap/pm/transform";
 

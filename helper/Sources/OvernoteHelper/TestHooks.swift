@@ -1,5 +1,5 @@
 import AppKit
-import BetterNotesCore
+import OvernoteCore
 
 /// `test.*` socket methods, present only with `--test-hooks`, so the end to end window check
 /// (scripts/e2e-window.sh) can read window state and drive bridge methods against the real

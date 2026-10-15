@@ -3,5 +3,5 @@
 /// Keep this in sync with `helper/VERSION`; the extension restarts a running helper whose
 /// version differs from the one it ships with.
 public enum HelperVersion {
-    public static let current = "0.1.0"
+    public static let current = "0.2.0"
 }

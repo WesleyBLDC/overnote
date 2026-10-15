@@ -44,7 +44,7 @@ enum Migrations {
         let found: Int
         let supported: Int
         var description: String {
-            "Database schema version \(found) is newer than this helper supports (\(supported)). Update Better Notes."
+            "Database schema version \(found) is newer than this helper supports (\(supported)). Update Overnote."
         }
     }
 

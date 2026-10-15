@@ -1,5 +1,5 @@
 import Foundation
-@testable import BetterNotesCore
+@testable import OvernoteCore
 
 /// A clock the tests move by hand.
 final class TestClock: @unchecked Sendable {

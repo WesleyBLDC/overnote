@@ -44,7 +44,7 @@ test("hiding saves right away, outside changes rebase, note.new opens the new no
 
   await page.waitForTimeout(1100);
   await page.evaluate((id) => {
-    const mock = (window as unknown as { __betterNotesMock: { store: { externalUpdate(id: string, c: object): void } } }).__betterNotesMock;
+    const mock = (window as unknown as { __overnoteMock: { store: { externalUpdate(id: string, c: object): void } } }).__overnoteMock;
     mock.store.externalUpdate(id, {
       rawContent: JSON.stringify({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "From outside" }] }] }),
       text: "From outside",
@@ -55,7 +55,7 @@ test("hiding saves right away, outside changes rebase, note.new opens the new no
   await expect(editor(page)).toHaveText("From outside");
 
   const created = await page.evaluate(() => {
-    const mock = (window as unknown as { __betterNotesMock: { store: { handlers: Record<string, (p: unknown) => unknown> } } }).__betterNotesMock;
+    const mock = (window as unknown as { __overnoteMock: { store: { handlers: Record<string, (p: unknown) => unknown> } } }).__overnoteMock;
     return mock.store.handlers["notes.create"]?.({ rawContent: "", markdown: "Fresh", text: "Fresh", title: "Fresh", show: true }) as { id: string };
   });
   await expect(page.getByTestId("app")).toHaveAttribute("data-note-id", created.id);

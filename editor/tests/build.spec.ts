@@ -26,7 +26,7 @@ test("production build boots, renders, and makes no external requests", async ({
     (window as unknown as { __sent: string[] }).__sent = sent;
     (window as unknown as { webkit: unknown }).webkit = {
       messageHandlers: {
-        betterNotes: {
+        overnote: {
           postMessage(message: { id: number; method: string }) {
             sent.push(message.method);
             const results: Record<string, unknown> = {
@@ -35,7 +35,7 @@ test("production build boots, renders, and makes no external requests", async ({
                 windowData: { current: note, previousNoteId: null, nextNoteId: null, pinnedShortcutNoteIds: [] },
               },
             };
-            const bridge = (window as unknown as { betterNotesBridge: { resolve(id: number, r: unknown): void } }).betterNotesBridge;
+            const bridge = (window as unknown as { overnoteBridge: { resolve(id: number, r: unknown): void } }).overnoteBridge;
             setTimeout(() => bridge.resolve(message.id, results[message.method] ?? {}), 1);
           },
         },

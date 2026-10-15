@@ -12,7 +12,7 @@ import {
   type JSONContent,
   type NoteId,
   type rpc,
-} from "@better-notes/core";
+} from "@overnote/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { AnyExtension, Editor } from "@tiptap/core";
 import { EditorState, TextSelection } from "@tiptap/pm/state";

@@ -1,5 +1,5 @@
 /** The ⌘K action panel with pushed views: Format, Copy As, Export, Browse, Recently Deleted (spec/keymap.md 2). */
-import { displayTitle, type NoteId, type NoteSummary, type rpc } from "@better-notes/core";
+import { displayTitle, type NoteId, type NoteSummary, type rpc } from "@overnote/core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
 import { fuzzyScore } from "../editor/slash";

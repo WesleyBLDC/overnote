@@ -138,7 +138,7 @@ public final class PurgeScheduler: @unchecked Sendable {
     /// `work` runs once immediately (synchronously) and then on every tick.
     public init(interval: TimeInterval = PurgeScheduler.interval, work: @escaping @Sendable () -> Void) {
         work()
-        timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "better-notes.purge", qos: .utility))
+        timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "overnote.purge", qos: .utility))
         timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .seconds(60))
         timer.setEventHandler(handler: work)
         timer.resume()
@@ -163,7 +163,7 @@ public struct HelperArguments: Equatable, Sendable {
     public var testHooks = false
 
     public static let usage = """
-        Usage: BetterNotesHelper --support-dir <dir> [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--headless] [--test-hooks] [--version]
+        Usage: OvernoteHelper --support-dir <dir> [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--headless] [--test-hooks] [--version]
         """
 
     public struct ParseError: Error, CustomStringConvertible {

@@ -11,7 +11,7 @@ import {
   type NoteSummary,
   type Settings,
   type WindowData,
-} from "@better-notes/core";
+} from "@overnote/core";
 
 export class MockRpcError extends Error {
   constructor(

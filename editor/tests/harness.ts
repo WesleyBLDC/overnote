@@ -21,18 +21,18 @@ export function editor(page: Page) {
 
 export async function calls(page: Page, method?: string): Promise<RecordedCall[]> {
   return page.evaluate((name) => {
-    const mock = (window as unknown as { __betterNotesMock: { calls: RecordedCall[] } }).__betterNotesMock;
+    const mock = (window as unknown as { __overnoteMock: { calls: RecordedCall[] } }).__overnoteMock;
     return mock.calls.filter((call) => !name || call.method === name);
   }, method);
 }
 
 export async function clearCalls(page: Page): Promise<void> {
-  await page.evaluate(() => (window as unknown as { __betterNotesMock: { clearCalls(): void } }).__betterNotesMock.clearCalls());
+  await page.evaluate(() => (window as unknown as { __overnoteMock: { clearCalls(): void } }).__overnoteMock.clearCalls());
 }
 
 export async function emit(page: Page, event: string, payload: unknown): Promise<void> {
   await page.evaluate(
-    ([name, data]) => (window as unknown as { __betterNotesMock: { emit(e: string, p: unknown): void } }).__betterNotesMock.emit(name as string, data),
+    ([name, data]) => (window as unknown as { __overnoteMock: { emit(e: string, p: unknown): void } }).__overnoteMock.emit(name as string, data),
     [event, payload] as const,
   );
 }
@@ -59,7 +59,7 @@ export async function blocks(page: Page): Promise<string[]> {
 /** Notes stored in the mock, newest update first. */
 export async function storedNotes(page: Page): Promise<{ id: string; title: string; text: string; markdown: string; pinned: number | null; deletedAt: number | null }[]> {
   return page.evaluate(() => {
-    const mock = (window as unknown as { __betterNotesMock: { store: { notes: Map<string, { updatedAt: number }> } } }).__betterNotesMock;
+    const mock = (window as unknown as { __overnoteMock: { store: { notes: Map<string, { updatedAt: number }> } } }).__overnoteMock;
     return [...mock.store.notes.values()].sort((a, b) => b.updatedAt - a.updatedAt) as never;
   });
 }

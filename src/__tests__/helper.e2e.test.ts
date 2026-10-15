@@ -1,6 +1,6 @@
 /**
  * End-to-end: the extension's domain layer against the REAL helper binary
- * (assets/bin/BetterNotesHelper, started with --headless and temp directories).
+ * (assets/bin/OvernoteHelper, started with --headless and temp directories).
  * Run `npm run build:helper` first.
  */
 import { execFileSync, spawn } from "node:child_process";
@@ -19,7 +19,7 @@ import { RpcClient, RpcError } from "../domain/rpc-client";
 import type { NoteSummary, RpcMethod, RpcParams, RpcResult } from "../domain/types";
 import { shortTempDir } from "./helpers";
 
-const REAL_HELPER = path.resolve("assets/bin/BetterNotesHelper");
+const REAL_HELPER = path.resolve("assets/bin/OvernoteHelper");
 const FAKE_HELPER = path.resolve("src/__tests__/fixtures/fake-helper.mjs");
 
 if (!fs.existsSync(REAL_HELPER)) {
@@ -53,8 +53,8 @@ describe("extension domain layer against the real helper", () => {
     const assets = path.join(root, "assets");
     fs.mkdirSync(path.join(assets, "bin"), { recursive: true });
     fs.mkdirSync(path.join(assets, "editor"), { recursive: true });
-    fs.copyFileSync(REAL_HELPER, path.join(assets, "bin", "BetterNotesHelper"));
-    fs.copyFileSync(`${REAL_HELPER}.sha256`, path.join(assets, "bin", "BetterNotesHelper.sha256"));
+    fs.copyFileSync(REAL_HELPER, path.join(assets, "bin", "OvernoteHelper"));
+    fs.copyFileSync(`${REAL_HELPER}.sha256`, path.join(assets, "bin", "OvernoteHelper.sha256"));
     paths = resolvePaths({ supportPath: path.join(root, "support"), assetsPath: assets, runtimeRoot: root });
     launcher = new HelperLauncher({ paths, client: new RpcClient({ socketPath: paths.socket }) });
     realVersion = execFileSync(REAL_HELPER, ["--version"], { encoding: "utf8" }).trim();

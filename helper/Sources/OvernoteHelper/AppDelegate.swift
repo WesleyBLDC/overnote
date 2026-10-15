@@ -1,5 +1,5 @@
 import AppKit
-import BetterNotesCore
+import OvernoteCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {

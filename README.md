@@ -1,4 +1,4 @@
-# Better Notes (planning)
+# Overnote (planning)
 
 An open-source copy of Raycast Notes, installed as a Raycast extension, that we can extend.
 Planning only: no code yet, not a git repository yet.

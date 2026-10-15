@@ -1,4 +1,4 @@
-import { displayTitle } from "@better-notes/core/text";
+import { displayTitle } from "@overnote/core/text";
 
 export { displayTitle };
 

@@ -1,4 +1,4 @@
-# Better Notes: agent instructions
+# Overnote: agent instructions
 
 Read `PLAN.md`, `docs/contract.md`, and the private spec-team guide (clean-room rules) before working here.
 

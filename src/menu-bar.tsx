@@ -3,7 +3,7 @@ import { showFailureToast, useCachedPromise } from "@raycast/utils";
 
 import { contentFromMarkdown } from "./api/content";
 import { loadMenuData } from "./api/menu-data";
-import { createNote, openInBetterNotes } from "./api/notes";
+import { createNote, openInOvernote } from "./api/notes";
 import { summaryTitle } from "./domain/format";
 import type { NoteSummary } from "./domain/types";
 
@@ -20,7 +20,7 @@ function NoteItem({ note }: { note: NoteSummary }) {
     <MenuBarExtra.Item
       title={summaryTitle(note)}
       icon={note.pinned !== null ? Icon.Pin : Icon.Document}
-      onAction={() => run("Could not open the note", () => openInBetterNotes(note.id))}
+      onAction={() => run("Could not open the note", () => openInOvernote(note.id))}
     />
   );
 }
@@ -29,12 +29,12 @@ export default function MenuBar() {
   const { data, isLoading, error } = useCachedPromise(loadMenuData, [], { keepPreviousData: true });
 
   return (
-    <MenuBarExtra icon={Icon.Document} tooltip="Better Notes" isLoading={isLoading}>
+    <MenuBarExtra icon={Icon.Document} tooltip="Overnote" isLoading={isLoading}>
       <MenuBarExtra.Section>
         <MenuBarExtra.Item
-          title="Open Better Notes"
+          title="Open Overnote"
           icon={Icon.AppWindow}
-          onAction={() => run("Could not open Better Notes", () => openInBetterNotes())}
+          onAction={() => run("Could not open Overnote", () => openInOvernote())}
         />
         <MenuBarExtra.Item
           title="New Note"

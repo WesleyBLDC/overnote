@@ -56,7 +56,7 @@ export async function assertBinaryExists(binary: string): Promise<void> {
     if (!stat.isFile()) throw new HelperBinaryError(`${binary} is not a file.`);
   } catch (error) {
     if (isErrno(error, "ENOENT")) {
-      throw new HelperBinaryError("The Better Notes helper is not built. Run `npm run build:helper`.");
+      throw new HelperBinaryError("The Overnote helper is not built. Run `npm run build:helper`.");
     }
     throw error;
   }
@@ -95,7 +95,7 @@ interface VersionCacheEntry {
 }
 
 /**
- * The version of the bundled helper, from `BetterNotesHelper --version`. The answer is cached on
+ * The version of the bundled helper, from `OvernoteHelper --version`. The answer is cached on
  * disk keyed by the binary's size and mtime, so the warm path does not run the binary every time.
  * On a cache miss the binary is verified against its checksum before it runs.
  */

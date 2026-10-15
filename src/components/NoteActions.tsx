@@ -23,7 +23,7 @@ import {
   duplicateNote,
   movePinnedDown,
   movePinnedUp,
-  openInBetterNotes,
+  openInOvernote,
   pinNote,
   recoverNote,
   requireNote,
@@ -65,7 +65,7 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition }:
     }
   }
 
-  const open = () => run("Could not open the note", () => openInBetterNotes(note.id));
+  const open = () => run("Could not open the note", () => openInOvernote(note.id));
 
   const copyContent = () =>
     run("Could not copy the note", async () => {

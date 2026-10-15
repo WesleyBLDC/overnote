@@ -24,7 +24,7 @@ public protocol HelperHost: Sendable {
     func saveFile(suggestedName: String, content: String) async throws -> String?
     /// Called after `settings.set` stored new settings.
     func settingsDidChange(_ settings: Settings) async
-    /// Sends an event to the editor (`window.betterNotesBridge.emit`).
+    /// Sends an event to the editor (`window.overnoteBridge.emit`).
     func emit(_ event: String, _ payload: JSONValue) async
     /// Exits gracefully soon after the current reply has been written.
     func requestShutdown() async

@@ -1,4 +1,4 @@
-import { ZOOM } from "@better-notes/core";
+import { ZOOM } from "@overnote/core";
 
 /** Rounds to the 5% grid and clamps to 75% to 200%. */
 export function clampZoom(value: number): number {

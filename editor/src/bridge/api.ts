@@ -1,5 +1,5 @@
 /** Typed wrappers for every contract method, on top of BridgeClient.call. */
-import { rpc } from "@better-notes/core";
+import { rpc } from "@overnote/core";
 import type { BridgeClient } from "./client";
 
 const M = rpc.Method;

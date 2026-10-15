@@ -7,7 +7,7 @@ import { ensureRuntimeDir, isErrno, type HelperPaths } from "./paths";
 import { isProcessAlive, isProcessNamed, readPidFile, sleep, terminate, waitForExit } from "./process";
 import { RpcClient, sharedClient } from "./rpc-client";
 
-const HELPER_NAME = "BetterNotesHelper";
+const HELPER_NAME = "OvernoteHelper";
 const PING_TIMEOUT_MS = 1000;
 const LOCK_STALE_MS = 15000;
 const LOCK_WAIT_MS = 8000;

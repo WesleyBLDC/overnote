@@ -23,7 +23,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HELPER="${HELPER:-$ROOT/assets/bin/BetterNotesHelper}"
+HELPER="${HELPER:-$ROOT/assets/bin/OvernoteHelper}"
 CAPTURE=""
 [[ "${1:-}" == "--capture" ]] && CAPTURE="${2:?--capture needs a file path}"
 
@@ -503,7 +503,7 @@ const panelWindow = (pid, state) =>
   });
   await stop(helper);
 
-  // The real editor build: served over betternotes:// (strict CSP, lazy chunks), it must
+  // The real editor build: served over overnote:// (strict CSP, lazy chunks), it must
   // reach system.ready and report its height. A fresh install opens at 640 x 560 (auto-sizing
   // off); with auto-sizing on, the panel follows the editor's height.
   args = argsFor(`${TMP}/support-editor`, EDITOR_DIR);

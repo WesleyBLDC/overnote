@@ -103,7 +103,7 @@ export function searchEmoji(entries: EmojiEntry[], query: string): EmojiEntry[] 
   return scored.sort((a, b) => b.score - a.score || a.entry.order - b.entry.order).map((s) => s.entry);
 }
 
-const FREQUENT_KEY = "betterNotes.emoji.frequent";
+const FREQUENT_KEY = "overnote.emoji.frequent";
 
 /** Per viewer usage counts; storage can be unavailable, so every access is guarded. */
 export function frequentEmoji(): string[] {

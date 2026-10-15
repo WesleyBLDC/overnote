@@ -11,7 +11,7 @@ import {
   plainTextToDoc,
   taskAt,
   toggleTasks,
-} from "@better-notes/core";
+} from "@overnote/core";
 import { Extension } from "@tiptap/core";
 import { Fragment, Slice, type Schema } from "@tiptap/pm/model";
 import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";

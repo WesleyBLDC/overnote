@@ -1,5 +1,5 @@
 /** Choosing the range for the link popover (spec/editor.md section 6). */
-import { normalizeLinkHref } from "@better-notes/core";
+import { normalizeLinkHref } from "@overnote/core";
 import type { EditorState } from "@tiptap/pm/state";
 
 export interface LinkTarget {

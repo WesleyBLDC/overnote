@@ -13,8 +13,8 @@ public struct SocketError: Error, CustomStringConvertible, Equatable {
 
 /// Socket file system helpers shared by the server and the client.
 public enum SocketPaths {
-    /// Default runtime directory, `/tmp/better-notes-<uid>`.
-    public static var defaultDirectory: String { "/tmp/better-notes-\(getuid())" }
+    /// Default runtime directory, `/tmp/overnote-<uid>`.
+    public static var defaultDirectory: String { "/tmp/overnote-\(getuid())" }
 
     /// Creates the socket's parent directory with mode 0700, or checks that an existing one
     /// is a real directory owned by this user and tightens its mode to 0700.
@@ -111,7 +111,7 @@ public final class SocketServer: @unchecked Sendable {
     public let path: String
     private let handler: LineHandler
     private let log: @Sendable (String) -> Void
-    private let queue = DispatchQueue(label: "better-notes.socket.accept")
+    private let queue = DispatchQueue(label: "overnote.socket.accept")
     private let lock = NSLock()
     private var listenFd: Int32 = -1
     private var acceptSource: DispatchSourceRead?
@@ -233,7 +233,7 @@ final class Connection: @unchecked Sendable {
     private let handler: SocketServer.LineHandler
     private let log: @Sendable (String) -> Void
     private let onClose: @Sendable (Connection) -> Void
-    private let queue = DispatchQueue(label: "better-notes.socket.connection")
+    private let queue = DispatchQueue(label: "overnote.socket.connection")
     private var source: DispatchSourceRead?
     private var buffer = Data()
     /// Guards the fields below and every write, so a late response never hits a reused descriptor.

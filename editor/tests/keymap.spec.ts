@@ -139,7 +139,7 @@ test("Esc hides the panel window, or resigns focus with the setting on", async (
   await page.keyboard.press("Escape");
   await expect.poll(async () => (await calls(page, "window.hide")).length).toBe(1);
   await page.evaluate(() =>
-    (window as unknown as { __betterNotesMock: { store: { handlers: Record<string, (p: unknown) => unknown> } } }).__betterNotesMock.store.handlers["settings.set"]?.({ escapeLosesFocus: true }),
+    (window as unknown as { __overnoteMock: { store: { handlers: Record<string, (p: unknown) => unknown> } } }).__overnoteMock.store.handlers["settings.set"]?.({ escapeLosesFocus: true }),
   );
   await editor(page).focus();
   await page.keyboard.press("Escape");

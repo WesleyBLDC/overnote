@@ -5,8 +5,8 @@
 import { vi } from "vitest";
 
 export const environment = {
-  supportPath: "/tmp/better-notes-test-support",
-  assetsPath: "/tmp/better-notes-test-assets",
+  supportPath: "/tmp/overnote-test-support",
+  assetsPath: "/tmp/overnote-test-assets",
   launchType: "userInitiated",
 };
 

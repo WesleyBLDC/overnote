@@ -1,5 +1,5 @@
 /** The editor's extension list: core's headless extensions plus DOM-only behavior. */
-import { createHeadlessExtensions } from "@better-notes/core";
+import { createHeadlessExtensions } from "@overnote/core";
 import { Extension, type AnyExtension } from "@tiptap/core";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { Dropcursor, Gapcursor, Placeholder } from "@tiptap/extensions";

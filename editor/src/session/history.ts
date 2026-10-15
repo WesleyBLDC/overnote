@@ -2,7 +2,7 @@
  * Back and forward stacks owned by the editor (contract v2, spec/keymap.md section 5).
  * Stacks are capped; visiting a note clears the forward stack like a browser.
  */
-import type { NoteId } from "@better-notes/core";
+import type { NoteId } from "@overnote/core";
 
 export const HISTORY_CAP = 100;
 

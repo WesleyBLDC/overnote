@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// Draws the Better Notes extension icon (512 x 512 PNG) with AppKit only, so it is reproducible:
+// Draws the Overnote extension icon (512 x 512 PNG) with AppKit only, so it is reproducible:
 //   swift scripts/make-icon.swift assets/extension-icon.png
 // Design: a teal to indigo rounded square holding a floating white note card with a folded corner,
 // three text lines, and a warm accent caret.

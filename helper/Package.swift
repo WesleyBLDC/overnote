@@ -2,22 +2,22 @@
 import PackageDescription
 
 let package = Package(
-    name: "BetterNotesHelper",
+    name: "OvernoteHelper",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "BetterNotesHelper", targets: ["BetterNotesHelper"]),
-        .library(name: "BetterNotesCore", targets: ["BetterNotesCore"]),
+        .executable(name: "OvernoteHelper", targets: ["OvernoteHelper"]),
+        .library(name: "OvernoteCore", targets: ["OvernoteCore"]),
     ],
     targets: [
         // Everything that does not need AppKit or WebKit: storage, RPC, sockets, lifecycle utilities.
         .target(
-            name: "BetterNotesCore",
+            name: "OvernoteCore",
             linkerSettings: [.linkedLibrary("sqlite3")]
         ),
         // The accessory app: floating panel, WKWebView host, bridge, and process lifecycle.
         .executableTarget(
-            name: "BetterNotesHelper",
-            dependencies: ["BetterNotesCore"],
+            name: "OvernoteHelper",
+            dependencies: ["OvernoteCore"],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("WebKit"),
@@ -26,8 +26,8 @@ let package = Package(
         // swift-testing suite. With only the Command Line Tools, run it through ./test.sh,
         // which adds the framework search paths that SwiftPM does not add on its own.
         .testTarget(
-            name: "BetterNotesCoreTests",
-            dependencies: ["BetterNotesCore"]
+            name: "OvernoteCoreTests",
+            dependencies: ["OvernoteCore"]
         ),
     ]
 )

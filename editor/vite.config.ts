@@ -6,7 +6,7 @@ const OUT_DIR = fileURLToPath(new URL("../assets/editor", import.meta.url));
 
 /**
  * Production HTML for the WKWebView: a strict CSP, and no crossorigin attributes,
- * because assets come from the betternotes:// custom scheme on the same origin.
+ * because assets come from the overnote:// custom scheme on the same origin.
  */
 function nativeHtml(): Plugin {
   const csp = [
@@ -21,7 +21,7 @@ function nativeHtml(): Plugin {
     "form-action 'none'",
   ].join("; ");
   return {
-    name: "better-notes-native-html",
+    name: "overnote-native-html",
     apply: "build",
     transformIndexHtml(html) {
       return html

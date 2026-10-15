@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import BetterNotesCore
+@testable import OvernoteCore
 
 // Unit tests are limited to logic end to end tests cannot reach cheaply (CLAUDE.md testing
 // policy): fold rules, ordering and cursor math, pins, trash purge, the update conflict, RPC
@@ -257,7 +257,7 @@ struct SecurityTests {
         ("raycast://extensions/raycast/notes", true),
         ("file:///etc/passwd", false),
         ("javascript:alert(1)", false),
-        ("betternotes://app/index.html", false),
+        ("overnote://app/index.html", false),
         ("https://", false),
         ("not a url", false),
     ])
@@ -276,12 +276,12 @@ struct SecurityTests {
         let assets = EditorAssets(directory: editor)
         func file(_ text: String) throws -> String? { assets.file(for: try #require(URL(string: text)))?.lastPathComponent }
 
-        #expect(try file("betternotes://app/") == "index.html")
-        #expect(try file("betternotes://app/assets/app.js") == "app.js")
-        #expect(try file("betternotes://app/../secret.txt") == nil)
-        #expect(try file("betternotes://app/%2E%2E/secret.txt") == nil)
-        #expect(try file("betternotes://app/assets/..%2F..%2Fsecret.txt") == nil)
-        #expect(try file("betternotes://app/link.txt") == nil)
-        #expect(try file("betternotes://other/index.html") == nil)
+        #expect(try file("overnote://app/") == "index.html")
+        #expect(try file("overnote://app/assets/app.js") == "app.js")
+        #expect(try file("overnote://app/../secret.txt") == nil)
+        #expect(try file("overnote://app/%2E%2E/secret.txt") == nil)
+        #expect(try file("overnote://app/assets/..%2F..%2Fsecret.txt") == nil)
+        #expect(try file("overnote://app/link.txt") == nil)
+        #expect(try file("overnote://other/index.html") == nil)
     }
 }

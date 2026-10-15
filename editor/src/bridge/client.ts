@@ -1,9 +1,9 @@
 /**
  * The web side of the WKWebView bridge (docs/contract.md section 3).
- * Requests go out through window.webkit.messageHandlers.betterNotes; the native side answers by
- * calling window.betterNotesBridge.resolve / reject and pushes events through emit.
+ * Requests go out through window.webkit.messageHandlers.overnote; the native side answers by
+ * calling window.overnoteBridge.resolve / reject and pushes events through emit.
  */
-import { rpc, type RpcErrorPayload } from "@better-notes/core";
+import { rpc, type RpcErrorPayload } from "@overnote/core";
 
 type MethodName = rpc.MethodName;
 type EventName = rpc.EventName;
@@ -19,7 +19,7 @@ export interface MessagePort {
   postMessage(message: OutgoingMessage): void;
 }
 
-/** What the editor installs on window.betterNotesBridge for the native side to call. */
+/** What the editor installs on window.overnoteBridge for the native side to call. */
 export interface BridgeReceiver {
   resolve(id: number | string, result: unknown): void;
   reject(id: number | string, error: RpcErrorPayload): void;
@@ -159,14 +159,14 @@ export class BridgeClient implements BridgeReceiver {
 }
 
 export interface BridgeWindow {
-  webkit?: { messageHandlers?: { betterNotes?: MessagePort } };
-  betterNotesBridge?: BridgeReceiver;
+  webkit?: { messageHandlers?: { overnote?: MessagePort } };
+  overnoteBridge?: BridgeReceiver;
 }
 
-/** Creates the client and publishes it as window.betterNotesBridge before anything is sent. */
+/** Creates the client and publishes it as window.overnoteBridge before anything is sent. */
 export function installBridge(target: BridgeWindow, options?: BridgeOptions): BridgeClient {
-  const client = new BridgeClient(() => target.webkit?.messageHandlers?.betterNotes, options);
-  target.betterNotesBridge = {
+  const client = new BridgeClient(() => target.webkit?.messageHandlers?.overnote, options);
+  target.overnoteBridge = {
     resolve: (id, result) => client.resolve(id, result),
     reject: (id, error) => client.reject(id, error),
     emit: (event, payload) => client.emit(event, payload),
@@ -175,5 +175,5 @@ export function installBridge(target: BridgeWindow, options?: BridgeOptions): Br
 }
 
 export function hasNativeBridge(target: BridgeWindow): boolean {
-  return Boolean(target.webkit?.messageHandlers?.betterNotes);
+  return Boolean(target.webkit?.messageHandlers?.overnote);
 }

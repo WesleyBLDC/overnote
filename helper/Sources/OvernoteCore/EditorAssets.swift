@@ -1,6 +1,6 @@
 import Foundation
 
-/// Maps `betternotes://app/<path>` requests onto files under the editor directory.
+/// Maps `overnote://app/<path>` requests onto files under the editor directory.
 public struct EditorAssets: Sendable {
     public let root: URL
 

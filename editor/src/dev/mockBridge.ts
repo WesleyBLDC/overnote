@@ -1,8 +1,8 @@
 /**
- * Installs a fake window.webkit.messageHandlers.betterNotes backed by MockStore,
- * so the editor runs in a normal browser. Tests drive it through window.__betterNotesMock.
+ * Installs a fake window.webkit.messageHandlers.overnote backed by MockStore,
+ * so the editor runs in a normal browser. Tests drive it through window.__overnoteMock.
  */
-import { buildNoteContent, markdownToDoc, rpc, type Note } from "@better-notes/core";
+import { buildNoteContent, markdownToDoc, rpc, type Note } from "@overnote/core";
 import type { BridgeReceiver, OutgoingMessage } from "../bridge/client";
 import { MockRpcError, MockStore } from "./mockStore";
 
@@ -28,9 +28,9 @@ export interface MockControl {
 }
 
 interface MockWindow {
-  webkit?: { messageHandlers?: { betterNotes?: { postMessage(message: OutgoingMessage): void } } };
-  betterNotesBridge?: BridgeReceiver;
-  __betterNotesMock?: MockControl;
+  webkit?: { messageHandlers?: { overnote?: { postMessage(message: OutgoingMessage): void } } };
+  overnoteBridge?: BridgeReceiver;
+  __overnoteMock?: MockControl;
 }
 
 /** The helper's first-open panel height in points when auto-sizing is off (contract section 4). */
@@ -48,7 +48,7 @@ function seedFromUrl(control: MockControl, search: string): void {
       // fall through to the default seed
     }
   }
-  control.seedMarkdown(["# Welcome to Better Notes\n\nA floating notepad, one hotkey away.\n\n- [ ] Try ⌘↩ on this task\n- [x] Open the dev harness"]);
+  control.seedMarkdown(["# Welcome to Overnote\n\nA floating notepad, one hotkey away.\n\n- [ ] Try ⌘↩ on this task\n- [x] Open the dev harness"]);
 }
 
 export function installMockBridge(target: MockWindow & Window): MockControl {
@@ -69,7 +69,7 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
     if (control.store.settings.windowAutoSize || restingHeight === null) restingHeight = clamp(contentHeight);
     root.style.height = `${restingHeight}px`;
   };
-  const receiver = (): BridgeReceiver | undefined => target.betterNotesBridge;
+  const receiver = (): BridgeReceiver | undefined => target.overnoteBridge;
   const control: MockControl = {
     store: new MockStore({
       emit: (event, payload) => setTimeout(() => receiver()?.emit(event, payload), 0),
@@ -88,7 +88,7 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
 
   target.webkit = {
     messageHandlers: {
-      betterNotes: {
+      overnote: {
         postMessage(message: OutgoingMessage) {
           const params = JSON.parse(JSON.stringify(message.params ?? {})) as unknown;
           control.calls.push({ method: message.method, params, at: Date.now() });
@@ -112,7 +112,7 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
       },
     },
   };
-  target.__betterNotesMock = control;
+  target.__overnoteMock = control;
   target.document.documentElement.dataset.harness = "true";
   seedFromUrl(control, target.location.search);
   if (!control.store.settings.windowAutoSize) {
