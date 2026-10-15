@@ -8,11 +8,11 @@
    * between the items of a list.
    */
   --note-em: calc(1rem * var(--note-scale));
-  --block-gap: calc(0.55 * var(--note-em));
-  --heading-gap: calc(1.1 * var(--note-em));
+  --block-gap: calc(0.6 * var(--note-em));
+  --heading-gap: calc(1.15 * var(--note-em));
   --inner-gap: calc(0.35 * var(--note-em));
-  --item-gap: calc(0.15 * var(--note-em));
-  min-height: 1.55em;
+  --item-gap: calc(0.2 * var(--note-em));
+  min-height: calc(1em * var(--line-height));
   outline: none;
   font-size: var(--note-em);
   line-height: var(--line-height);
@@ -26,6 +26,17 @@
 .note-editor::selection,
 .note-editor ::selection {
   background: var(--selection);
+}
+
+/*
+ * WebKit leaves the gutter beside each line of a bullet or numbered item unpainted when a selection
+ * spans list items (it paints task and toggle gutters and the gaps between items itself), so a select
+ * all showed blank boxes beside those items. Such lists fully inside the selection carry in-selection
+ * (listSelectionPlugin) and paint just their gutter column in the selection color, which is
+ * translucent so it blends over the panel exactly like the native highlight next to it.
+ */
+.note-editor .prosemirror-flat-list.in-selection:is([data-list-kind="bullet"], [data-list-kind="ordered"]) {
+  background: linear-gradient(var(--selection), var(--selection)) left top / var(--list-gutter) 100% no-repeat;
 }
 
 /* Reset first (zero specificity), so the gap rules below always win. */
@@ -47,21 +58,22 @@
 }
 
 .note-editor h1 {
-  font-size: 1.5em;
+  font-size: 1.6em;
   line-height: 1.3;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 .note-editor h2 {
-  font-size: 1.25em;
+  font-size: 1.3em;
   line-height: 1.35;
   font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .note-editor h3 {
-  font-size: 1.08em;
-  line-height: 1.4;
+  font-size: 1.1em;
+  line-height: 1.45;
   font-weight: 650;
 }
 
@@ -75,7 +87,7 @@
 }
 
 .note-editor code {
-  padding: 0.1em 0.3em;
+  padding: 0.12em 0.32em;
   border-radius: var(--radius-s);
   background: var(--surface-code);
   font-family: var(--font-mono);
@@ -84,7 +96,7 @@
 
 .note-editor blockquote {
   padding-left: 0.85em;
-  border-left: 0.2em solid var(--quote-border);
+  border-left: 0.18em solid var(--quote-border);
   color: var(--text-secondary);
 }
 
@@ -92,36 +104,11 @@
   height: 0;
   margin: 0.9em 0;
   border: 0;
-  border-top: 1px solid var(--border-strong);
+  border-top: var(--hairline) solid var(--border-strong);
 }
 
 .note-editor hr.ProseMirror-selectednode {
   border-top-color: var(--accent);
-}
-
-/*
- * The first line is the note's title: the first top-level block carries the note-title decoration
- * (see titleDecoration in domExtensions.ts). Same font, a touch larger and medium weight for a
- * paragraph, then space and a low-contrast hairline across the text column.
- */
-.note-editor > .note-title {
-  padding-bottom: 0.4em;
-  margin-bottom: 0.6em;
-  border-bottom: 1px solid var(--title-rule);
-}
-
-/* An empty note shows only the placeholder; the hairline appears with the first character. */
-.note-editor > .note-title.is-blank-note {
-  border-bottom-color: transparent;
-}
-
-.note-editor > p.note-title {
-  font-size: 1.08em;
-  font-weight: 500;
-}
-
-.note-editor > .note-title + * {
-  margin-top: 0;
 }
 
 /* Placeholders (Tiptap adds data-placeholder on the empty node). */
@@ -219,7 +206,11 @@
   contain: style;
 }
 
-/* Tasks: a rounded square outlined in the neutral accent, a filled inner square when checked. */
+/*
+ * Tasks: a rounded square outlined in the secondary text color; checking fills it with the accent
+ * and draws a check mark. The check animates once, only when the user checks it (just-checked),
+ * so a freshly loaded note never replays it.
+ */
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker label {
   display: flex;
   cursor: pointer;
@@ -230,21 +221,89 @@
   appearance: none;
   position: relative;
   font-size: inherit;
-  width: 0.85em;
-  height: 0.85em;
+  width: 0.88em;
+  height: 0.88em;
   margin: 0;
-  border: 0.09em solid var(--text-secondary);
-  border-radius: 0.25em;
+  border: 0.085em solid var(--text-secondary);
+  border-radius: 0.26em;
   background: transparent;
   cursor: pointer;
+  transition:
+    background-color var(--motion) var(--ease-out),
+    border-color var(--motion) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input:active {
+  transform: scale(0.92);
+}
+
+.note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input::after {
+  content: "";
+  position: absolute;
+  left: 0.27em;
+  top: 0.1em;
+  width: 0.2em;
+  height: 0.42em;
+  border: solid var(--on-accent);
+  border-width: 0 0.09em 0.09em 0;
+  opacity: 0;
+  transform: rotate(45deg) scale(0.4);
+  transform-origin: 60% 60%;
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-slow) var(--ease-out);
+}
+
+.note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input:checked {
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input:checked::after {
-  content: "";
-  position: absolute;
-  inset: 0.13em;
-  border-radius: 0.08em;
-  background: var(--accent);
+  opacity: 1;
+  transform: rotate(45deg) scale(1);
+}
+
+/* The moment of checking (just-checked, see taskCheckPlugin): the box pops and the mark draws in. */
+.note-editor .just-checked[data-list-checked] > .list-marker input {
+  animation: check-pop var(--motion-slow) var(--ease-out);
+}
+
+.note-editor .just-checked[data-list-checked] > .list-marker input::after {
+  animation: check-in var(--motion-slow) var(--ease-out);
+}
+
+.note-editor .just-checked[data-list-checked] > .list-marker,
+.note-editor .just-checked[data-list-checked] > .list-content > :is(p, h1, h2, h3) {
+  animation: check-dim var(--motion-slow) var(--ease-out);
+}
+
+@keyframes check-pop {
+  45% {
+    transform: scale(0.86);
+  }
+}
+
+@keyframes check-in {
+  from {
+    opacity: 0;
+    transform: rotate(45deg) scale(0.4);
+  }
+}
+
+@keyframes check-dim {
+  from {
+    opacity: 1;
+    color: var(--text);
+  }
+}
+
+.note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker,
+.note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-content > :is(p, h1, h2, h3) {
+  transition:
+    opacity var(--motion) var(--ease-out),
+    color var(--motion) var(--ease-out);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="task"][data-list-checked] > .list-marker {
@@ -263,7 +322,7 @@
 .note-editor .prosemirror-flat-list[data-list-kind="toggle"] > .list-marker::before {
   content: "▸";
   color: var(--text-secondary);
-  transition: transform 120ms ease;
+  transition: transform var(--motion) var(--ease-out);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="toggle"]:not([data-list-collapsed]) > .list-marker::before {
@@ -284,11 +343,11 @@
 
 .note-editor .code-block pre {
   margin: 0;
-  padding: 0.65em 0.8em;
+  padding: 0.8em 0.95em;
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: 0.86em;
-  line-height: 1.5;
+  line-height: 1.55;
   tab-size: 4;
 }
 
@@ -306,7 +365,7 @@
   align-items: center;
   gap: 0.2em;
   opacity: 0;
-  transition: opacity 120ms ease;
+  transition: opacity var(--motion) var(--ease-out);
   -webkit-user-select: none;
   user-select: none;
 }
@@ -320,9 +379,10 @@
 .note-editor .code-block-copy {
   height: 1.6em;
   padding: 0 0.45em;
-  border: 0.5px solid var(--border);
+  border: 0;
   border-radius: var(--radius-s);
   background: var(--surface-raised);
+  box-shadow: var(--shadow-small);
   color: var(--text-secondary);
   font: inherit;
   font-size: 0.76em;

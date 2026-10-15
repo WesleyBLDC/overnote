@@ -34,7 +34,8 @@ import { CommandPanel, type PanelAction, type PanelViewName } from "./CommandPan
 import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
 import { FindBar, type FindBarHandle } from "./FindBar";
 import { Footer } from "./Footer";
-import { useDragRegions, useLatest, useNotices, useResizeReporter, useSettings } from "./hooks";
+import { ExitGhost } from "./ExitGhost";
+import { useDragRegions, useLatest, useNotices, useResizeReporter, useScrollEdges, useSettings } from "./hooks";
 import { LinkPopover } from "./LinkPopover";
 import { Notices } from "./Notices";
 import { SlashMenu, type SlashMenuHandle } from "./SlashMenu";
@@ -42,12 +43,13 @@ import { Toolbar } from "./Toolbar";
 
 type ExportFormat = "md" | "html" | "txt";
 
+/** Places the caret and scrolls it into view in the same transaction, so the first painted frame is already right. */
 function clampCaret(editor: Editor, caret: number | null): void {
   const { doc } = editor.state;
   const size = doc.content.size;
   const wanted = typeof caret === "number" && Number.isFinite(caret) && caret > 0 ? Math.min(caret, size) : 0;
   const selection = wanted > 0 ? TextSelection.near(doc.resolve(wanted)) : TextSelection.atStart(doc);
-  editor.view.dispatch(editor.state.tr.setSelection(selection).setMeta("addToHistory", false));
+  editor.view.dispatch(editor.state.tr.setSelection(selection).setMeta("addToHistory", false).scrollIntoView());
 }
 
 /** Replaces the document without an undo step and starts a fresh undo history. */
@@ -55,6 +57,9 @@ function loadIntoEditor(editor: Editor, doc: JSONContent, caret: number | null):
   editor.commands.setContent(doc, { emitUpdate: false });
   const { state } = editor;
   editor.view.updateState(EditorState.create({ doc: state.doc, plugins: state.plugins }));
+  // Every note opens from the top, then the caret is revealed: never the previous note's offset.
+  const scroller = editor.view.dom.closest(".content");
+  if (scroller) scroller.scrollTop = 0;
   clampCaret(editor, caret);
 }
 
@@ -138,8 +143,9 @@ export function App({ api }: { api: Api }) {
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
-      scrollThreshold: { top: 16, bottom: 100, left: 0, right: 0 },
-      scrollMargin: { top: 16, bottom: 100, left: 0, right: 0 },
+      // The top margin keeps the caret below the scroll fade under the toolbar.
+      scrollThreshold: { top: 24, bottom: 100, left: 0, right: 0 },
+      scrollMargin: { top: 24, bottom: 100, left: 0, right: 0 },
       attributes: { class: "note-editor", "data-testid": "editor", spellcheck: "true" },
       handleKeyDown: (_view, event) => emojiRef.current?.onKeyDown(event) || slashRef.current?.onKeyDown(event) || false,
     },
@@ -286,6 +292,7 @@ export function App({ api }: { api: Api }) {
   const overlayRem = panel || confirm ? 34 : slashItems.length || showEmoji || linkTarget || formatMenuOpen ? 16 : null;
   useResizeReporter(wrapperRef, api, { autoSize: settings.windowAutoSize, overlayRem });
   useDragRegions(wrapperRef, api, settings.zoom);
+  useScrollEdges(wrapperRef);
 
   // ---- actions ----
 
@@ -576,7 +583,7 @@ export function App({ api }: { api: Api }) {
 
   return (
     <div className="app" ref={wrapperRef} data-testid="app" data-ready={state.ready ? "true" : "false"} data-note-id={currentId ?? ""}>
-      <Toolbar title={title} onClose={() => {
+      <Toolbar title={title} untitled={blank} onClose={() => {
         void session.flush();
         void api.window.hide().catch(() => undefined);
       }} onActions={() => setPanel(panel ? null : "root")} onBrowse={() => setPanel("browse")} onNew={() => void session.newNote()} />
@@ -698,6 +705,7 @@ export function App({ api }: { api: Api }) {
           }
         />
       ) : null}
+      <ExitGhost open={panel !== null} root={wrapperRef} selector=".panel-backdrop" className="panel-ghost" />
       {confirm ? <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} /> : null}
       <Notices notices={notices} />
     </div>

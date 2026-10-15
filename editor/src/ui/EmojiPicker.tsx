@@ -2,6 +2,7 @@
 import type { Editor } from "@tiptap/core";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CATEGORIES, frequentEmoji, loadEmoji, quickEmoji, searchEmoji, type EmojiEntry } from "../editor/emoji";
+import { revealSelected } from "../lib/motion";
 
 export interface EmojiPickerHandle {
   onKeyDown(event: KeyboardEvent): boolean;
@@ -73,7 +74,7 @@ export const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(funct
   const itemCount = mode === "quick" ? cells.length + 1 : cells.length;
 
   useEffect(() => {
-    gridRef.current?.querySelector(".is-selected")?.scrollIntoView({ block: "nearest" });
+    revealSelected(gridRef.current, true);
   }, [selected]);
 
   useImperativeHandle(ref, () => ({

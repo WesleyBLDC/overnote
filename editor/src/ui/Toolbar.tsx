@@ -2,6 +2,8 @@ import { Icon } from "./icons";
 
 interface ToolbarProps {
   title: string;
+  /** No text yet: the title is the "Untitled" fallback and is drawn quieter. */
+  untitled?: boolean;
   onClose: () => void;
   onActions: () => void;
   onBrowse: () => void;
@@ -9,7 +11,7 @@ interface ToolbarProps {
 }
 
 /** Top bar: the live title in the middle and three buttons on the right. */
-export function Toolbar({ title, onClose, onActions, onBrowse, onNew }: ToolbarProps) {
+export function Toolbar({ title, untitled, onClose, onActions, onBrowse, onNew }: ToolbarProps) {
   const keep = (event: React.MouseEvent) => event.preventDefault();
   return (
     <header className="toolbar" data-testid="toolbar">
@@ -18,7 +20,7 @@ export function Toolbar({ title, onClose, onActions, onBrowse, onNew }: ToolbarP
           <Icon name="close" />
         </button>
       </div>
-      <h1 className="toolbar-title" data-testid="title" title={title}>
+      <h1 className={`toolbar-title${untitled ? " is-untitled" : ""}`} data-testid="title" title={title}>
         {title}
       </h1>
       <div className="toolbar-actions chrome">

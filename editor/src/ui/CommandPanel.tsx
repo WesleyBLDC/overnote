@@ -3,9 +3,11 @@ import { displayTitle, type NoteId, type NoteSummary, type rpc, type Settings } 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
 import { fuzzyScore } from "../editor/slash";
+import { revealSelected } from "../lib/motion";
 import { characterLabel, relativeTime } from "../lib/relativeTime";
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
 import { adjustSetting, filterSettings, SettingsList } from "./SettingsView";
+import { Keys } from "./Keys";
 
 export interface PanelAction {
   id: string;
@@ -68,6 +70,9 @@ export function CommandPanel(props: CommandPanelProps) {
     loading: false,
   });
   const [deleted, setDeleted] = useState<rpc.DeletedItem[]>([]);
+  // Empty states wait for the first answer, so an empty list never flashes before the rows arrive.
+  const [deletedLoaded, setDeletedLoaded] = useState(false);
+  const [browseLoaded, setBrowseLoaded] = useState(false);
   const [version, setVersion] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -86,6 +91,7 @@ export function CommandPanel(props: CommandPanelProps) {
           cursor: page.nextCursor,
           loading: false,
         }));
+        setBrowseLoaded(true);
         if (!cursor && !filter.trim()) {
           const current = page.items.findIndex((item) => item.id === props.currentId);
           setIndex(Math.max(0, current));
@@ -99,7 +105,15 @@ export function CommandPanel(props: CommandPanelProps) {
 
   useEffect(() => {
     if (view === "browse") void loadBrowse(null, query);
-    if (view === "deleted") void props.api.notes.listDeleted().then((result) => setDeleted(result.items), () => undefined);
+    if (view === "deleted") {
+      void props.api.notes.listDeleted().then(
+        (result) => {
+          setDeleted(result.items);
+          setDeletedLoaded(true);
+        },
+        () => setDeletedLoaded(true),
+      );
+    }
   }, [view, query, version]);
 
   const actions = useMemo(() => {
@@ -118,9 +132,12 @@ export function CommandPanel(props: CommandPanelProps) {
     view === "browse" ? browse.items.length : view === "deleted" ? deletedRows.length : view === "settings" ? settingRows.length : actions.length;
   const selected = Math.min(index, Math.max(0, rowCount - 1));
 
+  // The selection glides into view on keyboard steps; a new view lands on it at once.
+  const revealedView = useRef<PanelViewName | null>(null);
   useEffect(() => {
-    listRef.current?.querySelector(".is-selected")?.scrollIntoView({ block: "nearest" });
-  }, [selected, view]);
+    revealSelected(listRef.current, revealedView.current === view);
+    revealedView.current = view;
+  }, [selected, view, rowCount]);
 
   const push = (next: PanelViewName) => {
     setStack((s) => [...s, next]);
@@ -207,7 +224,7 @@ export function CommandPanel(props: CommandPanelProps) {
             setIndex(0);
           }}
         />
-        <div className="panel-list" ref={listRef} onScroll={onScroll} role="listbox">
+        <div className="panel-list" key={view} ref={listRef} onScroll={onScroll} role="listbox">
           {view === "browse"
             ? browse.items.map((note, i) => {
                 const header = i === 0 && pinnedRows.length ? "Pinned" : i === pinnedRows.length ? "Notes" : null;
@@ -271,9 +288,19 @@ export function CommandPanel(props: CommandPanelProps) {
                 );
               })
             : null}
+          {view === "browse" && !browse.items.length && browseLoaded ? (
+            <EmptyState icon="search" title="No Matching Notes" hint={query.trim() ? "Try a different search." : "Notes you write show up here."} />
+          ) : null}
           {view === "deleted" ? (
             <>
-              {!query ? <div className="panel-banner">Notes in Recently Deleted will be permanently removed after 60 days.</div> : null}
+              {!query && deletedRows.length ? <div className="panel-banner">Notes in Recently Deleted will be permanently removed after 60 days.</div> : null}
+              {!deletedRows.length && deletedLoaded ? (
+                query ? (
+                  <EmptyState icon="search" title="No Matching Deleted Notes" hint="Try a different search." />
+                ) : (
+                  <EmptyState icon="trash" title="No Recently Deleted Notes" hint="Deleted notes stay here for 60 days before they are removed." />
+                )
+              ) : null}
               {deletedRows.map((note, i) => (
                 <div
                   key={note.id}
@@ -334,6 +361,10 @@ export function CommandPanel(props: CommandPanelProps) {
               onChange={props.onSettings}
             />
           ) : null}
+          {view !== "browse" && view !== "deleted" && view !== "settings" && !actions.length ? (
+            <EmptyState icon="search" title="No Matching Actions" />
+          ) : null}
+          {view === "settings" && !settingRows.length ? <EmptyState icon="search" title="No Matching Settings" /> : null}
           {view !== "browse" && view !== "deleted" && view !== "settings"
             ? actions.map((action, i) => {
                 const divider = !query && lastSection !== null && action.section !== lastSection;
@@ -353,7 +384,7 @@ export function CommandPanel(props: CommandPanelProps) {
                       tabIndex={-1}
                     >
                       <span className="panel-row-title">{action.title}</span>
-                      {action.push ? <Icon name="chevron" /> : action.shortcut ? <kbd>{action.shortcut}</kbd> : null}
+                      {action.push ? <Icon name="chevron" /> : action.shortcut ? <Keys shortcut={action.shortcut} /> : null}
                     </button>
                   </div>
                 );
@@ -361,6 +392,16 @@ export function CommandPanel(props: CommandPanelProps) {
             : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, hint }: { icon: IconName; title: string; hint?: string }) {
+  return (
+    <div className="panel-empty" data-testid="panel-empty" role="status">
+      <Icon name={icon} />
+      <span className="panel-empty-title">{title}</span>
+      {hint ? <span className="panel-empty-hint">{hint}</span> : null}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 import type { Editor } from "@tiptap/core";
 import { forwardRef, useImperativeHandle, useLayoutEffect, useState } from "react";
 import type { SlashItem } from "../editor/slash";
+import { Keys } from "./Keys";
 
 export interface SlashMenuHandle {
   /** Returns true when the key was used by the menu. */
@@ -66,7 +67,7 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
               tabIndex={-1}
             >
               <span className="menu-title">{item.title}</span>
-              <kbd>{item.shortcut}</kbd>
+              <Keys shortcut={item.shortcut} />
             </button>
           </div>
         );

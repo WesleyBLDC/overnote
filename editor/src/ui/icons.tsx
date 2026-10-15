@@ -29,6 +29,7 @@ const paths: Record<string, ReactElement> = {
   up: <path d="m4 10 4-4 4 4" />,
   down: <path d="m4 6 4 4 4-4" />,
   close: <path d="m4 4 8 8M12 4l-8 8" />,
+  search: <path d="M7 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10ZM13.5 13.5 10.6 10.6" />,
   sliders: <path d="M3 5h4m3 0h3M3 11h2m3 0h5M8.5 3.5v3M6.5 9.5v3" />,
 };
 

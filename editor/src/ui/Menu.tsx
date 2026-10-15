@@ -1,6 +1,7 @@
 /** A small dropdown menu with keyboard navigation, used by the format bar. */
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./icons";
+import { Keys } from "./Keys";
 
 export interface MenuItem {
   id: string;
@@ -58,7 +59,7 @@ export function Menu({ items, onSelect, onClose }: MenuProps) {
         >
           <span className="menu-check">{item.checked ? <Icon name="check" /> : null}</span>
           <span className="menu-title">{item.title}</span>
-          {item.shortcut ? <kbd>{item.shortcut}</kbd> : null}
+          {item.shortcut ? <Keys shortcut={item.shortcut} /> : null}
         </button>
       ))}
     </div>

@@ -5,6 +5,19 @@
   box-sizing: border-box;
 }
 
+/* Registered so the scroll fades can transition (an unregistered custom property would snap). */
+@property --fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 html {
   font-size: calc(var(--font-size) * var(--zoom));
   background: var(--surface);
@@ -52,17 +65,63 @@ button {
   color: inherit;
 }
 
+button:focus {
+  outline: none;
+}
+
+/* One focus ring everywhere a control can take keyboard focus. */
+button:focus-visible,
+[role="switch"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring);
+}
+
 kbd {
   font-family: var(--font-ui);
   font-size: 0.8rem;
   color: var(--text-tertiary);
-  letter-spacing: 0.04em;
 }
 
+/* Shortcuts: one small keycap per key, quiet until the row is selected. */
+.keys {
+  display: inline-flex;
+  flex: none;
+  gap: var(--space-0);
+  margin-left: auto;
+}
+
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-xs);
+  background: var(--keycap-bg);
+  box-shadow: inset 0 0 0 var(--hairline) var(--keycap-border);
+  color: var(--keycap-text);
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1;
+  transition: color var(--motion-fast) var(--ease-out);
+}
+
+.is-selected .keycap {
+  color: var(--text-secondary);
+}
+
+/* Icons share one stroke weight at every size, scaled by zoom with the rest of the UI. */
 .icon {
   width: 1rem;
   height: 1rem;
   flex: none;
+  stroke-width: 0.1rem;
+}
+
+.icon * {
+  vector-effect: non-scaling-stroke;
 }
 
 /* The app fills the panel; the editor area takes the rest and scrolls past the maximum height. */
@@ -74,9 +133,9 @@ kbd {
   background: var(--body-tint);
 }
 
-/* Chrome shows only while the pointer is over the panel. */
+/* Chrome shows only while the pointer is over the panel. Opacity only, so nothing shifts. */
 .chrome {
-  transition: opacity 140ms ease;
+  transition: opacity var(--motion) var(--ease-out);
 }
 
 .app:not(:hover) .chrome {
@@ -91,7 +150,7 @@ kbd {
 
 .toolbar-title,
 .format-bar {
-  transition: opacity 140ms ease;
+  transition: opacity var(--motion) var(--ease-out);
 }
 
 .close-button {
@@ -105,11 +164,15 @@ kbd {
   border-radius: 50%;
   background: var(--close);
   color: transparent;
+  transition:
+    opacity var(--motion) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
 }
 
 .close-button .icon {
   width: 0.6rem;
   height: 0.6rem;
+  stroke-width: 0.11rem;
 }
 
 .close-button:hover {
@@ -123,17 +186,40 @@ kbd {
  * Everything in the toolbar that is not a control drags the window (window.setDragRegions).
  */
 .toolbar {
+  position: relative;
   flex: none;
   z-index: 5;
   display: grid;
   grid-template-columns: 1fr minmax(0, auto) 1fr;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   min-height: var(--toolbar-height);
   padding: var(--drag-strip) max(var(--corner-clearance), calc(var(--content-x) - (var(--chrome-hit) - var(--chrome-icon)) / 2)) 0
     max(var(--corner-clearance), var(--content-x));
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* A hairline under the toolbar while the note is scrolled beneath it. */
+.toolbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--hairline);
+  background: var(--border);
+  opacity: 0;
+  transition: opacity var(--motion-slow) var(--ease-out);
+  pointer-events: none;
+}
+
+.app[data-scroll~="top"] .toolbar::after {
+  opacity: 1;
+}
+
+.toolbar-title.is-untitled {
+  color: var(--text-tertiary);
 }
 
 .toolbar-title {
@@ -179,17 +265,25 @@ kbd {
   justify-content: center;
   min-width: 1.7rem;
   height: 1.7rem;
-  padding: 0 0.3rem;
+  padding: 0 var(--space-1);
   border: 0;
   border-radius: var(--radius-s);
   background: transparent;
   color: var(--text-secondary);
   cursor: default;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    opacity var(--motion) var(--ease-out);
 }
 
 .icon-button:hover:not(:disabled) {
   background: var(--surface-hover);
   color: var(--text);
+}
+
+.icon-button:active:not(:disabled) {
+  background: var(--surface-selected);
 }
 
 .icon-button:disabled {
@@ -199,7 +293,7 @@ kbd {
 .icon-button.round {
   width: 2.3rem;
   height: 2.3rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
 }
 
 .icon-button.is-active {
@@ -208,23 +302,52 @@ kbd {
 
 .text-button {
   height: 1.7rem;
-  padding: 0 0.6rem;
-  border: 0.5px solid var(--border-strong);
+  padding: 0 var(--space-3);
+  border: 0;
   border-radius: var(--radius-s);
-  background: transparent;
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
   font-size: 0.86rem;
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+.text-button:hover:not(:disabled) {
+  background: var(--surface-selected);
 }
 
 .text-button:disabled {
   opacity: 0.45;
 }
 
+/*
+ * The note scrolls here. While content sits above or below the viewport, its edge fades out under
+ * the toolbar (top) or toward the footer (bottom) instead of being cut by a hard line. The fades
+ * are a mask, so they never change layout or the reported height.
+ */
 .content {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding: var(--content-top) var(--content-x) var(--content-bottom);
   cursor: text;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade-top), #000 calc(100% - var(--fade-bottom)), transparent 100%);
+  transition:
+    --fade-top var(--motion-slow) var(--ease-out),
+    --fade-bottom var(--motion-slow) var(--ease-out);
+}
+
+.app[data-scroll~="top"] .content {
+  --fade-top: var(--scroll-fade);
+}
+
+.app[data-scroll~="bottom"] .content {
+  --fade-bottom: calc(var(--scroll-fade) * 0.7);
+}
+
+/* Until the note and its caret are in place the editor stays invisible, so opening never flashes. */
+.app[data-ready="false"] .content-inner {
+  visibility: hidden;
 }
 
 .footer {
@@ -249,11 +372,15 @@ kbd {
 .counter {
   border: 0;
   background: transparent;
-  padding: 0.1rem 0.5rem;
+  padding: 0.1rem var(--space-2);
   border-radius: var(--radius-s);
   font-size: 0.8rem;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
+  transition:
+    color var(--motion-fast) var(--ease-out),
+    background-color var(--motion-fast) var(--ease-out);
+  animation: fade-in var(--motion) var(--ease-out);
 }
 
 .counter:hover {
@@ -261,10 +388,16 @@ kbd {
   background: var(--surface-hover);
 }
 
+/* The counter never shows a focus ring: focus stays in the editor. */
+.counter:focus-visible {
+  box-shadow: none;
+}
+
 .format-bar {
   display: flex;
   align-items: center;
   gap: 0.1rem;
+  animation: rise-in var(--motion-slow) var(--ease-out);
 }
 
 .format-group {
@@ -283,6 +416,9 @@ kbd {
   border-radius: var(--radius-s);
   background: transparent;
   color: var(--text-secondary);
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
 }
 
 .format-button .icon {
@@ -297,6 +433,7 @@ kbd {
 
 .format-button:hover {
   background: var(--surface-hover);
+  color: var(--text);
 }
 
 .format-button.is-active {
@@ -305,10 +442,48 @@ kbd {
 }
 
 .format-divider {
-  width: 1px;
+  width: var(--hairline);
   height: 1.2rem;
-  margin: 0 0.25rem;
+  margin: 0 var(--space-1);
   background: var(--border-strong);
+}
+
+/* ---- motion primitives ---- */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.25rem);
+  }
+}
+
+/* Popovers drop in from just above their resting place. */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--pop-offset)) scale(var(--pop-scale));
+  }
+}
+
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: translateY(var(--pop-offset)) scale(var(--pop-scale));
+  }
+}
+
+/* Footer menus are centered with a transform, so their animation keeps it. */
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0.25rem) scale(var(--pop-scale));
+  }
 }
 
 /* ---- popovers and menus ---- */
@@ -319,38 +494,43 @@ kbd {
   background: var(--surface-raised);
   -webkit-backdrop-filter: blur(24px) saturate(1.6);
   backdrop-filter: blur(24px) saturate(1.6);
-  border-radius: var(--radius-m);
+  border-radius: var(--radius-l);
   box-shadow: var(--shadow);
 }
 
 .popover {
   position: absolute;
   z-index: 20;
+  transform-origin: top center;
+  animation: pop-in var(--motion-slow) var(--ease-out);
 }
 
 .menu {
   position: absolute;
-  bottom: calc(100% + 0.4rem);
+  bottom: calc(100% + var(--space-2));
   left: 50%;
   z-index: 30;
   width: 15rem;
-  padding: 0.3rem;
+  padding: var(--space-1);
   transform: translateX(-50%);
+  transform-origin: bottom center;
   outline: none;
+  animation: menu-in var(--motion-slow) var(--ease-out);
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--space-2);
   width: 100%;
-  height: 1.9rem;
-  padding: 0 0.5rem;
+  height: 2rem;
+  padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-s);
   background: transparent;
   text-align: left;
   font-size: 0.9rem;
+  transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .menu-item.is-selected {
@@ -371,15 +551,16 @@ kbd {
 }
 
 .menu-section {
-  padding: 0.45rem 0.5rem 0.2rem;
-  font-size: 0.75rem;
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: 0.74rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-tertiary);
 }
 
 .menu-divider {
-  height: 1px;
-  margin: 0.3rem 0.4rem;
+  height: var(--hairline);
+  margin: var(--space-1) var(--space-2);
   background: var(--border);
 }
 
@@ -387,11 +568,11 @@ kbd {
   width: 20rem;
   max-height: 20rem;
   overflow-y: auto;
-  padding: 0.3rem;
+  padding: var(--space-1);
 }
 
 .link-popover {
-  padding: 0.3rem;
+  padding: var(--space-1);
   outline: none;
 }
 
@@ -406,7 +587,7 @@ kbd {
   flex: 1;
   min-width: 0;
   height: 1.7rem;
-  padding: 0 0.4rem;
+  padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-s);
   background: transparent;
@@ -419,6 +600,11 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 0.86rem;
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+.link-url:hover {
+  background: var(--surface-hover);
 }
 
 .link-edit input,
@@ -427,20 +613,29 @@ kbd {
   flex: 1;
   min-width: 0;
   height: 1.8rem;
-  padding: 0 0.5rem;
-  border: 0.5px solid var(--border-strong);
+  padding: 0 var(--space-2);
+  border: 0;
   border-radius: var(--radius-s);
-  background: transparent;
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
   color: var(--text);
   font: inherit;
   font-size: 0.9rem;
   outline: none;
+  transition: box-shadow var(--motion-fast) var(--ease-out);
+}
+
+.link-edit input::placeholder,
+.find-row input::placeholder,
+.panel-search::placeholder {
+  color: var(--placeholder);
 }
 
 .link-edit input:focus,
 .find-row input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--focus-ring);
+  box-shadow:
+    inset 0 0 0 var(--hairline) var(--border-strong),
+    0 0 0 var(--focus-ring-width) var(--focus-ring);
 }
 
 .find-bar {
@@ -448,12 +643,14 @@ kbd {
   z-index: 4;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  margin: 0 0.6rem 0.3rem;
-  padding: 0.35rem;
-  border-radius: var(--radius-m);
+  gap: var(--space-1);
+  margin: 0 var(--space-3) var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-l);
   background: var(--surface-raised);
   box-shadow: var(--shadow);
+  transform-origin: top center;
+  animation: pop-in var(--motion-slow) var(--ease-out);
 }
 
 .find-row {
@@ -471,7 +668,7 @@ kbd {
 }
 
 .chevron .icon {
-  transition: transform 120ms ease;
+  transition: transform var(--motion) var(--ease-out);
 }
 
 .chevron.is-open .icon {
@@ -495,49 +692,85 @@ kbd {
   align-items: center;
   justify-content: center;
   background: var(--dialog-scrim);
+  animation: fade-in var(--motion) var(--ease-out);
 }
+
+/* ---- the command panel (⌘K, browse, recently deleted, settings) ---- */
 
 .panel {
   top: calc(var(--drag-strip) + 2.2rem);
-  left: 50%;
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
-  width: min(22.8rem, calc(100% - 1.5rem));
+  width: min(var(--panel-width), calc(100% - 1.5rem));
   max-height: min(30rem, calc(100% - var(--drag-strip) - 3rem));
-  padding: 0.4rem;
-  transform: translateX(-50%);
+  margin: 0 auto;
+  padding: 0 var(--space-2) var(--space-2);
+  overflow: hidden;
+}
+
+/* The closing panel: a static, inert copy that fades out while focus is already back in the note. */
+.panel-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 39;
+  pointer-events: none;
+}
+
+.panel-ghost .panel {
+  animation: pop-out var(--motion-fast) var(--ease-in) forwards;
 }
 
 .panel-search {
   flex: none;
-  height: 2rem;
-  margin-bottom: 0.3rem;
-  border: 0;
-  border-bottom: 0.5px solid var(--border);
+  height: 2.75rem;
+  margin: 0 calc(-1 * var(--space-2)) var(--space-1);
+  /* Text lines up with the row titles below: the panel inset plus the row inset. */
+  padding: 0 calc(var(--space-2) + var(--space-3));
   border-radius: 0;
+  background: transparent;
+  box-shadow: inset 0 calc(-1 * var(--hairline)) 0 var(--border);
+  font-size: 0.95rem;
+}
+
+/* Section titles and the banner start on the same line as the row titles. */
+.panel .menu-section {
+  padding-inline: var(--space-3);
 }
 
 .panel-list {
   overflow-y: auto;
   min-height: 0;
+  scroll-padding: var(--space-1) 0;
+  animation: fade-in var(--motion-fast) var(--ease-out);
 }
 
 .panel-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   width: 100%;
-  min-height: 2rem;
-  padding: 0.25rem 0.5rem;
+  min-height: var(--row-height);
+  padding: var(--space-1) var(--space-3);
   border: 0;
-  border-radius: var(--radius-s);
+  border-radius: var(--radius-m);
   background: transparent;
   text-align: left;
   font-size: 0.9rem;
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+.panel-row > .icon {
+  color: var(--text-tertiary);
 }
 
 .panel-row.is-selected {
   background: var(--surface-selected);
+}
+
+.panel-row.is-selected > .icon {
+  color: var(--text-secondary);
 }
 
 .panel-row.is-destructive .panel-row-title {
@@ -552,6 +785,7 @@ kbd {
   display: flex;
   flex: 1;
   flex-direction: column;
+  gap: 0.05rem;
   min-width: 0;
 }
 
@@ -563,13 +797,52 @@ kbd {
 }
 
 .panel-row-subtitle {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 0.78rem;
   color: var(--text-tertiary);
+}
+
+/* Two line rows (notes, deleted notes, settings). */
+.panel-row:has(.panel-row-subtitle) {
+  min-height: var(--row-height-tall);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
 }
 
 .panel-row-buttons {
   display: flex;
   gap: 0.1rem;
+  animation: fade-in var(--motion-fast) var(--ease-out);
+}
+
+.panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-6) var(--space-4) calc(var(--space-6) + var(--space-1));
+  text-align: center;
+}
+
+.panel-empty .icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-bottom: var(--space-1);
+  color: var(--text-tertiary);
+}
+
+.panel-empty-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.panel-empty-hint {
+  max-width: 16rem;
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
 }
 
 /* ---- Settings view (⌘,) ---- */
@@ -579,14 +852,7 @@ kbd {
 }
 
 .setting-row {
-  min-height: 2.9rem;
   cursor: default;
-}
-
-.setting-row .panel-row-subtitle {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .switch {
@@ -594,9 +860,9 @@ kbd {
   flex: none;
   width: 2.15rem;
   height: 1.25rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--border-strong);
-  transition: background 140ms ease;
+  transition: background-color var(--motion) var(--ease-out);
 }
 
 .switch::after {
@@ -609,7 +875,9 @@ kbd {
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  transition: transform 140ms ease;
+  transition:
+    transform var(--motion-slow) var(--ease-out),
+    background-color var(--motion) var(--ease-out);
 }
 
 .switch.is-on {
@@ -624,25 +892,28 @@ kbd {
 .segmented {
   display: inline-flex;
   flex: none;
-  padding: 0.125rem;
+  padding: var(--space-0);
   border-radius: var(--radius-s);
   background: var(--surface-hover);
 }
 
 .segmented button {
   height: 1.45rem;
-  padding: 0 0.55rem;
+  padding: 0 var(--space-2);
   border: 0;
-  border-radius: calc(var(--radius-s) - 0.1rem);
+  border-radius: calc(var(--radius-s) - var(--space-0));
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.8rem;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
 }
 
 .segmented button.is-on {
   background: var(--surface-raised);
   color: var(--text);
-  box-shadow: 0 0 0 0.5px var(--border-strong);
+  box-shadow: var(--shadow-small);
 }
 
 .stepper {
@@ -660,15 +931,15 @@ kbd {
 }
 
 .stepper-reset {
-  margin-left: 0.3rem;
+  margin-left: var(--space-1);
   height: 1.45rem;
   font-size: 0.8rem;
 }
 
 .panel-banner {
-  margin: 0.2rem 0.5rem 0.4rem;
+  margin: var(--space-1) var(--space-3) var(--space-2);
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 
 .dot {
@@ -683,16 +954,17 @@ kbd {
 
 .dialog {
   width: min(20rem, calc(100% - 2rem));
-  padding: 1rem;
+  padding: var(--space-4);
+  animation: pop-in var(--motion-slow) var(--ease-out);
 }
 
 .dialog h2 {
-  margin: 0 0 0.4rem;
+  margin: 0 0 var(--space-1);
   font-size: 1rem;
 }
 
 .dialog p {
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-4);
   font-size: 0.9rem;
   color: var(--text-secondary);
 }
@@ -700,66 +972,78 @@ kbd {
 .dialog-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .dialog-buttons button {
   height: 1.9rem;
-  padding: 0 0.9rem;
-  border: 0.5px solid var(--border-strong);
+  padding: 0 var(--space-4);
+  border: 0;
   border-radius: var(--radius-s);
-  background: transparent;
+  background: var(--surface-hover);
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    filter var(--motion-fast) var(--ease-out);
 }
 
-.dialog-buttons .is-destructive {
-  border-color: transparent;
+.dialog-buttons button:hover {
+  background: var(--surface-selected);
+}
+
+.dialog-buttons .is-destructive,
+.dialog-buttons .is-destructive:hover {
   background: var(--danger);
+  box-shadow: none;
   color: var(--on-accent);
 }
 
-.dialog-buttons .is-primary {
-  border-color: transparent;
+.dialog-buttons .is-primary,
+.dialog-buttons .is-primary:hover {
   background: var(--accent);
+  box-shadow: none;
   color: var(--on-accent);
+}
+
+.dialog-buttons :is(.is-destructive, .is-primary):hover {
+  filter: brightness(1.08);
 }
 
 .notices {
   position: absolute;
   left: 50%;
-  bottom: 2.6rem;
+  /* Above the footer, so a notice never covers the counter or the format bar. */
+  bottom: calc(var(--footer-height) + var(--space-1));
   z-index: 50;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
   transform: translateX(-50%);
   pointer-events: none;
 }
 
+/* A notice rises in, then fades out just before it is removed (NOTICE_MS in hooks.ts is 2200). */
 .notice {
-  padding: 0.35rem 0.8rem;
-  border-radius: 999px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
   background: var(--surface-raised);
   box-shadow: var(--shadow);
   font-size: 0.85rem;
   white-space: nowrap;
-  animation: notice-in 140ms ease-out;
+  animation:
+    rise-in var(--motion-slow) var(--ease-out),
+    notice-out var(--motion-slow) var(--ease-in) 2020ms forwards;
 }
 
 .notice.is-error {
   color: var(--danger);
 }
 
-@keyframes notice-in {
-  from {
+@keyframes notice-out {
+  to {
     opacity: 0;
-    transform: translateY(0.3rem);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .notice {
-    animation: none;
+    transform: translateY(0.15rem);
   }
 }
 
@@ -767,7 +1051,7 @@ kbd {
 
 .emoji-picker {
   width: 20.5rem;
-  padding: 0.35rem;
+  padding: var(--space-1);
 }
 
 .emoji-picker.is-quick {
@@ -797,7 +1081,7 @@ kbd {
 
 .emoji-section {
   grid-column: 1 / -1;
-  padding: 0.35rem 0.2rem 0.15rem;
+  padding: var(--space-1) 0.2rem 0.15rem;
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-tertiary);
@@ -811,6 +1095,7 @@ kbd {
   background: transparent;
   font-size: 1.25rem;
   line-height: 1;
+  transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .emoji-cell.is-selected,
@@ -820,8 +1105,8 @@ kbd {
 
 .emoji-open {
   height: 2.1rem;
-  margin-left: 0.3rem;
-  padding: 0 0.6rem;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-3);
   border: 0;
   border-radius: var(--radius-s);
   background: var(--surface-hover);
@@ -830,20 +1115,20 @@ kbd {
 }
 
 .emoji-name {
-  padding: 0.3rem 0.2rem 0;
+  padding: var(--space-1) 0.2rem 0;
   font-size: 0.78rem;
   color: var(--text-secondary);
-  border-top: 0.5px solid var(--border);
-  margin-top: 0.25rem;
+  border-top: var(--hairline) solid var(--border);
+  margin-top: var(--space-1);
   min-height: 1.4rem;
 }
 
 .emoji-categories {
   display: flex;
   gap: 0.1rem;
-  padding-bottom: 0.25rem;
-  margin-bottom: 0.25rem;
-  border-bottom: 0.5px solid var(--border);
+  padding-bottom: var(--space-1);
+  margin-bottom: var(--space-1);
+  border-bottom: var(--hairline) solid var(--border);
 }
 
 .emoji-category {
@@ -854,6 +1139,7 @@ kbd {
   background: transparent;
   color: var(--text-secondary);
   font-size: 0.75rem;
+  transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .emoji-category:hover {
@@ -864,17 +1150,18 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
-  margin: 0 0.6rem 0.4rem;
-  padding: 0.35rem 0.4rem 0.35rem 0.7rem;
-  border-radius: var(--radius-m);
+  gap: var(--space-3);
+  margin: 0 var(--space-3) var(--space-1);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border-radius: var(--radius-l);
   background: var(--accent-soft);
   font-size: 0.85rem;
   color: var(--text-secondary);
+  animation: rise-in var(--motion-slow) var(--ease-out);
 }
 
 .text-button.is-primary {
-  border-color: transparent;
   background: var(--accent);
+  box-shadow: none;
   color: var(--on-accent);
 }

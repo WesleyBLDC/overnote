@@ -229,6 +229,36 @@ export function useDragRegions(ref: RefObject<HTMLElement | null>, api: Api, zoo
   }, [ref, api, zoom]);
 }
 
+/**
+ * Marks the app with data-scroll="top" and or "bottom" while the note has content above or below
+ * the visible area, for the scroll fades and the toolbar hairline. It writes the attribute directly
+ * (no React render) and only when the value changes.
+ */
+export function useScrollEdges(ref: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const app = ref.current;
+    const content = app?.querySelector<HTMLElement>(".content");
+    if (!app || !content) return;
+    const update = () => {
+      const top = content.scrollTop > 1;
+      const bottom = content.scrollTop + content.clientHeight < content.scrollHeight - 1;
+      const value = [top ? "top" : "", bottom ? "bottom" : ""].filter(Boolean).join(" ");
+      if ((app.dataset.scroll ?? "") === value) return;
+      if (value) app.dataset.scroll = value;
+      else delete app.dataset.scroll;
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(content);
+    if (content.firstElementChild) observer.observe(content.firstElementChild);
+    content.addEventListener("scroll", update, { passive: true });
+    update();
+    return () => {
+      observer.disconnect();
+      content.removeEventListener("scroll", update);
+    };
+  }, [ref]);
+}
+
 /** Keeps a ref pointing at the latest value, for callbacks created once. */
 export function useLatest<T>(value: T) {
   const ref = useRef(value);

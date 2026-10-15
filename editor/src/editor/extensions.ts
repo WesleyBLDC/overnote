@@ -6,6 +6,7 @@ import { Dropcursor, Gapcursor, Placeholder } from "@tiptap/extensions";
 import { createCodeBlockView, type CodeBlockViewOptions } from "./codeBlockView";
 import { NoteDomBehavior, linkRangeAt, type DomOptions } from "./domExtensions";
 import { FindHighlight } from "./find";
+import { debouncedHighlightPlugin } from "./highlight";
 import type { NoteLowlight } from "./lowlight";
 
 export interface EditorExtensionOptions extends DomOptions, CodeBlockViewOptions {
@@ -45,6 +46,16 @@ export function createEditorExtensions(options: EditorExtensionOptions): AnyExte
   const codeBlock = CodeBlockLowlight.extend({
     addNodeView() {
       return createCodeBlockView(options);
+    },
+    /*
+     * The stock highlighter re-runs on every keystroke inside a code block; ours waits for a pause.
+     * Tiptap can resolve this.parent back to this same function when the node is extended again
+     * (core's extendCodeBlock), so highlighters from any level are dropped before ours is added once.
+     */
+    addProseMirrorPlugins() {
+      const isHighlighter = (plugin: unknown) => /^(lowlight|noteHighlight)\$/.test((plugin as { key: string }).key);
+      const inherited = (this.parent?.() ?? []).filter((plugin) => !isHighlighter(plugin));
+      return [...inherited, debouncedHighlightPlugin({ name: this.name, lowlight: options.lowlight })];
     },
   }).configure({ lowlight: options.lowlight, defaultLanguage: null });
   return [
