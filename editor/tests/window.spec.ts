@@ -77,6 +77,49 @@ test("note text is 150% of the UI base and zoom scales it", async ({ page }) => 
   expect(zoomed.code / zoomed.body).toBeCloseTo(base.code / base.body, 3);
 });
 
+test("blocks keep one balanced gap while list items stay tight", async ({ page }) => {
+  await openHarness(page, ["Spacing\n\nIntro paragraph.\n\n- one\n- two\n  - nested\n\nBetween lists.\n\n1. first\n\nThen tasks:\n\n- [ ] task\n- [x] done\n\nNext paragraph.\n\n## Heading\n\nUnder the heading.\n\n```\ncode\n```\n\nAfter code."]);
+  const layout = await page.evaluate(() => {
+    const children = Array.from(document.querySelectorAll<HTMLElement>(".note-editor > *"));
+    const label = (el: HTMLElement) => ((el.querySelector("pre") ?? el).textContent ?? "").trim().slice(0, 12);
+    const gaps = children.slice(1).map((el, i) => ({
+      from: label(children[i]!),
+      to: label(el),
+      gap: Math.round((el.getBoundingClientRect().top - children[i]!.getBoundingClientRect().bottom) * 100) / 100,
+    }));
+    const nested = document.querySelector<HTMLElement>(".list-content > .prosemirror-flat-list")!;
+    const parent = nested.previousElementSibling as HTMLElement;
+    return { gaps, nested: nested.getBoundingClientRect().top - parent.getBoundingClientRect().bottom };
+  });
+  const gap = (from: string, to: string) => layout.gaps.find((g) => g.from.startsWith(from) && g.to.startsWith(to))?.gap;
+  // 150% note text is 21 px: blocks are 0.55em apart (11.55 px), list items 0.15em (3.15 px), headings get 1.1em above.
+  const block = 21 * 0.55;
+  const item = 21 * 0.15;
+  for (const [from, to] of [
+    ["Intro", "one"],
+    ["two", "Between"],
+    ["Between", "first"],
+    ["first", "Then"],
+    ["Then", "task"],
+    ["done", "Next"],
+    ["Under", "code"],
+    ["code", "After"],
+  ]) {
+    expect(gap(from!, to!), `${from} to ${to}`).toBeCloseTo(block, 0);
+  }
+  expect(gap("one", "two")).toBeCloseTo(item, 0);
+  expect(gap("task", "done")).toBeCloseTo(item, 0);
+  expect(layout.nested).toBeCloseTo(item, 0);
+  expect(gap("Next", "Heading")).toBeCloseTo(21 * 1.1, 0);
+
+  // The rhythm scales with zoom.
+  await page.keyboard.press("Meta+Equal");
+  await page.keyboard.press("Meta+Equal");
+  await expect
+    .poll(() => page.evaluate(() => parseFloat(getComputedStyle(document.querySelector(".note-editor > .prosemirror-flat-list")!).marginTop)))
+    .toBeCloseTo(block * 1.1, 1);
+});
+
 test("the first line is set apart as the title, live, without touching the stored note", async ({ page }) => {
   await openHarness(page, ["Hello\n\nbody text"]);
   const titleBlock = () => editor(page).locator(":scope > .note-title");

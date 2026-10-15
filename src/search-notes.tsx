@@ -61,12 +61,14 @@ export default function SearchNotes() {
               key={note.id}
               note={note}
               fullNote={selected}
+              highlight={hasQuery ? searchText : undefined}
               isLoadingDetail={note.id === selectedId && isLoadingSelected}
               actions={
                 <NoteActions
                   note={note}
                   fullNote={selected}
                   onChange={revalidate}
+                  highlight={hasQuery ? searchText : undefined}
                   pinPosition={
                     note.pinned === null || hasQuery
                       ? undefined

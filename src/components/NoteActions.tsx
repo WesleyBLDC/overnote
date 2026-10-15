@@ -44,6 +44,8 @@ export interface NoteActionsProps {
   isDetail?: boolean;
   /** Pin position, for Move Up and Move Down (only offered on pinned notes). */
   pinPosition?: { isFirst: boolean; isLast: boolean };
+  /** The active search text, carried into View Note for highlighting. */
+  highlight?: string;
 }
 
 type CopyFormat = "markdown" | "text" | "html";
@@ -51,7 +53,7 @@ type CopyFormat = "markdown" | "text" | "html";
 const FORMAT_LABEL: Record<CopyFormat, string> = { markdown: "Markdown", text: "Plain Text", html: "HTML" };
 
 /** The Search Notes action set (spec/keymap.md 6.1), shared by the list rows and the pushed detail. */
-export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition }: NoteActionsProps) {
+export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, highlight }: NoteActionsProps) {
   const { pop } = useNavigation();
   const title = summaryTitle(note);
   const deeplink = noteDeeplink(note.id);
@@ -192,7 +194,7 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition }:
             title="View Note"
             icon={Icon.Eye}
             shortcut={Keyboard.Shortcut.Common.ToggleQuickLook}
-            target={<NoteDetail note={note} onChange={onChange} />}
+            target={<NoteDetail note={note} onChange={onChange} highlight={highlight} />}
           />
         )}
       </ActionPanel.Section>

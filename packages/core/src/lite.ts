@@ -23,10 +23,8 @@ export function derivePreview(text: string): string {
   return Array.from(collapsed).slice(0, 200).join("");
 }
 
-/** Case and diacritic folding used for filter matching. */
-export function fold(value: string): string {
-  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
-}
+export { fold } from "./fold";
+export { highlightMarkdownMatches } from "./highlight";
 
 let graphemes: Intl.Segmenter | undefined;
 let words: Intl.Segmenter | undefined;

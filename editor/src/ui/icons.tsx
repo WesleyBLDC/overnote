@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 
 const paths: Record<string, ReactElement> = {
   plus: <path d="M8 3v10M3 8h10" />,
+  minus: <path d="M3 8h10" />,
   command: (
     <path d="M6 6V4.5A1.5 1.5 0 1 0 4.5 6H6Zm0 0h4M6 6v4m4-4V4.5A1.5 1.5 0 1 1 11.5 6H10Zm0 0v4m0 0v1.5a1.5 1.5 0 1 0 1.5-1.5H10Zm0 0H6m0 0v1.5A1.5 1.5 0 1 1 4.5 10H6Z" />
   ),

@@ -572,6 +572,99 @@ kbd {
   gap: 0.1rem;
 }
 
+/* ---- Settings view (⌘,) ---- */
+
+.panel[data-view="settings"] {
+  width: min(25rem, calc(100% - 1.5rem));
+}
+
+.setting-row {
+  min-height: 2.9rem;
+  cursor: default;
+}
+
+.setting-row .panel-row-subtitle {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 2.15rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background 140ms ease;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 140ms ease;
+}
+
+.switch.is-on {
+  background: var(--accent);
+}
+
+.switch.is-on::after {
+  transform: translateX(0.9rem);
+  background: var(--on-accent);
+}
+
+.segmented {
+  display: inline-flex;
+  flex: none;
+  padding: 0.125rem;
+  border-radius: var(--radius-s);
+  background: var(--surface-hover);
+}
+
+.segmented button {
+  height: 1.45rem;
+  padding: 0 0.55rem;
+  border: 0;
+  border-radius: calc(var(--radius-s) - 0.1rem);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.segmented button.is-on {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: 0 0 0 0.5px var(--border-strong);
+}
+
+.stepper {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.stepper-value {
+  min-width: 2.9rem;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.stepper-reset {
+  margin-left: 0.3rem;
+  height: 1.45rem;
+  font-size: 0.8rem;
+}
+
 .panel-banner {
   margin: 0.2rem 0.5rem 0.4rem;
   font-size: 0.8rem;

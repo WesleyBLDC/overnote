@@ -1,10 +1,11 @@
-/** The ⌘K action panel with pushed views: Format, Copy As, Export, Browse, Recently Deleted (spec/keymap.md 2). */
-import { displayTitle, type NoteId, type NoteSummary, type rpc } from "@overnote/core";
+/** The ⌘K action panel with pushed views: Format, Copy As, Export, Browse, Recently Deleted, Settings (spec/keymap.md 2). */
+import { displayTitle, type NoteId, type NoteSummary, type rpc, type Settings } from "@overnote/core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
 import { fuzzyScore } from "../editor/slash";
 import { characterLabel, relativeTime } from "../lib/relativeTime";
 import { Icon } from "./icons";
+import { adjustSetting, filterSettings, SettingsList } from "./SettingsView";
 
 export interface PanelAction {
   id: string;
@@ -18,13 +19,15 @@ export interface PanelAction {
   push?: PanelViewName;
 }
 
-export type PanelViewName = "root" | "format" | "heading" | "copyAs" | "export" | "browse" | "deleted";
+export type PanelViewName = "root" | "format" | "heading" | "copyAs" | "export" | "browse" | "deleted" | "settings";
 
 interface CommandPanelProps {
   initial: PanelViewName;
   lists: Record<"root" | "format" | "heading" | "copyAs" | "export", PanelAction[]>;
   api: Api;
   currentId: NoteId | null;
+  settings: Settings;
+  onSettings: (patch: Partial<Settings>) => void;
   onClose: () => void;
   onOpenNote: (id: NoteId) => void;
   onTogglePin: (id: NoteId, pinned: boolean) => Promise<void>;
@@ -42,6 +45,7 @@ const PLACEHOLDERS: Record<PanelViewName, string> = {
   export: "Export as…",
   browse: "Search notes…",
   deleted: "Search deleted notes…",
+  settings: "Search settings…",
 };
 
 function filterActions(actions: PanelAction[], query: string): PanelAction[] {
@@ -99,7 +103,7 @@ export function CommandPanel(props: CommandPanelProps) {
   }, [view, query, version]);
 
   const actions = useMemo(() => {
-    if (view === "browse" || view === "deleted") return [];
+    if (view === "browse" || view === "deleted" || view === "settings") return [];
     return filterActions(props.lists[view], query);
   }, [view, query, props.lists]);
 
@@ -108,7 +112,10 @@ export function CommandPanel(props: CommandPanelProps) {
     return q ? deleted.filter((n) => `${n.title}\n${n.preview}`.toLocaleLowerCase().includes(q)) : deleted;
   }, [deleted, query]);
 
-  const rowCount = view === "browse" ? browse.items.length : view === "deleted" ? deletedRows.length : actions.length;
+  const settingRows = useMemo(() => (view === "settings" ? filterSettings(query) : []), [view, query]);
+
+  const rowCount =
+    view === "browse" ? browse.items.length : view === "deleted" ? deletedRows.length : view === "settings" ? settingRows.length : actions.length;
   const selected = Math.min(index, Math.max(0, rowCount - 1));
 
   useEffect(() => {
@@ -145,7 +152,14 @@ export function CommandPanel(props: CommandPanelProps) {
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "ArrowDown") setIndex(rowCount ? (selected + 1) % rowCount : 0);
     else if (event.key === "ArrowUp") setIndex(rowCount ? (selected - 1 + rowCount) % rowCount : 0);
-    else if (event.key === "Enter") {
+    else if (view === "settings" && (event.key === "Enter" || event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      const row = settingRows[selected];
+      const direction = event.key === "Enter" ? 0 : event.key === "ArrowLeft" ? -1 : 1;
+      const patch = row ? adjustSetting(row, props.settings, direction) : null;
+      // Arrows on a row they do not adjust keep moving the caret in the search field.
+      if (!patch && direction !== 0) return;
+      if (patch) props.onSettings(patch);
+    } else if (event.key === "Enter") {
       if (view === "browse" && selectedNote) {
         props.onClose();
         props.onOpenNote(selectedNote.id);
@@ -310,7 +324,17 @@ export function CommandPanel(props: CommandPanelProps) {
               ))}
             </>
           ) : null}
-          {view !== "browse" && view !== "deleted"
+          {view === "settings" ? (
+            <SettingsList
+              rows={settingRows}
+              settings={props.settings}
+              selected={selected}
+              grouped={!query.trim()}
+              onHover={setIndex}
+              onChange={props.onSettings}
+            />
+          ) : null}
+          {view !== "browse" && view !== "deleted" && view !== "settings"
             ? actions.map((action, i) => {
                 const divider = !query && lastSection !== null && action.section !== lastSection;
                 lastSection = action.section;

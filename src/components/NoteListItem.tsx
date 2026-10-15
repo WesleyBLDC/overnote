@@ -1,3 +1,4 @@
+import { highlightMarkdownMatches } from "@overnote/core/text";
 import { Color, Icon, List } from "@raycast/api";
 import type { ReactNode } from "react";
 
@@ -13,10 +14,19 @@ export interface NoteListItemProps {
   actions: ReactNode;
   /** Which date the accessory shows. */
   dateField?: "updatedAt" | "deletedAt";
+  /** The active search text; its matches are bolded in the detail markdown. */
+  highlight?: string;
 }
 
 /** One note row; the detail pane shows the full markdown once the row is selected and loaded. */
-export function NoteListItem({ note, fullNote, isLoadingDetail, actions, dateField = "updatedAt" }: NoteListItemProps) {
+export function NoteListItem({
+  note,
+  fullNote,
+  isLoadingDetail,
+  actions,
+  dateField = "updatedAt",
+  highlight,
+}: NoteListItemProps) {
   const title = summaryTitle(note);
   const subtitle = previewWithoutTitle(note);
   const date = dateField === "deletedAt" ? (note.deletedAt ?? note.updatedAt) : note.updatedAt;
@@ -35,7 +45,7 @@ export function NoteListItem({ note, fullNote, isLoadingDetail, actions, dateFie
       detail={
         <List.Item.Detail
           isLoading={isLoadingDetail}
-          markdown={markdown}
+          markdown={highlight ? highlightMarkdownMatches(markdown, highlight) : markdown}
           metadata={<NoteMetadata note={note} variant="list" />}
         />
       }

@@ -2,9 +2,19 @@
 /* Note text is --note-scale times the UI base; every size below is in em, so it all grows together. */
 .note-editor {
   --line-height: var(--note-line-height);
+  /*
+   * Vertical rhythm in units of the note text size (rem based, so zoom scales it and headings do not
+   * inflate it): one gap between any two top-level blocks, a larger one above headings, a tight one
+   * between the items of a list.
+   */
+  --note-em: calc(1rem * var(--note-scale));
+  --block-gap: calc(0.55 * var(--note-em));
+  --heading-gap: calc(1.1 * var(--note-em));
+  --inner-gap: calc(0.35 * var(--note-em));
+  --item-gap: calc(0.15 * var(--note-em));
   min-height: 1.55em;
   outline: none;
-  font-size: calc(1rem * var(--note-scale));
+  font-size: var(--note-em);
   line-height: var(--line-height);
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -18,19 +28,22 @@
   background: var(--selection);
 }
 
-.note-editor > * + *,
-.note-editor .list-content > * + *,
-.note-editor blockquote > * + * {
-  margin-top: 0.35em;
+/* Reset first (zero specificity), so the gap rules below always win. */
+.note-editor :where(p, h1, h2, h3, blockquote, pre, .prosemirror-flat-list, .code-block) {
+  margin: 0;
 }
 
-.note-editor p,
-.note-editor h1,
-.note-editor h2,
-.note-editor h3,
-.note-editor blockquote,
-.note-editor pre {
-  margin: 0;
+.note-editor > * + *,
+.note-editor blockquote > * + * {
+  margin-top: var(--block-gap);
+}
+
+.note-editor .list-content > * + * {
+  margin-top: var(--inner-gap);
+}
+
+.note-editor > :is(h1, h2, h3):not(:first-child) {
+  margin-top: var(--heading-gap);
 }
 
 .note-editor h1 {
@@ -50,12 +63,6 @@
   font-size: 1.08em;
   line-height: 1.4;
   font-weight: 650;
-}
-
-.note-editor > h1:not(:first-child),
-.note-editor > h2:not(:first-child),
-.note-editor > h3:not(:first-child) {
-  margin-top: 0.7em;
 }
 
 .note-editor a {
@@ -130,13 +137,14 @@
 
 .note-editor .prosemirror-flat-list {
   position: relative;
-  margin: 0;
   padding: 0 0 0 var(--list-gutter);
   list-style: none;
 }
 
-.note-editor .prosemirror-flat-list + .prosemirror-flat-list {
-  margin-top: 0.15em;
+/* A list keeps the block gap from its neighbors, items of one list sit close, and a nested list hugs its parent. */
+.note-editor .prosemirror-flat-list + .prosemirror-flat-list,
+.note-editor .list-content > * + .prosemirror-flat-list {
+  margin-top: var(--item-gap);
 }
 
 .note-editor .prosemirror-flat-list > .list-marker {
@@ -270,7 +278,6 @@
 
 .note-editor .code-block {
   position: relative;
-  margin: 0.45em 0;
   border-radius: var(--radius-m);
   background: var(--surface-code);
 }

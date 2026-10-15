@@ -30,7 +30,7 @@
   --placeholder: rgba(12, 12, 14, 0.3);
 
   --surface: transparent;
-  --surface-raised: rgba(255, 255, 255, 0.985);
+  --surface-raised: #ffffff;
   --surface-hover: rgba(12, 12, 14, 0.06);
   --surface-selected: rgba(12, 12, 14, 0.08);
   --surface-code: rgba(12, 12, 14, 0.05);
@@ -94,7 +94,7 @@
     --text-dimmed: rgba(255, 255, 255, 0.4);
     --placeholder: rgba(255, 255, 255, 0.3);
 
-    --surface-raised: rgba(36, 36, 39, 0.985);
+    --surface-raised: #242427;
     --quote-border: rgba(255, 255, 255, 0.24);
     --surface-hover: rgba(255, 255, 255, 0.08);
     --surface-selected: rgba(255, 255, 255, 0.1);

@@ -4,7 +4,7 @@ export { emptyDoc, normalizeDoc, loadDoc, toStoredDoc, docFromPlainText } from "
 export { markdownToDoc, docToMarkdown } from "./markdown";
 export type { MarkdownMode, MarkdownOptions } from "./markdown";
 export { docToPlainText, deriveTitle } from "./plainText";
-export { displayTitle, derivePreview, countCharacters, countWords, fold, UNTITLED } from "./lite";
+export { displayTitle, derivePreview, countCharacters, countWords, fold, highlightMarkdownMatches, UNTITLED } from "./lite";
 export { docToHTML } from "./serialize/html";
 export { docToClipboard } from "./serialize/clipboard";
 export { buildNoteContent, noteContentFromMarkdown } from "./content";

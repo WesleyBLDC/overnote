@@ -8,6 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { highlightMarkdownMatches } from "@overnote/core/text";
+
 import { contentFromMarkdown } from "../api/content";
 import { titleMatchesFirst } from "../domain/fold";
 import { summaryTitle } from "../domain/format";
@@ -99,6 +101,8 @@ describe("extension domain layer against the real helper", () => {
     const filtered = await call("notes.list", { filter: "CAFE" });
     expect(ids(filtered.items).sort()).toEqual([cafe, groceries].sort());
     expect(ids(titleMatchesFirst(filtered.items, "CAFE", summaryTitle))).toEqual([cafe, groceries]);
+    // The detail pane bolds the matches in the stored markdown, as Search Notes renders it.
+    expect(highlightMarkdownMatches(created.markdown, "CAFE")).toBe(created.markdown.replace("Café", "**Café**"));
 
     const page1 = await call("notes.list", { limit: 2 });
     const page2 = await call("notes.list", { limit: 2, cursor: page1.nextCursor ?? undefined });

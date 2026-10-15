@@ -355,6 +355,20 @@ export function App({ api }: { api: Api }) {
     else void api.window.hide().catch(() => undefined);
   }, [api, session, settings.escapeLosesFocus]);
 
+  /*
+   * Raycast documents no deeplink that opens Create Quicklink prefilled (manual.raycast.com/quicklinks,
+   * developers.raycast.com deeplinks), so the note's deeplink goes to the clipboard, where the
+   * Create Quicklink form can autofill it from.
+   */
+  const createQuicklink = useCallback(() => {
+    const id = sessionRef.current?.getState().current?.id;
+    if (!id) return;
+    void copyText(noteDeeplink(id)).then(
+      () => notify("Deeplink copied. Open Create Quicklink in Raycast and paste it as the link."),
+      () => undefined,
+    );
+  }, [copyText, notify]);
+
   const pinned = state.current?.pinned !== null && state.current?.pinned !== undefined;
 
   const moveItem = useCallback(
@@ -395,6 +409,7 @@ export function App({ api }: { api: Api }) {
           section: "copy",
           run: () => state.current && void copyText(noteDeeplink(state.current.id)).then(() => notify("Copied deeplink"), () => undefined),
         },
+        { id: "quicklink", title: "Create Quicklink", shortcut: "⇧⌘L", section: "copy", run: createQuicklink },
         { id: "export", title: "Export…", shortcut: "⇧⌘E", section: "copy", push: "export" },
         { id: "moveUp", title: "Move List Item Up", shortcut: "⌃⌘↑", section: "edit", enabled: editor?.isActive("list") ?? false, run: () => moveItem("up") },
         { id: "moveDown", title: "Move List Item Down", shortcut: "⌃⌘↓", section: "edit", enabled: editor?.isActive("list") ?? false, run: () => moveItem("down") },
@@ -410,6 +425,7 @@ export function App({ api }: { api: Api }) {
         { id: "actualSize", title: "Actual Size", shortcut: "⌘0", section: "zoom", enabled: settings.zoom !== 1, run: () => setZoom(1, "Zoom reset") },
         { id: "zoomIn", title: "Zoom In", shortcut: "⌘=", section: "zoom", enabled: settings.zoom < 2, run: () => setZoom(stepZoom(settings.zoom, 1), `Zoom ${zoomLabel(stepZoom(settings.zoom, 1))}`) },
         { id: "zoomOut", title: "Zoom Out", shortcut: "⌘-", section: "zoom", enabled: settings.zoom > 0.75, run: () => setZoom(stepZoom(settings.zoom, -1), `Zoom ${zoomLabel(stepZoom(settings.zoom, -1))}`) },
+        { id: "settings", title: "Settings…", shortcut: "⌘,", section: "settings", keywords: ["preferences"], push: "settings" },
         { id: "deleted", title: "Show Recently Deleted Notes", section: "danger", push: "deleted" },
         { id: "delete", title: "Delete Note", shortcut: "⌃X", section: "danger", destructive: true, run: () => void session.deleteCurrent() },
         { id: "deleteAll", title: "Delete All Notes", shortcut: "⌃⇧X", section: "danger", destructive: true, run: deleteAll },
@@ -448,11 +464,11 @@ export function App({ api }: { api: Api }) {
         run: () => void exportAs(f),
       })),
     };
-  }, [editor, blank, pinned, state, settings, session, copyText, notify, updateSettings, setZoom, deleteAll, format, openLink, copyAs, exportAs, moveItem, preview, tick]);
+  }, [editor, blank, pinned, state, settings, session, copyText, notify, updateSettings, setZoom, deleteAll, format, openLink, copyAs, exportAs, moveItem, createQuicklink, preview, tick]);
 
   // ---- window level shortcuts ----
 
-  const handlers = useLatest({ lists, session, state, settings, panel, find, linkTarget, confirm, slashItems, showEmoji, hide, deleteAll, setZoom, openLink, preview, exitPreview });
+  const handlers = useLatest({ createQuicklink, lists, session, state, settings, panel, find, linkTarget, confirm, slashItems, showEmoji, hide, deleteAll, setZoom, openLink, preview, exitPreview });
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const h = handlers.current;
@@ -475,6 +491,7 @@ export function App({ api }: { api: Api }) {
       if (matches(event, { code: "Comma", meta: true, shift: true })) return run(() => setPanel("format"));
       if (matches(event, { code: "KeyC", meta: true, shift: true })) return run(() => setPanel("copyAs"));
       if (matches(event, { code: "KeyE", meta: true, shift: true })) return run(() => setPanel("export"));
+      if (matches(event, { code: "Comma", meta: true })) return run(() => setPanel(h.panel === "settings" ? null : "settings"));
       if (h.panel) return; // the panel handles the rest of its keys
       const slot = pinSlot(event);
       if (slot !== null) {
@@ -490,6 +507,7 @@ export function App({ api }: { api: Api }) {
       if (matches(event, { code: "KeyD", meta: true, shift: true })) {
         return run(() => h.lists.root.find((a) => a.id === "deeplink")?.run?.());
       }
+      if (matches(event, { code: "KeyL", meta: true, shift: true })) return run(h.createQuicklink);
       if (matches(event, { code: "BracketLeft", meta: true }) || matches(event, { code: "ArrowDown", meta: true, alt: true })) {
         if (h.find && event.code === "ArrowDown") return;
         return run(() => void h.session.back());
@@ -639,10 +657,13 @@ export function App({ api }: { api: Api }) {
       ) : null}
       {panel ? (
         <CommandPanel
+          key={panel}
           initial={panel}
           lists={lists}
           api={api}
           currentId={currentId}
+          settings={settings}
+          onSettings={updateSettings}
           onClose={closePanel}
           onOpenNote={(id: NoteId) => void session.open(id)}
           onTogglePin={async (id, pin) => {
