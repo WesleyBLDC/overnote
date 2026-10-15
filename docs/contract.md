@@ -126,7 +126,7 @@ The helper stores `NoteContent` verbatim.
 | `window.hide` | `{}` | `{ visible: false }` | |
 | `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped 128 to 860 pt times zoom. `temporary: true` (⌘K, browse, dialogs) applies even when windowAutoSize is off and is restored by the next non-temporary report |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
-| `window.setDragRegions` (bridge) | `{ rects: { x: number, y: number, width: number, height: number }[] }` | `{}` | CSS px rects (top-left origin, before zoom is applied by the helper: send rects already multiplied by zoom, in points) where a mouse down drags the window (empty toolbar area); the helper calls `performDrag(with:)` natively on mouse down inside them |
+| `window.setDragRegions` (bridge) | `{ rects: { x: number, y: number, width: number, height: number }[] }` | `{}` | Points (CSS px times zoom), top-left origin, relative to the web view. A mouse down inside drags the window natively (title-bar behavior: it also works as the first click into an unfocused panel) |
 | `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
 | `clipboard.copy` (bridge) | `{ text: string, html?: string }` | `{}` | Writes plain text plus optional HTML to the general pasteboard |
 | `file.saveAs` (bridge) | `{ suggestedName: string, content: string }` | `{ saved: boolean, path?: string }` | Native save panel; the helper sanitizes the suggested name |
@@ -174,7 +174,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - While the ⌘K panel, browse, or a dialog is open the editor reports a larger `contentHeight` (about 34rem; 16rem for small popups) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
 - The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
 - The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. ⌘W hides the panel (helper menu item, like closing a window in any app).
-- The helper gives the borderless panel generous resize hit zones: about 8 pt along edges and 16 pt at corners, with the matching resize cursors.
+- The helper gives the borderless panel generous resize hit zones: 8 pt along edges and 16 pt squares at corners, with the matching resize cursors. The panel has no `.resizable` style; these zones do all user resizing, and the top 8 pt of the drag strip is a resize zone. Keep interactive controls at least 16 pt from the panel corners.
 - Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so ⌘K and browse never resize a roomy window).
 - The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath. Minimum user size is 396 pt wide by 128 pt times zoom.
 - The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 135 pt with the footer at the bottom.
