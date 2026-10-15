@@ -94,7 +94,7 @@ interface NoteSummary {        // list rows: no rawContent or markdown
   pinned: number | null; createdAt: Millis; updatedAt: Millis;
   deletedAt: Millis | null; lastAccessedAt: Millis | null;
 }
-// Display title everywhere: title, else first line of text trimmed, else "Untitled" (core.displayTitle).
+// Display title everywhere: title, else first non-empty line of text trimmed, else "Untitled" (core.displayTitle).
 
 interface Settings {
   escapeLosesFocus: boolean;       // default false: Esc hides the panel
@@ -147,8 +147,10 @@ The helper stores `NoteContent` verbatim.
 | `settings.set` | `Partial<Settings>` | `Settings` | Emits `settings.changed` |
 
 **Filter matching:** case-insensitive substring match on title or text, folding case for all of Unicode and removing diacritics (an intentional improvement over ASCII-only folding).
+**Fold rule (exact, identical in TS and Swift):** Unicode NFKD normalization, then remove every scalar whose general category is a mark (Mn, Mc, Me), then lowercase with the root locale (TS `toLowerCase()`, Swift `lowercased()`). Apply the same fold to the query.
+**charCount** is the number of Unicode code points in `text` (SQLite `length(text)`, Swift `unicodeScalars.count`). The editor footer counts grapheme clusters separately.
 The helper stores folded copies (`title_fold`, `text_fold`) and matches with an escaped `LIKE`.
-Cursors are opaque strings encoding the keyset (match group, pin key, order timestamp, id).
+Cursors are opaque strings encoding the keyset (match group, pin key, order timestamp, id); a cursor is only valid for the source that issued it (helper or read-only fallback).
 
 ```ts
 interface WindowData {
@@ -217,7 +219,7 @@ export function docToPlainText(doc: JSONContent): string;
 export function docToHTML(doc: JSONContent): string;                     // semantic export HTML (ul/ol/li), no wrapper; empty doc is <p></p>
 // all serializers return no trailing newline; docToMarkdown output is stable under parse then serialize
 export function deriveTitle(doc: JSONContent): string;        // first line of plain text, trimmed
-export function displayTitle(n: { title: string; text: string }): string; // title, else first text line, else "Untitled"
+export function displayTitle(n: { title: string; text: string }): string; // title, else first non-empty text line trimmed, else "Untitled"
 export function buildNoteContent(doc: JSONContent): NoteContent; // rawContent + markdown + text + title
 export function noteContentFromMarkdown(markdown: string): NoteContent;
 export function loadDoc(rawContent: string | null, text: string): JSONContent; // stored doc if valid (placeholders preserved), else rebuild from text with a hard break per newline
@@ -230,7 +232,8 @@ export function normalizeLinkHref(input: string): string | null;
 export function countCharacters(text: string): number;                   // grapheme clusters of trimmed text
 export function countWords(text: string): number;                        // Intl.Segmenter word segments
 export type { Note, NoteSummary, NoteContent, Settings, WindowData, NoteId } from "./types";
-export * as rpc from "./rpc";   // method name constants and param/result types from section 5
+export * as rpc from "./rpc";
+// Light entry point `@better-notes/core/text` exports types, rpc, displayTitle, derivePreview, countCharacters, countWords and fold, with no Tiptap import (for list commands and the menu bar)   // method name constants and param/result types from section 5
 ```
 
 ## 8. Extension commands (package.json)
@@ -249,6 +252,8 @@ Launch context: `toggle-notes` accepts `launchContext: { id?: NoteId }` (shows t
 This lets deeplinks and quicklinks open a specific note or create one with text.
 
 ## Changelog
+
+- v2.4 (2026-10-14): exact fold rule shared by TS and Swift, charCount in code points, source-bound cursors, displayTitle skips empty lines, light `@better-notes/core/text` entry point.
 
 - v2.3 (2026-10-14): from spec/serialization.md, accepted deviations D1 to D19 (fix Raycast's round-trip bugs; headings 4 to 6 become level 3); markdownToDoc mode option; loadDoc nullable with hard-break fallback; docToClipboard returns {text, html}; derivePreview; semantic HTML; no trailing newlines.
 
