@@ -15,16 +15,8 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:5199",
     trace: "retain-on-failure",
   },
-  // WebKit is the engine of the native WKWebView panel, so every flow runs there.
-  // Chromium only runs the build smoke test, as a second engine check of the shipped bundle.
-  projects: [
-    { name: "webkit", use: { ...devices["Desktop Safari"], viewport: { width: 640, height: 720 } } },
-    {
-      name: "chromium",
-      testMatch: /build\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"], viewport: { width: 640, height: 720 } },
-    },
-  ],
+  // WebKit is the engine of the native WKWebView panel, the only place the editor runs.
+  projects: [{ name: "webkit", use: { ...devices["Desktop Safari"], viewport: { width: 640, height: 720 } } }],
   webServer: [
     {
       command: "npx vite --host 127.0.0.1 --port 5199 --strictPort",

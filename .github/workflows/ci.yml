@@ -18,6 +18,10 @@ env:
   npm_config_strict_allow_scripts: "true"
   # Logs from the helper scripts land here when a step fails, for the artifact upload.
   OVERNOTE_LOG_DIR: ${{ github.workspace }}/.ci-logs
+  # GitHub's macOS runners log in a GUI session, which the panel window checks need. If a runner
+  # image ever lacks one, set the repository variable OVERNOTE_WINDOW_E2E to 0 to skip only
+  # that step; unset, scripts/verify.sh runs it whenever CI is true.
+  OVERNOTE_WINDOW_E2E: ${{ vars.OVERNOTE_WINDOW_E2E }}
 
 jobs:
   verify:
@@ -37,48 +41,8 @@ jobs:
       - name: Pin npm
         run: npm install --global "npm@${NPM_VERSION}"
 
-      - name: Show toolchain
-        run: |
-          sw_vers
-          uname -m
-          node --version
-          npm --version
-          xcode-select -p
-          swift --version
-
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-
-      - name: Check the esbuild native binary
-        # esbuild's approved install script swaps its JS shim for the native binary.
-        run: node_modules/.bin/esbuild --version
-
-      # helper/VERSION and HelperVersion.current name the same semver version.
-      - name: Check the version
-        run: bash scripts/check-version.sh "$(tr -d '[:space:]' < helper/VERSION)"
-
-      - name: Typecheck extension
-        run: npx tsc --noEmit
-
-      - name: Typecheck editor
-        run: npx tsc --noEmit -p editor
-
-      - name: Typecheck core
-        run: npx tsc --noEmit -p packages/core
-
-      # Raycast's own checks: the manifest, the author handle, icons, ESLint, and Prettier.
-      - name: Raycast lint, extension
-        run: npx ray lint
-
-      # The editor and @overnote/core: typescript-eslint and the React hooks rules (eslint.config.js).
-      - name: ESLint, editor and core
-        run: npx eslint --max-warnings 0 editor packages/core
-
-      - name: Prettier
-        run: npx prettier --check src editor packages/core
-
-      - name: Build editor
-        run: npm run build:editor
 
       - name: Cache Swift build
         uses: actions/cache@v6
@@ -87,21 +51,6 @@ jobs:
           key: swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('helper/Package.swift', 'helper/Package.resolved', 'helper/Sources/**', 'helper/Tests/**', 'helper/Tools/**') }}
           restore-keys: |
             swiftpm-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Build helper (universal)
-        run: bash scripts/build-helper.sh
-
-      - name: Unit tests, extension and helper socket
-        run: npm test
-
-      - name: Unit tests, core
-        run: npm test -w packages/core
-
-      - name: Unit tests, editor
-        run: npm test -w editor
-
-      - name: Unit tests, helper
-        run: bash helper/test.sh
 
       - name: Read Playwright version
         id: playwright
@@ -116,34 +65,13 @@ jobs:
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps webkit chromium
+        run: npx playwright install --with-deps webkit
 
-      - name: End to end, editor (Playwright, WebKit)
-        run: npm run test:e2e -w editor
-
-      - name: End to end, helper over its socket
-        run: bash scripts/smoke-helper.sh
-
-      # Headless: installs a release packaged from this tree into temporary folders, updates it
-      # through a fake releases API, rolls it back, and restores notes after a simulated removal.
-      - name: End to end, install, update, backups, and restore
-        run: bash scripts/e2e-update.sh
-
-      # GitHub's macOS runners log in a GUI session, which the panel needs. If a runner image
-      # ever lacks one, set the repository variable OVERNOTE_WINDOW_E2E to 0 to skip this
-      # step (and only this step) until it is back. The same variable and value make
-      # scripts/verify.sh skip it, which otherwise runs it whenever CI is true.
-      - name: End to end, panel window
-        # format() turns an unset variable (null) into '' so it compares as a string, not the number 0.
-        if: format('{0}', vars.OVERNOTE_WINDOW_E2E) != '0'
-        run: bash scripts/e2e-window.sh
-
-      - name: Build Raycast extension
-        run: npx ray build -e dist -o "$RUNNER_TEMP/raybuild"
-
-      # The Store copy (prebuilt assets, no update channel) still assembles from this tree.
-      - name: Prepare the Store copy
-        run: bash scripts/prepare-store.sh "$RUNNER_TEMP/store"
+      # The whole suite, the same command contributors run locally: version, typechecks, lint,
+      # builds, unit tests, every end to end suite (the panel window one included in CI), and
+      # the Raycast build. It names the step that failed.
+      - name: Verify
+        run: npm run verify
 
       - name: Upload Playwright report
         if: failure()

@@ -82,11 +82,12 @@ Overnote has few unit tests and many end-to-end tests.
 Run the whole suite, in the same order as CI, with one command:
 
 ```sh
-npx playwright install webkit chromium   # once
+npx playwright install webkit   # once
 npm run verify
 ```
 
-`npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, builds the extension, and assembles the Store copy, stopping at the first failing step.
+`npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, and builds the extension, stopping at the first failing step.
+CI runs the same command.
 Playwright needs both WebKit (the engine of the native panel, which runs every editor flow) and Chromium (a second engine check of the shipped bundle).
 The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so `npm run verify` skips it on a workstation and runs it in CI.
 Set `OVERNOTE_WINDOW_E2E=1` to run it locally, or `OVERNOTE_WINDOW_E2E=0` to skip it even in CI.

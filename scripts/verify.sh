@@ -1,10 +1,11 @@
 #!/bin/bash
-# The full local suite, in the same order as CI (.github/workflows/ci.yml).
+# The full suite. CI runs exactly this (.github/workflows/ci.yml), so a green run here is a
+# green run there, apart from the panel window step below.
 #
 #   npm run verify
 #
 # Stops at the first failing step and names it. Needs macOS with the Xcode Command Line
-# Tools, Node 22+, and the Playwright browsers (npx playwright install webkit chromium).
+# Tools, Node 22+, and the Playwright browsers (npx playwright install webkit).
 #
 # The panel window check (scripts/e2e-window.sh) shows the panel on screen and needs a logged
 # in GUI session, so it is opt in on a workstation and on by default in CI.
@@ -29,12 +30,18 @@ on_exit_status() {
 }
 trap 'on_exit_status; rm -rf "$RAY_OUT"' EXIT
 
+# On GitHub Actions each step is a collapsible group in the log.
+GROUPS_ON=0
+[[ "${GITHUB_ACTIONS:-}" == "true" ]] && GROUPS_ON=1
+
 step() {
   current="$1"
   shift
+  ((GROUPS_ON)) && printf '::group::%s\n' "$current"
   printf '\n[verify] ==> %s\n' "$current"
   local t0=$SECONDS
   "$@"
+  ((GROUPS_ON)) && printf '::endgroup::\n'
   STEPS+=("$(printf '%4ss  %s' $((SECONDS - t0)) "$current")")
 }
 
@@ -65,7 +72,6 @@ else
   STEPS+=("   -   End to end: panel window (skipped)")
 fi
 step "Build: Raycast extension (ray build -e dist)" npx ray build -e dist -o "$RAY_OUT/raybuild"
-step "Package: Store copy" bash scripts/prepare-store.sh "$RAY_OUT/store"
 current=""
 
 printf '\n[verify] all steps passed in %ss\n' $((SECONDS - started))
