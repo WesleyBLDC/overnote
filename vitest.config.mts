@@ -1,8 +1,16 @@
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    // The command end-to-end tests run the real commands; only Raycast's UI calls are stubbed.
+    alias: {
+      "@raycast/api": fileURLToPath(new URL("./src/__mocks__/raycast-api.ts", import.meta.url)),
+      "@raycast/utils": fileURLToPath(new URL("./src/__mocks__/raycast-utils.ts", import.meta.url)),
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],

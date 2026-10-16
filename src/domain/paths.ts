@@ -35,7 +35,12 @@ export function databasePath(supportPath: string): string {
 
 export function resolvePaths(inputs: PathInputs): HelperPaths {
   const uid = inputs.uid ?? os.userInfo().uid;
-  const runtimeDir = runtimeDirFor(uid, inputs.runtimeRoot);
+  // OVERNOTE_RUNTIME_DIR moves the socket and pid file, as in scripts/update-extension.sh; the
+  // command end-to-end tests use it so they can never reach a helper the person is running.
+  const runtimeDir =
+    inputs.runtimeRoot === undefined && process.env.OVERNOTE_RUNTIME_DIR
+      ? process.env.OVERNOTE_RUNTIME_DIR
+      : runtimeDirFor(uid, inputs.runtimeRoot);
   const binary = path.join(inputs.assetsPath, "bin", "OvernoteHelper");
   return {
     runtimeDir,

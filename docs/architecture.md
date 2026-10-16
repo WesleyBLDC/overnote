@@ -360,6 +360,7 @@ On tag builds, `scripts/check-version.sh` checks that the tag is semver and that
 Only HTTPS is allowed for the API and the downloads (redirects included), unless `OVERNOTE_RELEASES_API` points at a test server.
 
 The support, runtime, and backups folders default to the real ones and can be overridden with `OVERNOTE_SUPPORT_DIR`, `OVERNOTE_RUNTIME_DIR`, and `OVERNOTE_BACKUP_DIR`, which `scripts/e2e-update.sh` points at temporary folders.
+The extension honors `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`), which the command end-to-end tests (`src/__tests__/commands.e2e.test.ts`) use so they can never reach a helper someone is running.
 
 ## Protocol versioning
 

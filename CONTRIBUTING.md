@@ -75,7 +75,7 @@ Overnote has few unit tests and many end-to-end tests.
   Do not add a unit test for every function, and remove redundant ones when you touch an area.
 - Every feature closes with end-to-end tests that exercise it the way a person does:
   - editor behavior through Playwright against the real editor UI in the browser harness (`editor/tests/`), plus the shipped editor build against the real helper (`editor/tests/real-helper.spec.ts`);
-  - helper and extension behavior through the real helper binary over its socket (`scripts/smoke-helper.sh` style);
+  - helper and extension behavior through the real helper binary over its socket (`scripts/smoke-helper.sh`), and the Raycast commands with their data layer against it (`src/__tests__/commands.e2e.test.ts`);
   - full flows inside real Raycast in development mode (hotkey toggle, panel, typing, persistence across restarts).
 - A feature is done when its end-to-end test passes, not when its unit tests pass.
 
