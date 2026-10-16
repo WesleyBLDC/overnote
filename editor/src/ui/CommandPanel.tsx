@@ -110,6 +110,12 @@ export function CommandPanel(props: CommandPanelProps) {
   // newer answer is dropped, but every search typed so far still narrows the list as soon as it answers.
   const requested = useRef(0);
   const applied = useRef(0);
+  // Enter pressed before the answer for the latest search arrived: open its first note once it does.
+  const openWhenLoaded = useRef(false);
+  const callbacks = useRef(props);
+  useLayoutEffect(() => {
+    callbacks.current = props;
+  });
   useEffect(() => {
     if (view !== "browse") return;
     const request = ++requested.current;
@@ -120,6 +126,15 @@ export function CommandPanel(props: CommandPanelProps) {
         applied.current = request;
         setBrowse({ items: page.items, cursor: page.nextCursor, loading: false });
         setBrowseLoaded(true);
+        if (openWhenLoaded.current && request === requested.current) {
+          openWhenLoaded.current = false;
+          const first = page.items[0];
+          if (first) {
+            callbacks.current.onClose();
+            callbacks.current.onOpenNote(first.id);
+          }
+          return;
+        }
         if (!filter)
           setIndex(
             Math.max(
@@ -243,7 +258,10 @@ export function CommandPanel(props: CommandPanelProps) {
       if (!patch && direction !== 0) return;
       if (patch) props.onSettings(patch);
     } else if (event.key === "Enter") {
-      if (view === "browse" && selectedNote) {
+      if (view === "browse" && applied.current < requested.current) {
+        // The list still shows an older search; act on the answer for what was typed.
+        openWhenLoaded.current = true;
+      } else if (view === "browse" && selectedNote) {
         props.onClose();
         props.onOpenNote(selectedNote.id);
       } else if (view === "deleted") {

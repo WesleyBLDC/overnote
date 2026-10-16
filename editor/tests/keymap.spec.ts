@@ -364,3 +364,16 @@ test("an export waits for the save panel longer than the usual request timeout",
   await page.clock.runFor(10_000);
   await expect(page.getByTestId("notices")).not.toContainText("Could not export");
 });
+
+test("Enter in Browse Notes opens the match for what was typed, even before the list catches up", async ({ page }) => {
+  await openHarness(page, ["Short note", "Long note"]);
+  // A slow helper: the search answer lands well after Enter.
+  await page.evaluate(() => {
+    (window as unknown as { __overnoteMock: { latency: number } }).__overnoteMock.latency = 400;
+  });
+  await page.keyboard.press("Meta+p");
+  await page.keyboard.type("Long");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("title")).toHaveText("Long note");
+  await expect(page.getByTestId("command-panel")).toHaveCount(0);
+});

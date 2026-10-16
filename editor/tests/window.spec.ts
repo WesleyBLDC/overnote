@@ -41,6 +41,8 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   // window.setOverhang, and closing gives the room back.
   const overhangs = async () => (await calls(page, "window.setOverhang")).map((c) => c.params.height as number);
   const reportsBeforePanel = (await reports()).length;
+  // The harness applies a reported height a moment after the report; open ⌘K on the short note.
+  await expect.poll(appHeight).toBe(start);
   await page.keyboard.press("Meta+k");
   await expect.poll(async () => (await overhangs()).at(-1) ?? 0).toBeGreaterThan(200);
   expect(await appHeight()).toBe(start);
@@ -443,6 +445,9 @@ test("opening a note never flashes: hidden until ready, caret and scroll restore
 test("select all paints the list gutter like the rest of the selection", async ({ page }) => {
   await openHarness(page, ["Lists\n\n- one\n- two\n  - nested\n\n1. first\n2. second\n\n- [ ] task\n\nAfter"]);
   await page.mouse.move(320, 710);
+  // The browser draws the text selection only in the focused editor; the editor takes focus
+  // right after it loads the note, so wait for that before selecting.
+  await expect(editor(page)).toBeFocused();
   await page.keyboard.press("Meta+a");
   await expect(editor(page).locator(".prosemirror-flat-list.in-selection")).toHaveCount(6);
   // Sample the gutter beside each bullet and number and the content column on the same row.
@@ -460,6 +465,8 @@ test("select all paints the list gutter like the rest of the selection", async (
     });
   });
   expect(points.length).toBe(5);
+  // The selection fades in; compare colors only once every transition has finished.
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
   const shot = (await page.screenshot()).toString("base64");
   const pixels = await page.evaluate(
     async ({ b64, pts }) => {

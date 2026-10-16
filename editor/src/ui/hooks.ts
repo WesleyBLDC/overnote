@@ -332,10 +332,20 @@ export function usePanelOverhang(api: Api, panelRef: React.RefObject<HTMLElement
       sent = height;
       void api.window.setOverhang(height).catch(() => undefined);
     };
+    // The panel's own size, and every row: a row can change height (fonts, keycaps) while the
+    // panel, still capped by the window, keeps its size.
     const resizes = new ResizeObserver(update);
-    resizes.observe(panel);
-    const rows = new MutationObserver(update);
+    const observeRows = () => {
+      resizes.disconnect();
+      resizes.observe(panel);
+      for (const row of Array.from(panel.querySelectorAll(".panel-list > *"))) resizes.observe(row);
+    };
+    const rows = new MutationObserver(() => {
+      observeRows();
+      update();
+    });
     rows.observe(panel, { childList: true, subtree: true });
+    observeRows();
     update();
     // A hide gives the room back; show the panel hanging again when the note comes back.
     const offShow = api.on("window.didShow", () => {

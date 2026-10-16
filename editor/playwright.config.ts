@@ -7,6 +7,8 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "tests",
   fullyParallel: true,
+  // GitHub's macOS runners have 3 cores; Playwright's default (half of them) would run one worker.
+  workers: process.env.CI ? 3 : undefined,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   // CI also writes an HTML report, uploaded when the job fails.
