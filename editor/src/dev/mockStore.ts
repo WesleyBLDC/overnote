@@ -191,6 +191,7 @@ export class MockStore {
       return { visible: false };
     },
     "window.resize": () => ({}),
+    "window.setOverhang": () => ({}),
     "window.resignFocus": () => ({}),
     // The helper turns these into native drag areas; the mock only records the call.
     "window.setDragRegions": () => ({}),

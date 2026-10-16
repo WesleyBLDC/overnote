@@ -298,3 +298,79 @@ export function useLatest<T>(value: T) {
   });
   return ref;
 }
+
+/** Room left under a hanging panel, so its shadow is not cut by the window edge. */
+const OVERHANG_MARGIN = 12;
+/** The tallest a panel grows, in rem (its CSS max-height). */
+const PANEL_MAX_REM = 30;
+/** A pending "give the room back" from a panel that just closed; a panel that opens cancels it. */
+let pendingRelease: (() => void) | null = null;
+
+/**
+ * Lets an open panel (⌘K, browse, settings) hang past the note's bottom edge instead of resizing
+ * the note: the note's height is frozen, and the helper grows the window below it by exactly the
+ * room the panel needs (window.setOverhang). When the panel closes, the room goes back after its
+ * exit fade, and the note follows the window again once the window is back to the note's size.
+ */
+export function usePanelOverhang(api: Api, panelRef: React.RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const app = document.querySelector<HTMLElement>("[data-testid=app]");
+    const panel = panelRef.current;
+    if (!app || !panel) return;
+    pendingRelease?.();
+    pendingRelease = null;
+    const noteHeight = app.getBoundingClientRect().height;
+    app.style.height = `${noteHeight}px`;
+    let sent = 0;
+    const update = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 14;
+      const list = panel.querySelector<HTMLElement>(".panel-list");
+      const hidden = list ? list.scrollHeight - list.clientHeight : 0;
+      const wanted = Math.min(PANEL_MAX_REM * rem, panel.offsetHeight + hidden);
+      const height = Math.max(0, Math.ceil(panel.offsetTop + wanted + OVERHANG_MARGIN - noteHeight));
+      if (height === sent) return;
+      sent = height;
+      void api.window.setOverhang(height).catch(() => undefined);
+    };
+    const resizes = new ResizeObserver(update);
+    resizes.observe(panel);
+    const rows = new MutationObserver(update);
+    rows.observe(panel, { childList: true, subtree: true });
+    update();
+    // A hide gives the room back; show the panel hanging again when the note comes back.
+    const offShow = api.on("window.didShow", () => {
+      sent = -1;
+      update();
+    });
+    return () => {
+      resizes.disconnect();
+      rows.disconnect();
+      offShow();
+      let unfreeze = 0;
+      const release = () => {
+        clearTimeout(timer);
+        clearTimeout(unfreeze);
+        window.removeEventListener("resize", onResize);
+        pendingRelease = null;
+      };
+      const thaw = () => {
+        release();
+        app.style.height = "";
+      };
+      const onResize = () => {
+        if (window.innerHeight <= noteHeight + 1) thaw();
+      };
+      // After the exit fade, so the closing panel is not cut off.
+      const timer = setTimeout(() => {
+        if (sent > 0) {
+          window.addEventListener("resize", onResize);
+          void api.window.setOverhang(0).catch(() => undefined);
+          unfreeze = window.setTimeout(thaw, 500);
+        } else {
+          thaw();
+        }
+      }, exitFallbackMs("--motion-fast"));
+      pendingRelease = release;
+    };
+  }, [api, panelRef]);
+}

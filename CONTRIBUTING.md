@@ -53,22 +53,17 @@ Add `?seed=empty` to the URL to start with no notes.
 | `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/` |
 | `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository |
 | `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
-| `scripts/` | Helper build, the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`) |
+| `scripts/` | Helper build, the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, `check-release.sh`, and `make-icon.swift` (draws `assets/extension-icon.png`: `swift scripts/make-icon.swift assets/extension-icon.png`) |
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
-| `assets/` | The icon, plus the built editor and helper (generated, not committed) |
+| `metadata/` | Raycast Store screenshots, used by `scripts/prepare-store.sh` |
+| `assets/` | The icon, drawn by `scripts/make-icon.swift`; the editor and helper builds are generated, not committed |
 | `media/` | README screenshots |
 
 ## The clean-room rule
 
-Overnote reproduces the behavior of Raycast Notes without copying its code, so contributions must be clean-room.
-The short version:
-
-- Build only from [`docs/architecture.md`](docs/architecture.md), the existing code and tests, the public docs in this repository, and public library documentation (Tiptap, ProseMirror, AppKit, the Raycast extension API).
-- Never decompile, disassemble, or read the Raycast app bundle, and never decrypt or read Raycast's databases or keys.
-- Never use the Raycast name, icon, colors, or branding in the product.
-- If you are unsure how something should behave, open an issue so the intended behavior can be settled, rather than guessing from Raycast's internals.
-
-Please read [`docs/clean-room.md`](docs/clean-room.md) before your first pull request.
+Contributions are clean room: build only from this repository's docs, code, and tests plus public library documentation, never from the Raycast app bundle, its databases, or reverse engineering output, and never use Raycast's name, icon, colors, or branding.
+Open an issue when behavior is unclear.
+Read [`docs/clean-room.md`](docs/clean-room.md) before your first pull request.
 
 ## Testing policy
 

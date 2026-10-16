@@ -81,7 +81,7 @@ jobs:
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
           dir="$RUNNER_TEMP/release"
-          files=("$dir/overnote-$VERSION.zip" "$dir/OvernoteHelper-$VERSION.zip" "$dir/OvernoteHelper.sha256" "$dir/SHA256SUMS")
+          files=("$dir/overnote-$VERSION.zip" "$dir/SHA256SUMS")
           flags=()
           [[ "$PRERELEASE" == "true" ]] && flags+=(--prerelease)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then

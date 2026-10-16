@@ -12,6 +12,9 @@ public protocol HelperHost: Sendable {
     /// (⌘K, browse, dialogs) applies even with auto-sizing off; the next non temporary report
     /// restores normal behavior.
     func resizeWindow(contentHeight: Double, temporary: Bool) async
+    /// Lets a dropdown hang `height` points past the note's bottom edge without resizing the
+    /// note; zero gives the room back.
+    func setOverhang(_ height: Double) async
     /// Replaces the areas of the web view where a mouse down drags the panel. Points, with a
     /// top left origin relative to the web view.
     func setDragRegions(_ rects: [DragRect]) async
@@ -51,7 +54,7 @@ public struct DragRect: Equatable, Sendable {
 /// implementation behind `--headless`.
 public final class RecordingHost: HelperHost, @unchecked Sendable {
     public enum Call: Equatable, Sendable {
-        case toggle, show, hide, resize(Double, temporary: Bool), dragRegions([DragRect]), openURL(String), resignFocus, copy(String, String?), save(String, String)
+        case toggle, show, hide, resize(Double, temporary: Bool), overhang(Double), dragRegions([DragRect]), openURL(String), resignFocus, copy(String, String?), save(String, String)
         case settingsChanged(Settings), emit(String, JSONValue), shutdown
     }
 
@@ -103,6 +106,7 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
     public func resizeWindow(contentHeight: Double, temporary: Bool) async {
         record(.resize(contentHeight, temporary: temporary))
     }
+    public func setOverhang(_ height: Double) async { record(.overhang(height)) }
     public func setDragRegions(_ rects: [DragRect]) async { record(.dragRegions(rects)) }
     public func openURL(_ url: URL) async { record(.openURL(url.absoluteString)) }
     public func resignFocus() async { record(.resignFocus) }

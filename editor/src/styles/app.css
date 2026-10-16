@@ -714,6 +714,11 @@ kbd {
   z-index: 40;
 }
 
+/* The whole window, including the strip a hanging panel borrows below the note. */
+.panel-backdrop {
+  position: fixed;
+}
+
 .dialog-backdrop {
   display: flex;
   align-items: center;
@@ -734,7 +739,8 @@ kbd {
   display: flex;
   flex-direction: column;
   width: min(var(--panel-width), calc(100% - 2 * var(--toolbar-inset-right)));
-  max-height: min(30rem, calc(100% - var(--drag-strip) - var(--chrome-hit) - 1rem));
+  /* Against the window, not the note: a panel hangs past the note's bottom edge (usePanelOverhang). */
+  max-height: min(30rem, calc(100vh - var(--drag-strip) - var(--chrome-hit) - 1.4rem));
   padding: 0 var(--space-2) var(--space-2);
   overflow: hidden;
   transform-origin: var(--origin-x, calc(100% - 3rem)) 0;

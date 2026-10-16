@@ -17,7 +17,7 @@
 # height rule, editor drag regions and the drag strip, first mouse, resize hit zones and real
 # resize drags, ⌘W, per display position memory, persistence across a restart, and the first
 # show with auto-sizing on, which waits hidden for the editor's first height report (up to
-# 1.5 s) so a cold start never flashes the default height.
+# 3 s) so a cold start never flashes the default height.
 #
 # Mouse and key events in the drag, resize, and ⌘W checks are built with NSEvent inside the
 # helper and dispatched through its own NSApp.sendEvent and event queue (test hooks). They
@@ -310,6 +310,26 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   await check("Hide While Screen Sharing withdraws the panel from capture and restores it", () => {
     assert.equal(hiddenFromShares?.sharing, 0, "sharing state while hidden from shares");
     assert.equal(sharedAgain?.sharing, 1, "sharing state after turning it off");
+  });
+
+  // A dropdown that hangs past the note (window.setOverhang): the window grows downward, while
+  // the note (its frame, material, and resize zones) keeps its size and place.
+  const beforeHang = await state();
+  await call("test.asBridge", { method: "window.setOverhang", params: { height: 120 } });
+  const hanging = await state();
+  await call("test.asBridge", { method: "window.setOverhang", params: { height: 0 } });
+  const afterHang = await state();
+  await check("window.setOverhang hangs room below the note without resizing it, and gives it back", () => {
+    assert.equal(hanging.overhang, 120, "overhang");
+    assert.equal(hanging.frame.height, beforeHang.frame.height + 120, "window height");
+    assert.equal(hanging.frame.top, beforeHang.frame.top, "window top");
+    assert.deepEqual(hanging.noteFrame, { x: beforeHang.frame.x, y: beforeHang.frame.y, width: beforeHang.frame.width, height: beforeHang.frame.height }, "note frame");
+    assert.equal(hanging.materialFrame.height, beforeHang.frame.height, "material height");
+    assert.equal(hanging.materialFrame.y, 120, "material sits above the overhang");
+    assert.equal(hanging.resizeZonesHidden, true, "resize zones off while a dropdown hangs");
+    assert.equal(afterHang.overhang, 0, "overhang after");
+    assert.deepEqual(afterHang.frame, beforeHang.frame, "frame restored");
+    assert.equal(afterHang.resizeZonesHidden, false, "resize zones back");
   });
   await check("first open: 640 x 560, centered, top just under the menu bar, on the pointer's display", () => {
     const vf = s.visibleFrame;
@@ -820,7 +840,7 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   s = await poll(quiet, (st) => st.visible);
   const offAfter = Date.now() - autoSizeOff;
   markVisible(s.visible);
-  // The setting change shows the panel, not the 1.5 s fallback: the helper logs every fallback,
+  // The setting change shows the panel, not the 3 s fallback: the helper logs every fallback,
   // so no new log line proves it without racing the clock on a loaded runner.
   const fallbacksAfter = fallbackLines();
   await check("turning auto-sizing off while a show waits shows the panel at once", () => {
@@ -837,9 +857,9 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   const shownAfter = Date.now() - timeoutStart;
   markVisible(s.visible);
   const quietLog = fs.readFileSync(`${TMP}/support-quiet/helper.log`, "utf8");
-  await check("with no height report at all, a waiting show gives up after 1.5 s and shows anyway", () => {
+  await check("with no height report at all, a waiting show gives up after 3 s and shows anyway", () => {
     assert.equal(s.visible, true, "visible");
-    assert.ok(shownAfter >= 1_400, `shown after only ${shownAfter} ms`);
+    assert.ok(shownAfter >= 2_900, `shown after only ${shownAfter} ms`);
     assert.ok(quietLog.includes("No height report from the editor"), "no timeout line in helper.log");
   });
   await stop(helper);

@@ -86,8 +86,26 @@ final class NotesPanel: NSPanel {
 }
 
 /// The panel's root view: clips its subviews to the rounded body and draws the 1 pt rim.
+///
+/// While a dropdown hangs past the note (`overhang` > 0, `window.setOverhang`), the window is
+/// taller than the note: the body (background, rim, resize zones) keeps the note's size at the
+/// top, and below it only the web view shows, through a mask, so the dropdown appears to hang
+/// past the bottom edge while the note itself never changes size.
 final class PanelBodyView: NSView {
     private let rim = CALayer()
+    private let overhangMask = CAShapeLayer()
+    /// Points of window below the note's bottom edge.
+    var overhang: CGFloat = 0 {
+        didSet { placeBodyViews() }
+    }
+    /// The views that keep the note's size while a dropdown hangs below it.
+    weak var background: NSView?
+    weak var resizeOverlay: NSView?
+
+    /// The note's area, at the top of the window.
+    var bodyRect: NSRect {
+        NSRect(x: 0, y: overhang, width: bounds.width, height: max(0, bounds.height - overhang))
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -108,9 +126,37 @@ final class PanelBodyView: NSView {
 
     override func layout() {
         super.layout()
+        placeBodyViews()
+    }
+
+    override func resizeSubviews(withOldSize oldSize: NSSize) {
+        super.resizeSubviews(withOldSize: oldSize)
+        placeBodyViews()
+    }
+
+    /// Sizes the note's own views to `bodyRect`, and clips to the rounded note plus the strip below.
+    func placeBodyViews() {
+        let body = bodyRect
+        background?.frame = body
+        resizeOverlay?.frame = body
+        // No resizing while a dropdown is open: its edges are not the note's edges.
+        resizeOverlay?.isHidden = overhang > 0
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        rim.frame = bounds
+        rim.frame = body
+        if overhang > 0 {
+            let radius = NotesPanel.cornerRadius
+            let path = CGMutablePath()
+            path.addRoundedRect(in: body, cornerWidth: radius, cornerHeight: radius)
+            path.addRect(NSRect(x: 0, y: 0, width: bounds.width, height: overhang))
+            overhangMask.frame = bounds
+            overhangMask.path = path
+            layer?.mask = overhangMask
+            layer?.masksToBounds = false
+        } else {
+            layer?.mask = nil
+            layer?.masksToBounds = true
+        }
         CATransaction.commit()
     }
 
@@ -275,7 +321,7 @@ final class ResizeOverlayView: NSView {
     }
 
     func edge(atWindowPoint point: NSPoint) -> ResizeEdge? {
-        ResizeEdge.zone(at: convert(point, from: nil), in: bounds.size)
+        isHidden ? nil : ResizeEdge.zone(at: convert(point, from: nil), in: bounds.size)
     }
 
     /// Resizing works on an unfocused panel too, like any window edge.

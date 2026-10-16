@@ -2,7 +2,7 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "overnote",
   "title": "Overnote",
-  "description": "An open-source, extensible floating Markdown notepad, one hotkey away, with local notes, daily backups, and one-command updates.",
+  "description": "An open-source, scriptable floating Markdown notepad, one hotkey away, with local notes, daily backups, and one-command updates.",
   "icon": "extension-icon.png",
   "author": "wesleybldc",
   "license": "MIT",

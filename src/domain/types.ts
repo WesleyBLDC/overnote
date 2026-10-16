@@ -20,10 +20,7 @@ export interface Page<T> {
 }
 
 /** Socket methods only; bridge-only methods are not reachable from the extension. */
-export type RpcMethods = Omit<
-  rpc.Methods,
-  "system.ready" | "window.resize" | "window.resignFocus" | "clipboard.copy" | "file.saveAs"
->;
+export type RpcMethods = Omit<rpc.Methods, rpc.BridgeOnlyMethod>;
 export type RpcMethod = keyof RpcMethods;
 export type RpcParams<M extends RpcMethod> = RpcMethods[M]["params"];
 export type RpcResult<M extends RpcMethod> = RpcMethods[M]["result"];

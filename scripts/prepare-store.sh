@@ -106,7 +106,7 @@ node -e '
   const fs = require("fs");
   const file = process.argv[1];
   const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
-  manifest.description = "An open-source, extensible floating Markdown notepad, one hotkey away, with local notes and daily backups.";
+  manifest.description = "An open-source, scriptable floating Markdown notepad, one hotkey away, with local notes and daily backups.";
   manifest.commands = manifest.commands.filter((command) => command.name !== "check-for-updates");
   for (const name of ["install-extension", "update-extension", "prepare-store", "verify", "test"]) delete manifest.scripts[name];
   // scripts/dev.sh (live editor and helper rebuilds) needs the full checkout; plain Raycast development here.

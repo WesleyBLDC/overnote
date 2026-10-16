@@ -85,6 +85,3 @@ To remove every trace, delete that folder too, along with the extension's suppor
 - **"The prebuilt helper is missing or does not match"**: the download was damaged or changed; download the zip again.
 - **Overnote does not show up in Raycast**: make sure Raycast is running and signed in, then run `npm run install-extension` again.
 - **"This folder is not an installed release"**: `npm run update-extension` works only in a folder unzipped from a release; in a git checkout, use `git pull` and `npm run install-extension`.
-
-The helper also ships on its own as `OvernoteHelper-<version>.zip` with `OvernoteHelper.sha256`, for people who build the extension from source without the Command Line Tools.
-Put the unzipped `OvernoteHelper` and `OvernoteHelper.sha256` into `assets/bin/` of a checkout.

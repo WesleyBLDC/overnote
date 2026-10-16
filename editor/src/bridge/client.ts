@@ -71,7 +71,8 @@ export class BridgeClient implements BridgeReceiver {
     this.bufferLimit = options.bufferLimit ?? 20;
   }
 
-  call<M extends MethodName>(method: M, params: rpc.Params<M>): Promise<rpc.Result<M>> {
+  /** Socket-only methods are not reachable from the editor; the helper refuses them on the bridge. */
+  call<M extends Exclude<MethodName, rpc.SocketOnlyMethod>>(method: M, params: rpc.Params<M>): Promise<rpc.Result<M>> {
     const id = this.nextId++;
     return new Promise<rpc.Result<M>>((resolve, reject) => {
       const port = this.port();

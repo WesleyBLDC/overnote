@@ -16,11 +16,9 @@ Press it again and it is gone.
 Overnote works like the notes you already know from Raycast, and adds what a built-in tool cannot:
 
 - **Open source.** MIT licensed, with every part of it in this repository.
-- **Extensible.** Every note has a deeplink for quicklinks and scripts, and the code is built to take add-ons, such as a Markdown mirror folder.
+- **Scriptable.** Every note has a deeplink for quicklinks and scripts, and the helper speaks a documented socket protocol ([docs/architecture.md](docs/architecture.md)) that your own tools can use.
 - **Your data, on your Mac.** Notes live in one local SQLite file, with automatic daily backups you can restore from Raycast.
 - **Updates you control.** Check for Updates tells you when a new release is out, and one command installs it after backing up your notes. <!-- store:remove-line -->
-
-Overnote is inspired by Raycast Notes and is not affiliated with Raycast.
 
 ## Features
 
@@ -59,16 +57,7 @@ You need macOS 14 Sonoma or later, [Raycast](https://www.raycast.com) installed 
 To update, run `npm run update-extension` in the same folder; it backs up your notes first.
 [`docs/install.md`](docs/install.md) covers updating, backups, uninstalling, and troubleshooting.
 
-To build from source instead, you also need the Xcode Command Line Tools (`xcode-select --install`):
-
-```sh
-git clone https://github.com/WesleyBLDC/overnote.git
-cd overnote
-npm install
-npm run dev
-```
-
-Once Raycast lists the Overnote commands, stop `npm run dev` with ⌃C; the extension stays installed.
+To build from source instead, follow the Development setup in [CONTRIBUTING.md](CONTRIBUTING.md); it needs the Xcode Command Line Tools too.
 <!-- /store:remove -->
 
 ## Usage
@@ -138,12 +127,12 @@ Create Quicklink in Search Notes saves it as a Raycast quicklink.
 ## Your data
 
 - Notes live in one SQLite file in the extension's Raycast support folder, and never leave your Mac.
-- Backups go to `~/Library/Application Support/Overnote/backups`, outside the extension, so they survive removing it.
-  Overnote writes one a day, and one before every restore and database upgrade, and keeps the latest 10 plus one per week for the last 4 weeks.
-  `npm run update-extension` also writes one before it updates. <!-- store:remove-line -->
+- Backups go to `~/Library/Application Support/Overnote/backups`, outside the extension.
+  Overnote writes one a day, and one before every restore and database upgrade.
+  Every update from GitHub backs up first too. <!-- store:remove-line -->
 - **Back Up Notes Now**, **Restore Notes from Backup**, and **Reveal Backups Folder** are in Search Notes and the menu bar.
-  A restore backs up the current notes first, so it can be undone.
-- After a reinstall, Search Notes offers to restore your latest backup.
+  A restore backs up the current notes first.
+  [docs/install.md](docs/install.md) covers backups and restore.
 - Deleted notes are purged after 60 days.
 - Overnote has no account and no analytics, and the notes panel cannot make network connections.
 - The only network request is Check for Updates, which asks GitHub for the latest release when you run it. <!-- store:remove-line -->

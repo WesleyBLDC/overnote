@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v2.12 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v2.13 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -69,7 +69,7 @@ The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups fold
 |---|---|---|
 | `window.didShow` | `{}` | The panel became visible |
 | `window.didHide` | `{}` | The panel was hidden |
-| `window.didBecomeKey` / `window.didResignKey` | `{}` | Focus changes |
+| `window.didResignKey` | `{}` | The panel lost focus |
 | `note.open` | `{ id: string }` | An external caller asked to show a specific note |
 | `note.new` | `{ note: Note }` | An external caller created a note and asked to show it |
 | `notes.changed` | `{ ids: string[] }` | Data changed through the socket (so the editor reloads) |
@@ -137,7 +137,8 @@ The helper stores `NoteContent` verbatim.
 | `window.toggle` | `{}` | `{ visible: boolean }` | Show and focus, or hide |
 | `window.show` | `{ noteId?: NoteId }` | `{ visible: true }` | Shows the panel, optionally on a note (emits `note.open`) |
 | `window.hide` | `{}` | `{ visible: false }` | |
-| `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped 128 to 860 pt times zoom. `temporary: true` (⌘K, browse, dialogs) applies even when windowAutoSize is off and is restored by the next non-temporary report |
+| `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped 128 to 860 pt times zoom. `temporary: true` (dialogs and popups; panels hang past the note instead, see `window.setOverhang`) applies even when windowAutoSize is off and is restored by the next non-temporary report |
+| `window.setOverhang` (bridge) | `{ height: number }` | `{}` | Lets an open panel (⌘K, browse, settings) hang `height` points past the note's bottom edge: the window grows downward (never past the display's visible area) while the note, its material, and its resize zones keep their size and place; the strip below shows only the web view. Resize zones are off and height reports wait while it is above 0. `0` gives the room back. A hide gives it back too |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
 | `window.setDragRegions` (bridge) | `{ rects: { x: number, y: number, width: number, height: number }[] }` | `{}` | Points (CSS px times zoom), top-left origin, relative to the web view. A mouse down inside drags the window natively (title-bar behavior: it also works as the first click into an unfocused panel) |
 | `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
@@ -215,7 +216,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath.
   Minimum user size is 396 pt wide by 128 pt times zoom.
 - The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 139 pt with the footer at the bottom.
-- With windowAutoSize on and no normal `window.resize` report yet (a cold start, for example `--show`), a show waits with the panel hidden for that first report, up to 1.5 s, and then orders the panel in at the reported height, so it never flashes the default height.
+- With windowAutoSize on and no normal `window.resize` report yet (a cold start, for example `--show`), a show waits with the panel hidden for that first report, up to 3 s (a cold WebKit start on a slow machine takes about 1.5 s), and then orders the panel in at the reported height, so it never flashes the default height.
   A temporary report does not end the wait.
   While it waits, `window.toggle` cancels the show (result `visible: false`), `window.hide` cancels it too, `window.show { noteId }` still emits `note.open`, and turning windowAutoSize off shows the panel at once.
 - Helper test-only flags: `--test-hooks` enables `test.*` socket methods.
@@ -362,7 +363,7 @@ The support, runtime, and backups folders default to the real ones and can be ov
 
 ## Protocol versioning
 
-The protocol described here is v2.12 (v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v2.13 (v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.

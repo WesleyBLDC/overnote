@@ -105,6 +105,12 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
             try {
               if (message.method === "window.resize")
                 applyPanelHeight(params as { contentHeight: number; temporary?: boolean });
+              // The harness panel cannot grow a transparent strip like the helper's window does,
+              // so it lets the dropdown draw past its bottom edge instead.
+              if (message.method === "window.setOverhang") {
+                const root = target.document.getElementById("root");
+                if (root) root.style.overflow = (params as { height: number }).height > 0 ? "visible" : "";
+              }
               receiver()?.resolve(message.id, control.store.dispatch(message.method, params));
             } catch (error) {
               const code = error instanceof MockRpcError ? error.code : rpc.ErrorCode.Internal;

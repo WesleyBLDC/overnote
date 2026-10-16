@@ -5,19 +5,9 @@
 #   npm run update-extension                       the latest release
 #   npm run update-extension -- --version v0.3.0   a specific release (also to roll back)
 #
-# Steps:
-#   1. Reads the installed version from assets/prebuilt.json (only a release install has one).
-#   2. Asks the GitHub releases API for the target release, downloads its zip and SHA256SUMS to a
-#      temporary folder, and checks the zip against SHA256SUMS.
-#   3. Rollback guard: refuses a release whose helper writes an older database schema than the
-#      one your notes already use (PRAGMA user_version, read with sqlite3 -readonly on a copy).
-#   4. Backs up your notes: asks the running helper for system.backup {reason: "pre-update"},
-#      starting it headless first when it is not running. If the helper cannot start, it copies
-#      the database with `sqlite3 .backup` instead.
-#   5. Stops the helper cleanly (system.shutdown, then SIGTERM through its pid file).
-#   6. Replaces this folder's files with the release's, keeping node_modules. It never touches
-#      the notes (the extension's support folder) or the backups folder.
-#   7. Runs scripts/install-extension.sh from the new files and prints the old and new versions.
+# Downloads the release and checks it against SHA256SUMS, backs up your notes, stops the helper,
+# replaces this folder's files (keeping node_modules), and reinstalls. Details: docs/architecture.md,
+# section 9.
 #
 # Options:
 #   --version vX.Y.Z  update or roll back to that release instead of the latest

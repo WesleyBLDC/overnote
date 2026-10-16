@@ -32,6 +32,7 @@ export const Method = {
   WindowShow: "window.show",
   WindowHide: "window.hide",
   WindowResize: "window.resize",
+  WindowSetOverhang: "window.setOverhang",
   WindowResignFocus: "window.resignFocus",
   WindowSetDragRegions: "window.setDragRegions",
   ClipboardCopy: "clipboard.copy",
@@ -64,24 +65,27 @@ export const Method = {
 export type MethodName = (typeof Method)[keyof typeof Method];
 
 /** Methods that only exist on the WKWebView bridge. */
-export const BRIDGE_ONLY_METHODS: readonly MethodName[] = [
+export const BRIDGE_ONLY_METHODS = [
   Method.SystemReady,
   Method.WindowResize,
+  Method.WindowSetOverhang,
   Method.WindowResignFocus,
   Method.WindowSetDragRegions,
   Method.ClipboardCopy,
   Method.FileSaveAs,
   Method.AppOpenURL,
-];
+] as const satisfies readonly MethodName[];
+export type BridgeOnlyMethod = (typeof BRIDGE_ONLY_METHODS)[number];
 
 /** Methods that only exist on the socket (backups and restores are for the extension and scripts). */
-export const SOCKET_ONLY_METHODS: readonly MethodName[] = [
+export const SOCKET_ONLY_METHODS = [
   Method.SystemStatus,
   Method.SystemBackup,
   Method.SystemListBackups,
   Method.SystemRestoreBackup,
   Method.SystemDismissRestoreOffer,
-];
+] as const satisfies readonly MethodName[];
+export type SocketOnlyMethod = (typeof SOCKET_ONLY_METHODS)[number];
 
 type Empty = Record<string, never>;
 
@@ -168,6 +172,8 @@ export interface Methods {
   "window.show": { params: { noteId?: NoteId }; result: { visible: true } };
   "window.hide": { params: Empty; result: { visible: false } };
   "window.resize": { params: { contentHeight: number; temporary?: boolean }; result: Empty };
+  /** Lets a dropdown hang `height` points past the note's bottom edge; the note keeps its size. 0 gives the room back. */
+  "window.setOverhang": { params: { height: number }; result: Empty };
   "window.resignFocus": { params: Empty; result: Empty };
   "window.setDragRegions": { params: { rects: DragRect[] }; result: Empty };
   "clipboard.copy": { params: { text: string; html?: string }; result: Empty };
@@ -214,7 +220,6 @@ export type Response<M extends MethodName = MethodName> =
 export const Event = {
   WindowDidShow: "window.didShow",
   WindowDidHide: "window.didHide",
-  WindowDidBecomeKey: "window.didBecomeKey",
   WindowDidResignKey: "window.didResignKey",
   NoteOpen: "note.open",
   NoteNew: "note.new",
@@ -228,7 +233,6 @@ export type EventName = (typeof Event)[keyof typeof Event];
 export interface Events {
   "window.didShow": Empty;
   "window.didHide": Empty;
-  "window.didBecomeKey": Empty;
   "window.didResignKey": Empty;
   "note.open": { id: NoteId };
   "note.new": { note: Note };

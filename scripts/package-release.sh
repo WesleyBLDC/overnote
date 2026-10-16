@@ -9,9 +9,7 @@
 #   overnote-<version>.zip           the extension, ready for `npm run install-extension`:
 #                                    sources plus the PREBUILT helper and editor, so installing
 #                                    needs only Node 22+ and Raycast (no Xcode tools)
-#   OvernoteHelper-<version>.zip     the bare universal helper, executable bit kept
-#   OvernoteHelper.sha256            the helper's checksum, as written by build-helper.sh
-#   SHA256SUMS                       checksums of every file above
+#   SHA256SUMS                       the checksum of the zip
 #   release-notes.md                 a source summary for the release body
 #
 # The zip holds one folder, `overnote/`. It leaves out tests, helper sources, build output,
@@ -88,22 +86,14 @@ cat > "$PKG/assets/prebuilt.json" <<EOF
 EOF
 
 chmod 755 "$PKG/assets/bin/OvernoteHelper" "$PKG"/scripts/*.sh
-rm -f "$OUT/overnote-$VERSION.zip" "$OUT/OvernoteHelper-$VERSION.zip"
+rm -f "$OUT/overnote-$VERSION.zip"
 # Info-ZIP keeps Unix permissions, so the helper stays executable; -X drops extra attributes.
 (cd "$STAGE" && zip -q -r -X "$OUT/overnote-$VERSION.zip" overnote)
-(cd assets/bin && zip -q -X "$OUT/OvernoteHelper-$VERSION.zip" OvernoteHelper)
-cp "$BIN.sha256" "$OUT/OvernoteHelper.sha256"
 
-# Check what we ship: the helper is executable inside both zips and matches its checksum.
-for zipfile in "$OUT/overnote-$VERSION.zip" "$OUT/OvernoteHelper-$VERSION.zip"; do
-  zipinfo "$zipfile" | grep -E 'OvernoteHelper$' | grep -q '^-rwxr-xr-x' || die "the helper in $(basename "$zipfile") is not executable"
-done
-CHECK="$STAGE/check"
-mkdir "$CHECK"
-unzip -q "$OUT/OvernoteHelper-$VERSION.zip" -d "$CHECK"
-[[ "$(shasum -a 256 "$CHECK/OvernoteHelper" | cut -d' ' -f1)" == "$HELPER_SHA" ]] || die "the zipped helper does not match its checksum"
+# Check what we ship: the helper is executable inside the zip.
+zipinfo "$OUT/overnote-$VERSION.zip" | grep -E 'OvernoteHelper$' | grep -q '^-rwxr-xr-x' || die "the helper in overnote-$VERSION.zip is not executable"
 
-(cd "$OUT" && shasum -a 256 "overnote-$VERSION.zip" "OvernoteHelper-$VERSION.zip" OvernoteHelper.sha256 > SHA256SUMS)
+(cd "$OUT" && shasum -a 256 "overnote-$VERSION.zip" > SHA256SUMS)
 
 FILES="$(cd "$STAGE" && find overnote -type f | sort)"
 cat > "$OUT/release-notes.md" <<EOF

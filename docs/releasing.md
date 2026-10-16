@@ -8,9 +8,7 @@ Pushing a tag that starts with `v` runs `.github/workflows/release.yml`, which b
 | File | Contents |
 |---|---|
 | `overnote-<version>.zip` | The extension, ready to install with `npm run install-extension` (see [install.md](install.md)) |
-| `OvernoteHelper-<version>.zip` | The universal (arm64 and x86_64) helper on its own, with its executable bit |
-| `OvernoteHelper.sha256` | The helper's SHA-256, the same file `scripts/build-helper.sh` writes |
-| `SHA256SUMS` | Checksums of the three files above |
+| `SHA256SUMS` | The checksum of the zip |
 
 The release notes list the install steps, then the commit, helper version, database schema, architectures, checksum, and toolchain the release was built with, and the files in the zip.
 
@@ -37,9 +35,7 @@ It also records the release `version`, which Check for Updates and `npm run upda
    bash scripts/check-release.sh /tmp/overnote-release/overnote-0.3.0.zip
    ```
 
-   `scripts/check-release.sh` takes a local zip, checked against the `SHA256SUMS` next to it, or a release URL, checked against the `SHA256SUMS` of the same release.
-   It quarantines every file the way a browser download does, installs with the Xcode tools stubbed out, starts the helper headless through the zip's own launcher, creates and lists a note, and checks that the launcher cleared the quarantine and that the signature verifies.
-   It never shows the panel and never talks to Raycast, so it is safe to run on a workstation.
+   `scripts/check-release.sh` installs the zip the way a browser download arrives, quarantined and with the Xcode tools stubbed out, and runs the helper headless; it never shows the panel or talks to Raycast, so it is safe on a workstation (`--help` lists the steps).
 
 5. Tag and push:
 

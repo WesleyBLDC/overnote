@@ -323,7 +323,8 @@ export function App({ api }: { api: Api }) {
   const slashItems = slash && slash.from !== slashDismissed ? filterSlashItems(slash.query) : [];
   const emojiQuery = editor.isFocused ? emojiQueryAt(editor.state) : null;
   const showEmoji = emojiQuery !== null && emojiQuery.from !== emojiDismissed;
-  const overlayRem = panel || confirm ? 34 : slashItems.length || showEmoji || linkTarget || formatMenuOpen ? 16 : null;
+  // Panels hang past the note instead (usePanelOverhang), so only dialogs and popups grow it.
+  const overlayRem = confirm ? 34 : slashItems.length || showEmoji || linkTarget || formatMenuOpen ? 16 : null;
   const hasSelection = !editor.state.selection.empty;
   const inList = editor.isActive("list");
   useResizeReporter(app, api, { autoSize: settings.windowAutoSize, overlayRem });

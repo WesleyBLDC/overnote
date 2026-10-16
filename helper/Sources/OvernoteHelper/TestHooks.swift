@@ -50,6 +50,11 @@ final class TestHooks {
                     "x": .double(frame.minX), "y": .double(frame.minY),
                     "width": .double(frame.width), "height": .double(frame.height), "top": .double(frame.maxY),
                 ],
+                "overhang": .double(Double(controller.overhang)),
+                "noteFrame": Self.rectJSON(controller.noteFrame),
+                "materialFrame": Self.rectJSON(
+                    Self.find(NSVisualEffectView.self, in: panel.contentView)?.frame ?? .zero),
+                "resizeZonesHidden": .bool(Self.find(ResizeOverlayView.self, in: panel.contentView)?.isHidden ?? false),
                 "screenKey": .string(panel.screen?.positionKey ?? ""),
                 "pointerScreenKey": .string(Self.screenUnderPointer?.positionKey ?? ""),
                 "visibleFrameHeight": .double(Double(panel.screen?.visibleFrame.height ?? 0)),

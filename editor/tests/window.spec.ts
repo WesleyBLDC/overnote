@@ -37,23 +37,30 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await page.keyboard.press("Meta+0");
   await expect.poll(async () => (await last())?.contentHeight ?? 0).toBe(start);
 
-  // ⌘K in a short panel grows it temporarily and closing restores it.
+  // ⌘K in a short panel never resizes the note: the panel hangs past its bottom edge through
+  // window.setOverhang, and closing gives the room back.
+  const overhangs = async () => (await calls(page, "window.setOverhang")).map((c) => c.params.height as number);
+  const reportsBeforePanel = (await reports()).length;
   await page.keyboard.press("Meta+k");
-  await expect.poll(last).toMatchObject({ temporary: true });
-  expect((await last())?.contentHeight ?? 0).toBeGreaterThan(400);
+  await expect.poll(async () => (await overhangs()).at(-1) ?? 0).toBeGreaterThan(200);
+  expect(await appHeight()).toBe(start);
   await page.keyboard.press("Escape");
-  await expect.poll(last).toEqual({ contentHeight: start });
+  await expect.poll(async () => (await overhangs()).at(-1)).toBe(0);
+  await settle(page);
+  expect((await reports()).slice(reportsBeforePanel).filter((r) => r.temporary)).toEqual([]);
+  expect(await appHeight()).toBe(start);
 
-  // With auto-sizing off, content changes are not reported but temporary growth still is.
+  // With auto-sizing off, content changes are not reported, and browse hangs the same way.
   await page.keyboard.press("Meta+Shift+Slash");
   const count = (await reports()).length;
   for (let i = 0; i < 3; i++) await page.keyboard.press("Enter");
   await settle(page);
   expect((await reports()).length).toBe(count);
   await page.keyboard.press("Meta+p");
-  await expect.poll(last).toMatchObject({ temporary: true });
+  await expect.poll(async () => (await overhangs()).at(-1) ?? 0).toBeGreaterThan(0);
   await page.keyboard.press("Escape");
-  await expect.poll(async () => (await last())?.temporary).toBeUndefined();
+  await expect.poll(async () => (await overhangs()).at(-1)).toBe(0);
+  expect((await reports()).length).toBe(count);
 
   // The top 12 points stay free of controls for the native drag strip.
   await page.mouse.move(300, 120);
