@@ -72,10 +72,16 @@ export async function blocks(page: Page): Promise<string[]> {
 }
 
 /** Notes stored in the mock, newest update first. */
-export async function storedNotes(
-  page: Page,
-): Promise<
-  { id: string; title: string; text: string; markdown: string; pinned: number | null; deletedAt: number | null }[]
+export async function storedNotes(page: Page): Promise<
+  {
+    id: string;
+    title: string;
+    text: string;
+    markdown: string;
+    pinned: number | null;
+    deletedAt: number | null;
+    updatedAt: number;
+  }[]
 > {
   return page.evaluate(() => {
     const mock = (window as unknown as { __overnoteMock: { store: { notes: Map<string, { updatedAt: number }> } } })

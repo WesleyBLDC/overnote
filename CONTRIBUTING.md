@@ -74,7 +74,7 @@ Overnote has few unit tests and many end-to-end tests.
   Beyond that, unit tests are only for logic end-to-end tests cannot reach cheaply, such as fold rules, ordering and cursor math, trash purge, and the launcher's restart and version logic.
   Do not add a unit test for every function, and remove redundant ones when you touch an area.
 - Every feature closes with end-to-end tests that exercise it the way a person does:
-  - editor behavior through Playwright against the real editor UI in the browser harness (`editor/tests/`);
+  - editor behavior through Playwright against the real editor UI in the browser harness (`editor/tests/`), plus the shipped editor build against the real helper (`editor/tests/real-helper.spec.ts`);
   - helper and extension behavior through the real helper binary over its socket (`scripts/smoke-helper.sh` style);
   - full flows inside real Raycast in development mode (hotkey toggle, panel, typing, persistence across restarts).
 - A feature is done when its end-to-end test passes, not when its unit tests pass.
@@ -88,7 +88,7 @@ npm run verify
 
 `npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, and builds the extension, stopping at the first failing step.
 CI runs the same command.
-Playwright needs both WebKit (the engine of the native panel, which runs every editor flow) and Chromium (a second engine check of the shipped bundle).
+Playwright needs only WebKit, the engine of the native panel.
 The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so `npm run verify` skips it on a workstation and runs it in CI.
 Set `OVERNOTE_WINDOW_E2E=1` to run it locally, or `OVERNOTE_WINDOW_E2E=0` to skip it even in CI.
 

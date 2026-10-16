@@ -33,12 +33,20 @@ if arguments.headless {
     // With --test-hooks, smoke tests can read what a window host would have received.
     let hooks: RPCDispatcher.ExtensionHandler? =
         arguments.testHooks
-        ? { @Sendable method, _ in
+        ? { @Sendable method, params in
             switch method {
             case "test.events":
                 return .array(host.events.map { ["event": .string($0.0), "payload": $0.1] })
             case "test.visible":
                 return .bool(host.isVisible)
+            case "test.asBridge":
+                // Lets an end to end test run the real editor build against this helper: the
+                // page's bridge messages arrive over the socket and are handled as the bridge.
+                let p = try Params(params)
+                guard let dispatcher = await MainActor.run(body: { runtime.dispatcher }) else {
+                    throw RPCError.internal("No dispatcher")
+                }
+                return try await dispatcher.handle(method: try p.string("method"), params: p.values["params"], source: .bridge)
             default:
                 return nil
             }
