@@ -701,7 +701,9 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   });
   // The page's messages take effect in the order it sent them: 40 saves to one note, fired at
   // once from the page, leave the last one stored.
-  const orderedNote = (await helper.call("notes.windowData", {})).current;
+  const orderedNote = await helper.call("notes.create", {
+    rawContent: "", markdown: "ordered", text: "ordered", title: "ordered",
+  });
   await helper.call("test.js", {
     expression: `(() => { for (let i = 0; i < 40; i++) window.webkit.messageHandlers.overnote.postMessage({ id: 900000 + i, method: "notes.update", params: { id: ${JSON.stringify(orderedNote.id)}, rawContent: "", markdown: "v" + i, text: "v" + i, title: "v" + i } }); return true; })()`,
   });
