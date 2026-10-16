@@ -134,3 +134,36 @@ test("a failed autosave says so once while saving keeps failing, and the next sa
   await page.clock.runFor(350);
   await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft one two three");
 });
+
+test("an outside change while typing never overwrites the typing: the save conflicts, retries, and keeps it", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  const [note] = await storedNotes(page);
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  // Another writer (the Create Note command, a script) changes the note before the autosave runs.
+  await page.evaluate((id) => {
+    const mock = (window as unknown as { __overnoteMock: { store: { externalUpdate(id: string, c: object): void } } })
+      .__overnoteMock;
+    mock.store.externalUpdate(id, {
+      rawContent: JSON.stringify({
+        type: "doc",
+        content: [{ type: "paragraph", content: [{ type: "text", text: "From outside" }] }],
+      }),
+      text: "From outside",
+      title: "From outside",
+      markdown: "From outside",
+    });
+  }, note?.id ?? "");
+  await page.clock.runFor(400);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine");
+  await expect(editor(page)).toHaveText("Draft mine");
+  // The first save was refused as stale, and the retry against the stored version wrote the typing.
+  const saves = (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params);
+  expect(saves.length).toBe(2);
+  expect(saves[0]?.params.expectedUpdatedAt).toBe(note?.updatedAt);
+  expect(saves[1]?.params.expectedUpdatedAt).not.toBe(note?.updatedAt);
+});
