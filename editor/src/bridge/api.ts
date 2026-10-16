@@ -56,6 +56,7 @@ export function createApi(client: BridgeClient) {
     settings: {
       get: () => call(M.SettingsGet, {}),
       set: (params: P<"settings.set">) => call(M.SettingsSet, params),
+      reset: () => call(M.SettingsReset, {}),
     },
     on: client.on.bind(client),
   };

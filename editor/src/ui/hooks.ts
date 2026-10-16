@@ -57,7 +57,11 @@ export function useSettings(api: Api) {
     },
     [api],
   );
-  return { settings, setSettings, update };
+  /** Every setting back to its default; the helper also puts the window back to its first open frame. */
+  const reset = useCallback(async () => {
+    setSettings({ ...DEFAULT_SETTINGS, ...(await api.settings.reset()) });
+  }, [api]);
+  return { settings, setSettings, update, reset };
 }
 
 export interface ResizeOptions {

@@ -9,7 +9,8 @@ type SwitchKey = "escapeLosesFocus" | "windowAutoSize" | "hideWhileScreenSharing
 export type SettingRow =
   | { id: SwitchKey; kind: "switch"; title: string; subtitle: string; section: string; keywords?: string[] }
   | { id: "countMode"; kind: "segment"; title: string; subtitle: string; section: string; keywords?: string[] }
-  | { id: "zoom"; kind: "stepper"; title: string; subtitle: string; section: string; keywords?: string[] };
+  | { id: "zoom"; kind: "stepper"; title: string; subtitle: string; section: string; keywords?: string[] }
+  | { id: "reset"; kind: "action"; title: string; subtitle: string; section: string; keywords?: string[] };
 
 export const SETTING_ROWS: readonly SettingRow[] = [
   {
@@ -60,6 +61,14 @@ export const SETTING_ROWS: readonly SettingRow[] = [
     subtitle: "Buttons in place of the counter",
     keywords: ["toolbar", "buttons"],
   },
+  {
+    id: "reset",
+    kind: "action",
+    section: "Reset",
+    title: "Reset All Settings",
+    subtitle: "Window size, zoom, and every option",
+    keywords: ["default", "restore", "size"],
+  },
 ];
 
 export function filterSettings(query: string): SettingRow[] {
@@ -83,6 +92,8 @@ export function adjustSetting(row: SettingRow, settings: Settings, direction: -1
     case "segment":
       if (direction === 0) return { countMode: settings.countMode === "words" ? "characters" : "words" };
       return { countMode: direction < 0 ? "characters" : "words" };
+    case "action":
+      return null;
     case "stepper": {
       if (direction === 0) return null;
       const zoom = stepZoom(settings.zoom, direction);
@@ -98,12 +109,13 @@ interface SettingsListProps {
   grouped: boolean;
   onHover: (index: number) => void;
   onChange: (patch: Partial<Settings>) => void;
+  onReset: () => void;
 }
 
 /** Keeps focus in the panel search field when a control is clicked. */
 const keepFocus = (event: React.MouseEvent) => event.preventDefault();
 
-export function SettingsList({ rows, settings, selected, grouped, onHover, onChange }: SettingsListProps) {
+export function SettingsList({ rows, settings, selected, grouped, onHover, onChange, onReset }: SettingsListProps) {
   return (
     <>
       {rows.map((row, i) => {
@@ -119,7 +131,8 @@ export function SettingsList({ rows, settings, selected, grouped, onHover, onCha
               onMouseEnter={() => onHover(i)}
               onMouseDown={keepFocus}
               onClick={() => {
-                if (row.kind !== "stepper") {
+                if (row.kind === "action") onReset();
+                else if (row.kind !== "stepper") {
                   const patch = adjustSetting(row, settings, 0);
                   if (patch) onChange(patch);
                 }
@@ -150,6 +163,13 @@ function SettingControl({
   if (row.kind === "switch") {
     const on = settings[row.id];
     return <span role="switch" aria-checked={on} aria-label={row.title} className={`switch${on ? " is-on" : ""}`} />;
+  }
+  if (row.kind === "action") {
+    return (
+      <span className="text-button setting-action" aria-hidden>
+        Reset
+      </span>
+    );
   }
   if (row.kind === "segment") {
     return (

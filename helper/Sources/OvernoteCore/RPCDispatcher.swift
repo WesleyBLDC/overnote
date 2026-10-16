@@ -256,6 +256,11 @@ public final class RPCDispatcher: Sendable {
             await host.settingsDidChange(settings)
             await host.emit("settings.changed", settings.json)
             return settings.json
+        case "settings.reset":
+            let settings = try repository.resetSettings()
+            await host.settingsDidChange(settings)
+            await host.emit("settings.changed", settings.json)
+            return settings.json
 
         default:
             throw RPCError.methodNotFound(method)

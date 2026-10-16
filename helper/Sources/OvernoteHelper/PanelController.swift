@@ -307,6 +307,17 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         setFrame(keepOnScreen(frame, visible: visible))
     }
 
+    /// The first open frame: the default size, centered at the top of the display under the pointer.
+    private func restoreDefaultFrame() {
+        guard let screen = panel.screen ?? screenUnderPointer else { return }
+        let visible = screen.visibleFrame
+        let height = settings.windowAutoSize ? targetHeight(on: screen) : NotesPanel.defaultHeight
+        let frame = NSRect(
+            x: visible.midX - NotesPanel.defaultWidth / 2, y: visible.maxY - height, width: NotesPanel.defaultWidth,
+            height: height)
+        setFrame(keepOnScreen(frame, visible: visible))
+    }
+
     /// The height the panel should have now, before keeping it on screen.
     private func targetHeight(on screen: NSScreen) -> CGFloat {
         let zoom = CGFloat(settings.zoom)
@@ -562,8 +573,16 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         let geometryChanged =
             newSettings.windowAutoSize != settings.windowAutoSize || newSettings.zoom != settings.zoom
             || newSettings.panelFrame?.height != settings.panelFrame?.height
+        // settings.reset forgets the frame: the panel goes back to its first open size and place.
+        let frameForgotten = newSettings.panelFrame == nil && settings.panelFrame != nil
         settings = newSettings
         applyWindowSettings()
+        if frameForgotten {
+            temporaryHeight = nil
+            heightBeforeTemporary = nil
+            restoreDefaultFrame()
+            return
+        }
         if pendingShow != nil, !settings.windowAutoSize {
             // Auto-sizing went off while a show waited for a height report: nothing to wait for.
             present()

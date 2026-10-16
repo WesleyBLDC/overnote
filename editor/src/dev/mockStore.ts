@@ -353,6 +353,11 @@ export class MockStore {
       this.emit(rpc.Event.SettingsChanged, { ...this.settings });
       return { ...this.settings };
     },
+    "settings.reset": () => {
+      this.settings = { ...DEFAULT_SETTINGS };
+      this.emit(rpc.Event.SettingsChanged, { ...this.settings });
+      return { ...this.settings };
+    },
   };
 
   private swapPin(id: NoteId, direction: -1 | 1): void {

@@ -194,9 +194,9 @@ struct ResizeEdge: OptionSet, Hashable {
     static let right = ResizeEdge(rawValue: 1 << 3)
 
     /// Along each edge.
-    static let edgeThickness: CGFloat = 8
+    static let edgeThickness: CGFloat = 10
     /// The square at each corner.
-    static let cornerSize: CGFloat = 16
+    static let cornerSize: CGFloat = 24
 
     var name: String {
         let parts: [(ResizeEdge, String)] = [(.top, "top"), (.bottom, "bottom"), (.left, "left"), (.right, "right")]

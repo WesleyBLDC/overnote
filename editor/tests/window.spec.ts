@@ -14,12 +14,12 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await settle(page);
   expect(await reports()).toEqual([]);
 
-  // With auto-sizing on, a one-line note is about 139 points (one 120% line between the bars), footer at the bottom.
+  // With auto-sizing on, a one-line note is about 143 points (one 120% line between the bars), footer at the bottom.
   await page.keyboard.press("Meta+Shift+Slash");
   await expect.poll(async () => (await reports()).length).toBeGreaterThan(0);
   const start = (await last())?.contentHeight ?? 0;
   expect(start).toBeGreaterThanOrEqual(134);
-  expect(start).toBeLessThanOrEqual(142);
+  expect(start).toBeLessThanOrEqual(146);
   await expect.poll(appHeight).toBe(start);
   const footerGap = await page
     .getByTestId("footer")
@@ -277,7 +277,7 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   await page.keyboard.press("Meta+k");
   const normal = await timing();
   expect(normal.chrome).toMatch(/^0\.15s cubic-bezier/);
-  expect(normal.panel).toBe("pop-in 0.18s");
+  expect(normal.panel).toBe("panel-in 0.18s");
   await pauseClock(page);
 
   // Closing leaves an inert copy that fades out, then disappears; the live panel is gone at once.
@@ -350,7 +350,7 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   await page.keyboard.press("Meta+k");
   const reduced = await timing();
   expect(reduced.chrome).toMatch(/^0s /);
-  expect(reduced.panel).toBe("pop-in 0s");
+  expect(reduced.panel).toBe("panel-in 0s");
   // With reduced motion no copy is made at all: the copy would render in the same commit that
   // removes the panel, so there is nothing to wait for.
   await page.keyboard.press("Escape");
@@ -481,7 +481,7 @@ test("select all paints the list gutter like the rest of the selection", async (
   await expect(editor(page).locator(".in-selection")).toHaveCount(0);
 });
 
-test("Close, title, and icons share one line; icons are 20% larger", async ({ page }) => {
+test("Close, title, and icons share one line; icons are about a third larger", async ({ page }) => {
   await openHarness(page, ["Hello\n\nbody"]);
   await page.mouse.move(320, 200);
   const m = await page.evaluate(() => {
@@ -507,12 +507,12 @@ test("Close, title, and icons share one line; icons are 20% larger", async ({ pa
   expect(Math.abs(m.closeLeft - m.textLeft)).toBeLessThanOrEqual(1);
   expect(Math.abs(m.closeMid - m.titleMid)).toBeLessThanOrEqual(1);
   for (const mid of m.actionMids) expect(Math.abs(mid - m.titleMid)).toBeLessThanOrEqual(1);
-  expect(m.icon[0]).toBeCloseTo(16.8, 1);
+  expect(m.icon[0]).toBeCloseTo(18.48, 1);
   for (const [w, h] of m.hit) {
-    expect(w).toBeCloseTo(28.7, 1);
-    expect(h).toBeCloseTo(28.7, 1);
+    expect(w).toBeCloseTo(31.5, 1);
+    expect(h).toBeCloseTo(31.5, 1);
   }
-  // Controls stay clear of the helper's resize zones: 8 points along edges, 16 point squares at corners.
+  // Controls stay clear of the helper's resize zones: 10 points along edges, 24 point squares at corners.
   const clearance = await page.evaluate(() => {
     const app = document.querySelector("[data-testid=app]")!.getBoundingClientRect();
     return [...document.querySelectorAll("[data-testid=toolbar] button, [data-testid=footer] button")].map((el) => {
@@ -521,7 +521,7 @@ test("Close, title, and icons share one line; icons are 20% larger", async ({ pa
       const top = r.top - app.top;
       const right = app.right - r.right;
       const bottom = app.bottom - r.bottom;
-      const inCorner = Math.min(left, right) < 16 && Math.min(top, bottom) < 16;
+      const inCorner = Math.min(left, right) < 24 && Math.min(top, bottom) < 24;
       return {
         name: el.getAttribute("aria-label") ?? el.textContent,
         edge: Math.min(left, top, right, bottom),
@@ -530,10 +530,10 @@ test("Close, title, and icons share one line; icons are 20% larger", async ({ pa
     });
   });
   for (const c of clearance) {
-    expect(c.edge, String(c.name)).toBeGreaterThanOrEqual(8);
+    expect(c.edge, String(c.name)).toBeGreaterThanOrEqual(10);
     expect(c.inCorner, String(c.name)).toBe(false);
   }
-  expect(m.closeLeft).toBeGreaterThanOrEqual(16);
+  expect(m.closeLeft).toBeGreaterThanOrEqual(24);
 
   await page.keyboard.press("Alt+Meta+Comma");
   const formatIcon = await page
@@ -541,7 +541,40 @@ test("Close, title, and icons share one line; icons are 20% larger", async ({ pa
     .locator(".format-button .icon")
     .first()
     .evaluate((el) => el.getBoundingClientRect().width);
-  expect(formatIcon).toBeCloseTo(16.8, 1);
+  expect(formatIcon).toBeCloseTo(18.48, 1);
+});
+
+test("panels drop from the toolbar button that opened them, right aligned under the buttons", async ({ page }) => {
+  await openHarness(page, ["Anchored"]);
+  const geometry = async () =>
+    page.evaluate(() => {
+      const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+      const panel = document.querySelector<HTMLElement>("[data-testid=command-panel]")!;
+      const p = panel.getBoundingClientRect();
+      const origin = parseFloat(getComputedStyle(panel).transformOrigin.split(" ")[0] ?? "0");
+      return {
+        originX: p.left + origin,
+        top: p.top,
+        right: p.right,
+        actions: box("[data-anchor=actions]"),
+        browse: box("[data-anchor=browse]"),
+        plus: box("[data-testid=new-note]"),
+      };
+    });
+  const settled = () => page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+  await page.mouse.move(320, 200);
+  await page.locator("[data-anchor=actions]").click();
+  await settled();
+  let g = await geometry();
+  expect(Math.abs(g.originX - (g.actions.left + g.actions.width / 2))).toBeLessThanOrEqual(1);
+  expect(g.top).toBeGreaterThan(g.actions.bottom);
+  expect(Math.abs(g.right - g.plus.right)).toBeLessThanOrEqual(1);
+  await page.keyboard.press("Escape");
+  await page.locator("[data-anchor=browse]").click();
+  await expect(page.getByTestId("command-panel")).toHaveAttribute("data-view", "browse");
+  await settled();
+  g = await geometry();
+  expect(Math.abs(g.originX - (g.browse.left + g.browse.width / 2))).toBeLessThanOrEqual(1);
 });
 
 test("toolbar drag regions cover the empty toolbar and exclude every button", async ({ page }) => {

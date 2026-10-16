@@ -41,6 +41,7 @@
   --motion-slow: 180ms;
   --pop-offset: -0.3rem;
   --pop-scale: 0.98;
+  --panel-scale: 0.92;
 
   /* ---- colors: light ---- */
   --body-tint: rgba(251, 251, 252, 0.94);
@@ -89,8 +90,8 @@
 
   /* ---- window layout ---- */
   --drag-strip: 12px;
-  /* The helper's resize zones: 8 pt along edges, 16 pt squares at corners; controls stay outside. */
-  --corner-clearance: 16px;
+  /* The helper's resize zones: 10 pt along edges, 24 pt squares at corners; controls stay outside. */
+  --corner-clearance: 24px;
   /* One line note at 100%: 52 (toolbar) + 7 + 27.7 (one 16.8 px line at 1.65) + 4.2 + 48 (footer), about 139 points. */
   --toolbar-height: 3.715rem;
   --content-top: 0.5rem;
@@ -98,16 +99,25 @@
   --footer-height: 3.43rem;
   /* Content that scrolls under the toolbar fades out over this height. */
   --scroll-fade: 1.4rem;
-  /* Toolbar and format bar icons are 20% larger than the 1rem base, with hit targets to match. */
-  --chrome-icon: 1.2rem;
-  --chrome-hit: 2.05rem;
-  --close-size: 1rem;
+  /* Toolbar and format bar icons are about a third larger than the 1rem base, with hit targets to match. */
+  --chrome-icon: 1.32rem;
+  --chrome-hit: 2.25rem;
+  --close-size: 1.1rem;
+  /* Buttons in the footer, the panels, and the popovers. */
+  --button-size: 1.87rem;
+  --button-size-round: 2.53rem;
+  /* The last toolbar glyph ends on the text column's right edge, clear of the corner square. */
+  --toolbar-inset-right: max(
+    var(--corner-clearance),
+    calc(var(--content-x) - (var(--chrome-hit) - var(--chrome-icon)) / 2)
+  );
   --close: #ec5f59;
   --close-glyph: rgba(0, 0, 0, 0.6);
   --quote-border: rgba(12, 12, 14, 0.2);
   /* In em, so it resolves against the note text where it is used. */
   --list-gutter: 1.55em;
-  --content-x: 1.43rem;
+  /* The text column starts where the Close control does: just clear of the 24 pt corner square. */
+  --content-x: 1.715rem;
   /* Panels (⌘K, browse, settings): row heights and widths. */
   --row-height: 2.4rem;
   --row-height-tall: 3.2rem;
@@ -173,5 +183,6 @@
     --motion-slow: 0ms;
     --pop-offset: 0rem;
     --pop-scale: 1;
+    --panel-scale: 1;
   }
 }

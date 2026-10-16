@@ -601,6 +601,17 @@ public final class NotesRepository: @unchecked Sendable {
         }
     }
 
+    /// Removes every stored setting, so each one reads as its default. The current note and the
+    /// restore offer live in the same table under other keys and stay.
+    public func resetSettings() throws -> Settings {
+        try transaction {
+            for key in Settings.keys {
+                try db.run("DELETE FROM settings WHERE key = ?", [.text(key)])
+            }
+            return Settings.defaults
+        }
+    }
+
     /// Reads stored settings over the defaults. Unknown or invalid stored values are ignored,
     /// so a bad row can never stop the helper from starting.
     private func loadSettings() throws -> Settings {

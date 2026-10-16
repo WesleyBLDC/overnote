@@ -59,6 +59,7 @@ export const Method = {
   NotesWindowData: "notes.windowData",
   SettingsGet: "settings.get",
   SettingsSet: "settings.set",
+  SettingsReset: "settings.reset",
 } as const;
 export type MethodName = (typeof Method)[keyof typeof Method];
 
@@ -194,6 +195,8 @@ export interface Methods {
   "notes.windowData": { params: { noteId?: NoteId }; result: WindowData };
   "settings.get": { params: Empty; result: Settings };
   "settings.set": { params: Partial<Settings>; result: Settings };
+  /** Every setting back to its default, the window frame included; notes and the current note stay. */
+  "settings.reset": { params: Empty; result: Settings };
 }
 
 export type Params<M extends MethodName> = Methods[M]["params"];

@@ -323,6 +323,19 @@ test("⌘, opens Settings: controls write through settings.set and follow settin
   await expect(page.getByTestId("zoom-value")).toHaveText("150%");
   await expect(page.getByTestId("count-characters")).toHaveAttribute("aria-checked", "true");
 
+  // Reset All Settings (search, then Enter) puts every option back and says so.
+  await page.keyboard.type("reset");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await calls(page, "settings.reset")).length).toBe(1);
+  await page.keyboard.press("Meta+a");
+  await page.keyboard.press("Backspace");
+  for (const id of ["escapeLosesFocus", "windowAutoSize", "hideWhileScreenSharing", "showFormatBar"]) {
+    await expect(sw(id)).toHaveAttribute("aria-checked", "false");
+  }
+  await expect(page.getByTestId("format-bar")).toHaveCount(0);
+  await expect(page.getByTestId("notices")).toContainText("Settings reset to defaults");
+  await expect(page.getByTestId("zoom-value")).toHaveText("100%");
+
   // Escape clears the search, then closes; ⌘K lists Settings… and pushes the same view.
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);

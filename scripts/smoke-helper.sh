@@ -349,6 +349,21 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   assert.equal((await lastEvent("settings.changed")).payload.zoom, 0.75);
   ok("settings: partial updates, zoom snap and clamp, per display panelFrame, atomic validation, settings.changed");
 
+  // settings.reset: every setting back to its default, the frame forgotten; the current note stays.
+  const kept = await call("notes.create", content("kept current"));
+  await call("window.show", { noteId: kept.id });
+  const currentBefore = (await call("notes.windowData", {})).current?.id ?? null;
+  assert.equal(currentBefore, kept.id);
+  await call("settings.set", { zoom: 1.5, showFormatBar: true, countMode: "words" });
+  const reset = await call("settings.reset");
+  assert.deepEqual(reset, defaults);
+  assert.deepEqual(await call("settings.get"), defaults);
+  assert.deepEqual((await lastEvent("settings.changed")).payload, defaults);
+  assert.equal((await call("notes.windowData", {})).current?.id ?? null, currentBefore);
+  await call("notes.delete", { id: kept.id });
+  await call("notes.permanentlyDelete", { id: kept.id });
+  ok("settings.reset: defaults stored and announced, the current note kept");
+
   // ---- errors and events
   await expectError(-32601, "notes.search", { query: "x" });
   await expectError(-32601, "notes.navigate", { direction: "back" });

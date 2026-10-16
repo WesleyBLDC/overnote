@@ -38,6 +38,7 @@ export function Toolbar({ title, untitled, onClose, onActions, onBrowse, onNew }
           className="icon-button"
           title="Actions (⌘K)"
           aria-label="Actions"
+          data-anchor="actions"
           onMouseDown={keep}
           onClick={onActions}
           tabIndex={-1}
@@ -49,6 +50,7 @@ export function Toolbar({ title, untitled, onClose, onActions, onBrowse, onNew }
           className="icon-button"
           title="Browse Notes (⌘P)"
           aria-label="Browse Notes"
+          data-anchor="browse"
           onMouseDown={keep}
           onClick={onBrowse}
           tabIndex={-1}

@@ -526,17 +526,17 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     assert.ok(seen.some(near(150)), `page saw ${JSON.stringify(seen)}`);
   });
 
-  // Resize zones: 8 pt along each edge, 16 pt squares at the corners, above the web view.
+  // Resize zones: 10 pt along each edge, 24 pt squares at the corners, above the web view.
   s = await state();
   const w = s.frame.width, h = s.frame.height;
   const hit = (x, y) => call("test.hitTest", { x, y });
   const zones = {};
-  for (const [name, x, y] of [["tl", 2, 2], ["tl-inner", 14, 14], ["tr", w - 2, 2], ["bl", 2, h - 2], ["br", w - 2, h - 2],
-    ["top", w / 2, 3], ["bottom", w / 2, h - 3], ["left", 3, h / 2], ["right", w - 3, h / 2], ["left-inner", 12, h / 2],
-    ["strip", w / 2, 10], ["body", w / 2, h / 2]]) {
+  for (const [name, x, y] of [["tl", 2, 2], ["tl-inner", 22, 22], ["tr", w - 2, 2], ["bl", 2, h - 2], ["br", w - 2, h - 2],
+    ["top", w / 2, 3], ["bottom", w / 2, h - 3], ["left", 3, h / 2], ["right", w - 3, h / 2], ["left-inner", 13, h / 2],
+    ["strip", w / 2, 11], ["body", w / 2, h / 2]]) {
     zones[name] = await hit(x, y);
   }
-  await check("resize hit zones: edges 8 pt, corners 16 pt, interior falls through to the web view and drag strip", () => {
+  await check("resize hit zones: edges 10 pt, corners 24 pt, interior falls through to the web view and drag strip", () => {
     assert.equal(zones.tl.zone, "top-left");
     assert.equal(zones["tl-inner"].zone, "top-left");
     assert.equal(zones.tr.zone, "top-right");

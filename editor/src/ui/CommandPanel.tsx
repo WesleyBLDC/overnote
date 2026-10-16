@@ -32,6 +32,7 @@ interface CommandPanelProps {
   currentId: NoteId | null;
   settings: Settings;
   onSettings: (patch: Partial<Settings>) => void;
+  onResetSettings: () => void;
   onClose: () => void;
   onOpenNote: (id: NoteId) => void;
   onTogglePin: (id: NoteId, pinned: boolean) => Promise<void>;
@@ -84,6 +85,19 @@ export function CommandPanel(props: CommandPanelProps) {
   const [version, setVersion] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // The panel grows out of the toolbar button that stands for its first view: Browse Notes for
+  // browse, Actions for everything else. Measured once, so moving between views keeps the origin.
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    const button = document.querySelector(`[data-anchor="${props.initial === "browse" ? "browse" : "actions"}"]`);
+    if (!panel || !button) return;
+    // Layout positions, not the bounding box: the entrance animation already scales the panel.
+    const parentLeft = (panel.offsetParent as HTMLElement | null)?.getBoundingClientRect().left ?? 0;
+    const b = button.getBoundingClientRect();
+    panel.style.setProperty("--origin-x", `${Math.round(b.left + b.width / 2 - parentLeft - panel.offsetLeft)}px`);
+  }, [props.initial]);
   const view = stack[stack.length - 1] ?? "root";
   const { api, currentId } = props;
 
@@ -218,6 +232,10 @@ export function CommandPanel(props: CommandPanelProps) {
     ) {
       const row = settingRows[selected];
       const direction = event.key === "Enter" ? 0 : event.key === "ArrowLeft" ? -1 : 1;
+      if (row?.kind === "action") {
+        if (direction === 0) props.onResetSettings();
+        return;
+      }
       const patch = row ? adjustSetting(row, props.settings, direction) : null;
       // Arrows on a row they do not adjust keep moving the caret in the search field.
       if (!patch && direction !== 0) return;
@@ -263,6 +281,7 @@ export function CommandPanel(props: CommandPanelProps) {
   return (
     <div className="panel-backdrop" onMouseDown={props.onClose}>
       <div
+        ref={panelRef}
         className="popover panel"
         data-testid="command-panel"
         data-view={view}
@@ -438,6 +457,7 @@ export function CommandPanel(props: CommandPanelProps) {
               grouped={!query.trim()}
               onHover={setIndex}
               onChange={props.onSettings}
+              onReset={props.onResetSettings}
             />
           ) : null}
           {view !== "browse" && view !== "deleted" && view !== "settings" && !actions.length ? (

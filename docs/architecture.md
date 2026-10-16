@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v2.11 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v2.12 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -164,6 +164,7 @@ The helper stores `NoteContent` verbatim.
 | `notes.windowData` | `{ noteId?: NoteId }` | `WindowData` | For that note, or the persisted current note when omitted. If missing or deleted, falls back to the most recently updated live note. `current` is null only when no live notes exist |
 | `settings.get` | `{}` | `Settings` | |
 | `settings.set` | `Partial<Settings>` | `Settings` | Emits `settings.changed` |
+| `settings.reset` | `{}` | `Settings` | Deletes every stored setting so each reads as its default (the panel frame included, so the panel returns to its first open size and place); the current note and the restore offer stay. Emits `settings.changed` |
 
 **Filter matching:** case-insensitive substring match on title or text, folding case for all of Unicode and removing diacritics (an intentional improvement over ASCII-only folding).
 **Fold rule (exact, identical in TS and Swift):** Unicode NFKD normalization, then remove every scalar whose general category is a mark (Mn, Mc, Me), then lowercase with the root locale (TS `toLowerCase()`, Swift `lowercased()`).
@@ -207,9 +208,9 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - While the ⌘K panel, browse, or a dialog is open the editor reports a larger `contentHeight` (about 34rem; 16rem for small popups) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
 - The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
 - The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. ⌘W hides the panel (helper menu item, like closing a window in any app).
-- The helper gives the borderless panel generous resize hit zones: 8 pt along edges and 16 pt squares at corners, with the matching resize cursors.
-  The panel has no `.resizable` style; these zones do all user resizing, and the top 8 pt of the drag strip is a resize zone.
-  Keep interactive controls at least 16 pt from the panel corners.
+- The helper gives the borderless panel generous resize hit zones: 10 pt along edges and 24 pt squares at corners, with the matching resize cursors.
+  The panel has no `.resizable` style; these zones do all user resizing, and the top 10 pt of the drag strip is a resize zone.
+  Keep interactive controls at least 24 pt from the panel corners.
 - Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so ⌘K and browse never resize a roomy window).
 - The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath.
   Minimum user size is 396 pt wide by 128 pt times zoom.
@@ -360,7 +361,7 @@ The support, runtime, and backups folders default to the real ones and can be ov
 
 ## Protocol versioning
 
-The protocol described here is v2.11 (v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v2.12 (v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.

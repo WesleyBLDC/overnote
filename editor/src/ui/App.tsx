@@ -89,7 +89,7 @@ export function App({ api }: { api: Api }) {
     },
     [notify],
   );
-  const { settings, setSettings, update: updateSettings } = useSettings(api);
+  const { settings, setSettings, update: updateSettings, reset: resetSettings } = useSettings(api);
   // The app element as state, so popups and hooks get it as a value instead of reading a ref while rendering.
   const [app, setApp] = useState<HTMLDivElement | null>(null);
   const [linkTarget, setLinkTarget] = useState<LinkTarget | null>(null);
@@ -870,6 +870,12 @@ export function App({ api }: { api: Api }) {
           currentId={currentId}
           settings={settings}
           onSettings={updateSettings}
+          onResetSettings={() =>
+            attempt("reset the settings", async () => {
+              await resetSettings();
+              notify("Settings reset to defaults");
+            })
+          }
           onClose={closePanel}
           onOpenNote={(id: NoteId) => void session.open(id)}
           onTogglePin={(id, pin) =>
