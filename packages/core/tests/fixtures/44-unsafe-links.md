@@ -1,0 +1,1 @@
+[d](data:text/html,hi) [v](vbscript:msgbox) [f](file:///etc/hosts) [J](JavaScript:alert(1)) [ok](https://example.com)

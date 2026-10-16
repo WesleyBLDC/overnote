@@ -234,6 +234,9 @@ final class Connection: @unchecked Sendable {
     private let log: @Sendable (String) -> Void
     private let onClose: @Sendable (Connection) -> Void
     private let queue = DispatchQueue(label: "overnote.socket.connection")
+    /// Responses are written here, not on Swift's shared cooperative threads: a client that stops
+    /// reading may block a write, and only its own responses should wait for it.
+    private let writeQueue = DispatchQueue(label: "overnote.socket.write")
     private var source: DispatchSourceRead?
     private var buffer = Data()
     /// Guards the fields below and every write, so a late response never hits a reused descriptor.
@@ -242,6 +245,8 @@ final class Connection: @unchecked Sendable {
     private var readingDone = false
     private var pending = 0
     private var forceClose = false
+    /// A write failed or timed out: the client is gone or stopped reading, so nothing more is sent.
+    private var broken = false
 
     init(
         fd: Int32, handler: @escaping SocketServer.LineHandler, log: @escaping @Sendable (String) -> Void,
@@ -303,22 +308,29 @@ final class Connection: @unchecked Sendable {
             let handler = handler
             Task {
                 let response = await handler(line)
-                self.send(response)
-                self.stateLock.withLock { self.pending -= 1 }
-                self.closeIfIdle()
+                self.writeQueue.async {
+                    self.send(response)
+                    self.stateLock.withLock { self.pending -= 1 }
+                    self.closeIfIdle()
+                }
             }
         }
     }
 
     func send(_ line: String) {
-        stateLock.withLock {
-            guard !closed else { return }
+        let failed = stateLock.withLock { () -> Bool in
+            guard !closed, !broken else { return false }
             do {
                 try SocketPaths.writeAll(fd: fd, data: Data((line + "\n").utf8), timeout: 5)
+                return false
             } catch {
-                log("Dropping response: \(error)")
+                broken = true
+                log("Closing connection: \(error)")
+                return true
             }
         }
+        // A client that has not read for 5 s is dropped, so its queued answers never pile up.
+        if failed { close() }
     }
 
     /// Closes now, dropping responses still in flight.

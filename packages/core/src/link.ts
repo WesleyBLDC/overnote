@@ -1,6 +1,11 @@
 /** One URL normalization rule for typing, paste, the link popover, HTML, and Markdown. */
 
 const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+/**
+ * Schemes that never become links: they can run script or reach local files when an exported
+ * note is opened in a browser. The panel only ever opens web, mail, and Raycast links anyway.
+ */
+const BLOCKED_SCHEMES = new Set(["javascript:", "data:", "vbscript:", "file:"]);
 const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 
@@ -52,7 +57,7 @@ function parses(url: string): URL | null {
 export function normalizeLinkHref(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
-  if (/^javascript:/i.test(trimmed)) return null;
+  if (BLOCKED_SCHEMES.has(SCHEME.exec(trimmed)?.[0].toLowerCase() ?? "")) return null;
   const hasWhitespace = /\s/.test(trimmed);
   let candidate: string;
   if (trimmed.startsWith("//")) {
@@ -66,7 +71,7 @@ export function normalizeLinkHref(input: string): string | null {
   }
   const url = parses(candidate);
   if (!url) return null;
-  if (url.protocol.toLowerCase() === "javascript:") return null;
+  if (BLOCKED_SCHEMES.has(url.protocol.toLowerCase())) return null;
   return hasWhitespace ? url.href : candidate;
 }
 

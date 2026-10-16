@@ -74,3 +74,4 @@ Rules for the test harness:
 | 41 | underline-plus-signs | `C++` text is not underline; literal `++word` is escaped | |
 | 42 | all-in-one | A realistic note touching most block and mark types | txt, html, clipboard |
 | 43 | ordered-paren-delimiter | `1)` items are written as `1.` | |
+| 44 | unsafe-links | `data:`, `vbscript:`, `file:`, and mixed case `JavaScript:` links drop to their text; a web link stays | md, txt, html |

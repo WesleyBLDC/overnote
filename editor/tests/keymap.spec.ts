@@ -333,7 +333,7 @@ test("⌘, opens Settings: controls write through settings.set and follow settin
     await expect(sw(id)).toHaveAttribute("aria-checked", "false");
   }
   await expect(page.getByTestId("format-bar")).toHaveCount(0);
-  await expect(page.getByTestId("notices")).toContainText("Settings reset to defaults");
+  await expect(page.getByRole("status").getByText("Settings reset to defaults")).toBeVisible();
   await expect(page.getByTestId("zoom-value")).toHaveText("100%");
 
   // Escape clears the search, then closes; ⌘K lists Settings… and pushes the same view.

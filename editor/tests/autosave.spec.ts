@@ -109,13 +109,21 @@ test("a failed autosave says so once while saving keeps failing, and the next sa
       ] = 500;
     });
   const contentSaves = async () => (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params).length;
-  const failures = page.getByTestId("notices").getByText("Could not save note. Try again.");
+  // Errors go to the assertive region, and no live region sits inside another (it would be read twice).
+  const failures = page.getByRole("alert").getByText("Could not save note. Try again.");
   await page.keyboard.press("Meta+ArrowDown");
 
   await failNextSave();
   await page.keyboard.type(" one");
   await page.clock.runFor(350);
   await expect(failures).toHaveCount(1);
+  const nestedRegions = await page.evaluate(
+    () =>
+      document.querySelectorAll(
+        ":is([role=status], [role=alert], [aria-live]) :is([role=status], [role=alert], [aria-live])",
+      ).length,
+  );
+  expect(nestedRegions).toBe(0);
 
   // Still failing: no second notice for the same problem.
   await failNextSave();

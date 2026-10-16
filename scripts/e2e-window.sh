@@ -699,6 +699,14 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   await check("real editor loads hidden and calls system.ready", () => {
     assert.ok(calls.methods.includes("system.ready"), `bridge calls: ${calls.methods.join(", ")}`);
   });
+  // The page's messages take effect in the order it sent them: 40 saves to one note, fired at
+  // once from the page, leave the last one stored.
+  const orderedNote = (await helper.call("notes.windowData", {})).current;
+  await helper.call("test.js", {
+    expression: `(() => { for (let i = 0; i < 40; i++) window.webkit.messageHandlers.overnote.postMessage({ id: 900000 + i, method: "notes.update", params: { id: ${JSON.stringify(orderedNote.id)}, rawContent: "", markdown: "v" + i, text: "v" + i, title: "v" + i } }); return true; })()`,
+  });
+  const ordered = await poll(async () => (await helper.call("notes.get", { id: orderedNote.id })).text, (t) => t === "v39", UI_MS);
+  await check("bridge messages take effect in the order the page sent them", () => assert.equal(ordered, "v39"));
   await helper.call("window.show");
   visibleSince = Date.now();
   const firstEditor = await poll(editorState, (st) => st.visible);

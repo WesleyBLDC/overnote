@@ -288,7 +288,7 @@ export function toStoredDoc(doc: JSONContent): JSONContent;               // inv
 export function docToClipboard(docOrSlice: JSONContent): { text: string; html: string };   // ⌘C/⌘X format: plain text plus semantic HTML
 export function parsePastedText(plain: string, html?: string): JSONContent;
 export function looksLikeMarkdown(plain: string, html?: string): boolean;
-export function normalizeLinkHref(input: string): string | null;
+export function normalizeLinkHref(input: string): string | null;   // null for javascript:, data:, vbscript:, and file: (kept as text)
 export function countCharacters(text: string): number;                   // grapheme clusters of trimmed text
 export function countWords(text: string): number;                        // Intl.Segmenter word segments
 export type { Note, NoteSummary, NoteContent, Settings, WindowData, NoteId } from "./types";

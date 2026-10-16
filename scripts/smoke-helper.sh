@@ -432,6 +432,20 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   assert.equal((await call("notes.get", { id: bigNote.id })).text, big);
   ok("a 1 MB note round trips intact");
 
+  // A client that sends many requests for that note and never reads must not hold up anyone else:
+  // its responses wait on its own connection, and it is dropped once a write has waited 5 s.
+  const stuck = net.createConnection(process.env.SOCKET);
+  await new Promise((resolve) => stuck.on("connect", resolve));
+  stuck.pause();
+  stuck.write(Array.from({ length: 200 }, (_, i) => JSON.stringify({ id: i, method: "notes.get", params: { id: bigNote.id } }) + "\n").join(""));
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const pingStart = Date.now();
+  await call("system.ping");
+  const pingMs = Date.now() - pingStart;
+  stuck.destroy();
+  assert.ok(pingMs < 1000, `ping took ${pingMs} ms while a client was not reading`);
+  ok(`a client that stops reading does not hold up others (ping in ${pingMs} ms)`);
+
   await call("settings.set", { escapeLosesFocus: true });
   socket.end();
   require("node:fs").writeFileSync(process.env.COUNT_FILE, String(passed));

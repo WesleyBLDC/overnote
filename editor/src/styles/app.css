@@ -1088,6 +1088,11 @@ kbd {
   pointer-events: none;
 }
 
+/* The two live regions do not add boxes: their notices stack in the one column above. */
+.notice-region {
+  display: contents;
+}
+
 /*
  * A notice rises in, then fades out once the editor marks it as leaving (data-leaving, set by
  * useNotices in hooks.ts when its time is up); it is removed when this transition ends.

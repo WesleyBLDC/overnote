@@ -11,6 +11,9 @@ final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, W
     private let handler: RPCDispatcher
     private weak var webView: WKWebView?
     private let logger: FileLogger
+    /// The message being handled last. Each new one waits for it, so the page's messages take
+    /// effect in the order it sent them (two saves never land out of order).
+    private var lastMessage: Task<Void, Never>?
     /// Called with each method the page sends (test hooks only).
     var onMessage: ((String) -> Void)?
     /// Called when the main frame starts loading our own page (a reload included).
@@ -46,15 +49,25 @@ final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, W
         onMessage?(method)
         let params = request["params"]
         let dispatcher = handler
-        Task {
+        let handle = { @MainActor [weak self] in
             do {
                 let result = try await dispatcher.handle(method: method, params: params, source: .bridge)
-                resolve(id: id, result: result)
+                self?.resolve(id: id, result: result)
             } catch let error as RPCError {
-                reject(id: id, error: error)
+                self?.reject(id: id, error: error)
             } catch {
-                reject(id: id, error: .internal("\(error)"))
+                self?.reject(id: id, error: .internal("\(error)"))
             }
+        }
+        // Save As waits on a save panel for as long as the person takes, so it never holds up the rest.
+        if method == "file.saveAs" {
+            Task { await handle() }
+            return
+        }
+        let previous = lastMessage
+        lastMessage = Task {
+            await previous?.value
+            await handle()
         }
     }
 

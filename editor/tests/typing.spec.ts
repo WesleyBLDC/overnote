@@ -70,7 +70,9 @@ test("list triggers change an item instead of nesting, and headings convert", as
 });
 
 test("inline rules, links, autolinks, and typography", async ({ page }) => {
-  await page.keyboard.type("**bold** *it* ~~gone~~ `x` [Site](raycast.com) [bad](javascript:alert) example.com ");
+  await page.keyboard.type(
+    "**bold** *it* ~~gone~~ `x` [Site](raycast.com) [bad](javascript:alert) [raw](data:text/html,hi) example.com ",
+  );
   await page.keyboard.type('-- ... "hi" don\'t -> (c) ++u++');
   const paragraph = (await docJSON(page)).content?.[0];
   const marked = (type: string) =>
@@ -87,6 +89,7 @@ test("inline rules, links, autolinks, and typography", async ({ page }) => {
   ]);
   const text = await editor(page).innerText();
   expect(text).toContain("[bad](javascript:alert)");
+  expect(text).toContain("[raw](data:text/html,hi)");
   expect(text).toContain("— … “hi” don’t → ©");
   // Typing right after a link does not extend it.
   await page.keyboard.press("Enter");
