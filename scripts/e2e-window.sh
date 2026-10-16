@@ -301,6 +301,16 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     assert.equal(server.onscreen, true, "window server onscreen");
     assert.equal(server.sharing, 1, "shareable (read only) by default");
   });
+  // Hide While Screen Sharing: the window server stops offering the panel to capture tools
+  // (kCGWindowSharingState 0, NSWindow.sharingType .none), and offers it again when turned off.
+  await call("settings.set", { hideWhileScreenSharing: true });
+  const hiddenFromShares = await poll(() => panelWindow(pid, s), (w) => w?.sharing === 0);
+  await call("settings.set", { hideWhileScreenSharing: false });
+  const sharedAgain = await poll(() => panelWindow(pid, s), (w) => w?.sharing === 1);
+  await check("Hide While Screen Sharing withdraws the panel from capture and restores it", () => {
+    assert.equal(hiddenFromShares?.sharing, 0, "sharing state while hidden from shares");
+    assert.equal(sharedAgain?.sharing, 1, "sharing state after turning it off");
+  });
   await check("first open: 640 x 560, centered, top just under the menu bar, on the pointer's display", () => {
     const vf = s.visibleFrame;
     assert.equal(s.frame.width, 640, "width");

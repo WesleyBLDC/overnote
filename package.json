@@ -27,6 +27,19 @@
   ],
   "commands": [
     {
+      "name": "open-notes",
+      "title": "Open Overnote",
+      "description": "Show the floating Overnote window on the note you last had open.",
+      "mode": "no-view",
+      "keywords": [
+        "notes",
+        "show",
+        "last note",
+        "recent",
+        "window"
+      ]
+    },
+    {
       "name": "toggle-notes",
       "title": "Toggle Overnote",
       "description": "Show or hide the floating Overnote window.",

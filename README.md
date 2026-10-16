@@ -125,6 +125,7 @@ Press ⌘K in the panel to see every action with its shortcut.
 | Command | What it does |
 |---|---|
 | Toggle Overnote | Shows or hides the floating panel. Bind your hotkey here. |
+| Open Overnote | Shows the panel on the note you last had open, and never hides it. |
 | Create Note | Creates a note from its argument, the Raycast search text, or the selected text, and opens it. |
 | Search Notes | Lists notes by date with a preview, and opens, pins, copies, duplicates, deletes, backs up, and restores them. |
 | Recently Deleted Notes | Restores deleted notes or removes them for good. |

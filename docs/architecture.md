@@ -299,6 +299,7 @@ export * as rpc from "./rpc";
 
 | name | title | mode | notes |
 |---|---|---|---|
+| `open-notes` | Open Overnote | no-view | Launch the helper with `--show` if needed, else `window.show` (never hides) |
 | `toggle-notes` | Toggle Overnote | no-view | Launch the helper if needed, then `window.toggle` |
 | `create-note` | Create Note | no-view | Optional `text` argument, then `fallbackText`, then selected text, then empty. `notes.create` with `show: true` |
 | `search-notes` | Search Notes | view | List with markdown detail using `notes.list` with `filter` (or the read-only DB with the same order and matching); title matches are moved first within each page; writes through the helper |
