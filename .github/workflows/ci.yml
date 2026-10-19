@@ -52,6 +52,57 @@ jobs:
           restore-keys: |
             swiftpm-${{ runner.os }}-${{ runner.arch }}-
 
+      # The whole suite, the same command contributors run locally: version, typechecks, lint,
+      # builds, unit tests, every end to end suite (the panel window one included in CI), and
+      # the Raycast build. It names the step that failed. The editor Playwright suite, the
+      # longest step, runs in the editor-e2e job beside this one instead.
+      - name: Verify
+        run: npm run verify
+        env:
+          OVERNOTE_EDITOR_E2E: "0"
+
+      - name: Upload helper logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: helper-logs
+          path: ${{ env.OVERNOTE_LOG_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14
+
+  editor-e2e:
+    name: Editor end to end (Playwright)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Pin npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # The verify job saves this cache; restoring is enough here.
+      - name: Restore Swift build
+        uses: actions/cache/restore@v6
+        with:
+          path: helper/.build
+          key: swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('helper/Package.swift', 'helper/Package.resolved', 'helper/Sources/**', 'helper/Tests/**', 'helper/Tools/**') }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-${{ runner.arch }}-
+
+      # tests/real-helper.spec.ts drives the real helper binary.
+      - name: Build helper
+        run: npm run build:helper
+
       - name: Read Playwright version
         id: playwright
         run: echo "version=$(node -p 'require("@playwright/test/package.json").version')" >> "$GITHUB_OUTPUT"
@@ -65,13 +116,10 @@ jobs:
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps webkit
+        run: npx playwright install webkit
 
-      # The whole suite, the same command contributors run locally: version, typechecks, lint,
-      # builds, unit tests, every end to end suite (the panel window one included in CI), and
-      # the Raycast build. It names the step that failed.
-      - name: Verify
-        run: npm run verify
+      - name: End to end (Playwright)
+        run: npm run test:e2e -w editor
 
       - name: Upload Playwright report
         if: failure()
@@ -81,14 +129,5 @@ jobs:
           path: |
             editor/playwright-report
             editor/test-results
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Upload helper logs
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: helper-logs
-          path: ${{ env.OVERNOTE_LOG_DIR }}
           if-no-files-found: ignore
           retention-days: 14

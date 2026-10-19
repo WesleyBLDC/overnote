@@ -1,6 +1,7 @@
 #!/bin/bash
 # The full suite. CI runs exactly this (.github/workflows/ci.yml), so a green run here is a
-# green run there, apart from the panel window step below.
+# green run there, apart from the panel window step below. CI runs the editor Playwright step
+# in a job of its own, beside this one, because it is the longest step.
 #
 #   npm run verify
 #
@@ -13,6 +14,7 @@
 # Environment:
 #   OVERNOTE_WINDOW_E2E=1  run scripts/e2e-window.sh (the default when CI=true)
 #   OVERNOTE_WINDOW_E2E=0  skip it, even in CI
+#   OVERNOTE_EDITOR_E2E=0  skip the editor Playwright suite (CI runs it in a parallel job)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -58,7 +60,12 @@ step "Unit: extension and helper socket" npm test
 step "Unit: core" npm test -w packages/core
 step "Unit: editor" npm test -w editor
 step "Unit: helper" bash helper/test.sh
-step "End to end: editor (Playwright)" npm run test:e2e -w editor
+if [[ "${OVERNOTE_EDITOR_E2E:-1}" == "0" ]]; then
+  printf '\n[verify] skipped: End to end: editor (OVERNOTE_EDITOR_E2E=0)\n'
+  STEPS+=("   -   End to end: editor (Playwright) (skipped)")
+else
+  step "End to end: editor (Playwright)" npm run test:e2e -w editor
+fi
 step "End to end: helper smoke" bash scripts/smoke-helper.sh
 step "End to end: install, update, backups, and restore" bash scripts/e2e-update.sh
 window_e2e="${OVERNOTE_WINDOW_E2E:-}"
