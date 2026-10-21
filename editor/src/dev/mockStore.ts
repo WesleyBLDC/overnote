@@ -212,8 +212,8 @@ export class MockStore {
         caretPosition: 0,
       };
       this.notes.set(note.id, note);
-      this.currentNoteId = note.id;
       if (show) {
+        this.currentNoteId = note.id;
         this.visible = true;
         this.emit(rpc.Event.NoteNew, { note: { ...note } });
       }
@@ -293,7 +293,6 @@ export class MockStore {
         caretPosition: 0,
       };
       this.notes.set(copy.id, copy);
-      this.currentNoteId = copy.id;
       return { ...copy };
     },
     "notes.pin": (params) => {

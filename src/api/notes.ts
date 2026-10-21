@@ -106,8 +106,13 @@ export function movePinnedDown(id: NoteId): Promise<void> {
   });
 }
 
+/** Duplicates a note and makes the copy current, so the panel opens on it next. */
 export function duplicateNote(id: NoteId, titleSuffix?: string): Promise<Note> {
-  return write(() => callHelper("notes.duplicate", titleSuffix === undefined ? { id } : { id, titleSuffix }));
+  return write(async () => {
+    const copy = await callHelper("notes.duplicate", titleSuffix === undefined ? { id } : { id, titleSuffix });
+    await callHelper("notes.setCurrentNote", { noteId: copy.id });
+    return copy;
+  });
 }
 
 export function deleteNote(id: NoteId): Promise<void> {

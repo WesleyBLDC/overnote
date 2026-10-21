@@ -1,6 +1,6 @@
 /** Window shortcuts and the ⌘K panel. */
 import { expect, test } from "@playwright/test";
-import { calls, clearCalls, editor, emit, openHarness, settle, storedNotes } from "./harness";
+import { calls, clearCalls, editor, emit, openHarness, settle, storedCurrentNoteId, storedNotes } from "./harness";
 
 const title = (page: import("@playwright/test").Page) => page.getByTestId("title");
 
@@ -17,6 +17,9 @@ test("⌘K runs actions, ⌘N refuses a blank note, history goes back and forwar
     (await storedNotes(page)).find((n) => n.title === "Alpha")?.id ?? "",
   );
   await expect(title(page)).toHaveText("Untitled");
+  // notes.create without show leaves the current note alone, so the editor persists the new one.
+  const created = await page.getByTestId("app").getAttribute("data-note-id");
+  await expect.poll(() => storedCurrentNoteId(page)).toBe(created);
 
   await page.keyboard.press("Meta+n");
   await expect(page.getByTestId("notices")).toContainText("You already have an empty note");
@@ -33,6 +36,14 @@ test("⌘K runs actions, ⌘N refuses a blank note, history goes back and forwar
   await expect(title(page)).toHaveText("Alpha");
   await page.keyboard.press("Alt+Meta+ArrowUp");
   await expect(title(page)).toHaveText("Beta");
+
+  // ⌘D opens the copy and persists it as current; notes.duplicate itself leaves current alone.
+  const original = await page.getByTestId("app").getAttribute("data-note-id");
+  await page.keyboard.press("Meta+d");
+  await expect(page.getByTestId("notices")).toContainText("Note duplicated");
+  const copy = await page.getByTestId("app").getAttribute("data-note-id");
+  expect(copy).not.toBe(original);
+  await expect.poll(() => storedCurrentNoteId(page)).toBe(copy);
 });
 
 test("⌘P browses, pins work with ⇧⌘P and ⌘1, ⌃X deletes", async ({ page }) => {

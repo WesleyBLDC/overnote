@@ -20,7 +20,8 @@ import ToggleNotes from "../toggle-notes";
 import { readPidFile, waitForExit } from "../domain/process";
 import { shortTempDir } from "./helpers";
 
-const REAL_HELPER = path.resolve("assets/bin/OvernoteHelper");
+// OVERNOTE_HELPER_BIN points at another build, such as helper/.build/release/OvernoteHelper.
+const REAL_HELPER = path.resolve(process.env.OVERNOTE_HELPER_BIN || "assets/bin/OvernoteHelper");
 if (!fs.existsSync(REAL_HELPER)) {
   throw new Error(`${REAL_HELPER} is missing: run \`npm run build:helper\` before the end-to-end tests`);
 }

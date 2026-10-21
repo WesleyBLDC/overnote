@@ -162,11 +162,14 @@ public final class NotesRepository: @unchecked Sendable {
 
     // MARK: - CRUD
 
-    /// Creates a note and makes it the persisted current note.
-    public func create(_ content: NoteContent) throws -> Note {
+    /// Creates a note. It becomes the persisted current note only when `makeCurrent` is true (a
+    /// create that shows the panel), so a background write never moves the note the panel opens on.
+    public func create(_ content: NoteContent, makeCurrent: Bool = false) throws -> Note {
         try transaction {
             let id = try insertNote(content, now: clock())
-            try persistCurrentNote(id)
+            if makeCurrent {
+                try persistCurrentNote(id)
+            }
             return try requireNote(id)
         }
     }
@@ -284,7 +287,8 @@ public final class NotesRepository: @unchecked Sendable {
     }
 
     /// Copies a note's content into a new live note with fresh timestamps, no pin, and caret 0.
-    /// `titleSuffix`, when given, is appended to the stored title only. The copy becomes current.
+    /// `titleSuffix`, when given, is appended to the stored title only. The current note does not
+    /// change; a caller that opens the copy persists it with `setCurrentNote`.
     public func duplicate(_ id: String, titleSuffix: String? = nil) throws -> Note {
         try transaction {
             var content = try requireNote(id).content
@@ -292,7 +296,6 @@ public final class NotesRepository: @unchecked Sendable {
                 content.title += titleSuffix
             }
             let newId = try insertNote(content, now: clock())
-            try persistCurrentNote(newId)
             return try requireNote(newId)
         }
     }

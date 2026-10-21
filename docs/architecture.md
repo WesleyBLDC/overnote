@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v2.14 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v2.15 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -144,7 +144,7 @@ The helper stores `NoteContent` verbatim.
 | `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
 | `clipboard.copy` (bridge) | `{ text: string, html?: string }` | `{}` | Writes plain text plus optional HTML to the general pasteboard |
 | `file.saveAs` (bridge) | `{ suggestedName: string, content: string }` | `{ saved: boolean, path?: string }` | Native save panel; the helper sanitizes the suggested name and keeps it within 240 UTF-8 bytes, extension included |
-| `notes.create` | `NoteContent & { show?: boolean }` | `Note` | Sets created/updated/lastAccessed to now; becomes the persisted current note; `show` opens the panel on it (emits `note.new`). Callers always send full content built with core |
+| `notes.create` | `NoteContent & { show?: boolean }` | `Note` | Sets created/updated/lastAccessed to now. Only with `show: true` does it become the persisted current note and open the panel on it (emits `note.new`); without `show` the current note stays as it was, so a background write never moves the note the panel opens on. Callers always send full content built with core |
 | `notes.get` | `{ id }` | `Note` | 404 if missing |
 | `notes.update` | `{ id, expectedUpdatedAt?: Millis } & Partial<NoteContent> & { caretPosition?: number }` | `{ status: "ok", note: Note } \| { status: "conflict", note: Note }` | Content fields set `updatedAt` to now (always, even if unchanged). Caret-only updates never change `updatedAt` and apply only to live notes. If `expectedUpdatedAt` is given and differs from the stored value, nothing is written and `conflict` returns the stored note |
 | `notes.delete` | `{ id }` | `{}` | Soft delete: sets `deletedAt` now, clears `pinned`, `updatedAt` = old + 1 ms |
@@ -152,7 +152,7 @@ The helper stores `NoteContent` verbatim.
 | `notes.recover` | `{ id }` | `Note` | Clears `deletedAt` (pin stays cleared), `updatedAt` = old + 1 ms |
 | `notes.permanentlyDelete` | `{ id }` | `{}` | Only affects notes already in the trash; no-op on live notes |
 | `notes.emptyTrash` | `{}` | `{ count }` | |
-| `notes.duplicate` | `{ id, titleSuffix?: string }` | `Note` | Fresh created/updated/lastAccessed, no pin, caret 0; becomes current |
+| `notes.duplicate` | `{ id, titleSuffix?: string }` | `Note` | Fresh created/updated/lastAccessed, no pin, caret 0. The current note stays as it was; a caller that opens the copy persists it with `notes.setCurrentNote` (the editor's ⌘D and Search Notes' Duplicate do) or shows it with `window.show { noteId }` |
 | `notes.pin` | `{ id }` | `Note` | Appends to the end of the pinned list: key = max pinned key + 1000 (first pin 1000). Does not change `updatedAt` |
 | `notes.unpin` | `{ id }` | `Note` | Does not change `updatedAt` |
 | `notes.movePinnedUp` / `notes.movePinnedDown` | `{ id }` | `{}` | Swap keys with the neighbor pin; no-op at the ends |
@@ -226,6 +226,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   When a stack is empty, back goes to `previousNoteId` and forward to `nextNoteId`.
   Deleted ids are removed from both stacks.
 - Every switch calls `notes.touchAccessed` and `notes.setCurrentNote` after flushing pending edits (a failed flush cancels the switch).
+  A note the editor creates (⌘N, or the first note when none exist) or duplicates (⌘D) is persisted with `notes.setCurrentNote` too, since `notes.create` without `show` and `notes.duplicate` leave the current note alone.
 - ⌘N on a note whose text is blank only shows a "You already have an empty note" notice.
 - When `current` is null the editor creates a note immediately from the empty document.
 - Deleting the current note opens `nextNoteId`, else `previousNoteId`, else creates a fresh empty note.
@@ -374,7 +375,7 @@ The extension honors `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`), which t
 
 ## Protocol versioning
 
-The protocol described here is v2.14 (v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v2.15 (v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on; helper 0.4.0 is the first release with it; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.

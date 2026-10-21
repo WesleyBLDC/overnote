@@ -4,6 +4,7 @@
  * Run `npm run build:helper` first.
  */
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -21,7 +22,8 @@ import { RpcClient, RpcError } from "../domain/rpc-client";
 import type { NoteSummary, RpcMethod, RpcParams, RpcResult } from "../domain/types";
 import { shortTempDir } from "./helpers";
 
-const REAL_HELPER = path.resolve("assets/bin/OvernoteHelper");
+// OVERNOTE_HELPER_BIN points at another build, such as helper/.build/release/OvernoteHelper.
+const REAL_HELPER = path.resolve(process.env.OVERNOTE_HELPER_BIN || "assets/bin/OvernoteHelper");
 const FAKE_HELPER = path.resolve("src/__tests__/fixtures/fake-helper.mjs");
 
 if (!fs.existsSync(REAL_HELPER)) {
@@ -57,7 +59,8 @@ describe("extension domain layer against the real helper", () => {
     fs.mkdirSync(path.join(assets, "bin"), { recursive: true });
     fs.mkdirSync(path.join(assets, "editor"), { recursive: true });
     fs.copyFileSync(REAL_HELPER, path.join(assets, "bin", "OvernoteHelper"));
-    fs.copyFileSync(`${REAL_HELPER}.sha256`, path.join(assets, "bin", "OvernoteHelper.sha256"));
+    const sum = createHash("sha256").update(fs.readFileSync(REAL_HELPER)).digest("hex");
+    fs.writeFileSync(path.join(assets, "bin", "OvernoteHelper.sha256"), `${sum}  OvernoteHelper\n`);
     paths = resolvePaths({ supportPath: path.join(root, "support"), assetsPath: assets, runtimeRoot: root });
     launcher = new HelperLauncher({ paths, client: new RpcClient({ socketPath: paths.socket }) });
     realVersion = execFileSync(REAL_HELPER, ["--version"], { encoding: "utf8" }).trim();
@@ -129,8 +132,11 @@ describe("extension domain layer against the real helper", () => {
     expect(await rpcCode(call("notes.movePinnedUp", { id: groceries }))).toBe(409);
 
     await call("notes.unpin", { id: second });
+    await call("notes.setCurrentNote", { noteId: groceries });
     const copy = await call("notes.duplicate", { id: second, titleSuffix: " (Copy)" });
     expect(copy).toMatchObject({ title: "Second note (Copy)", pinned: null });
+    // A duplicate, like a create without show, leaves the note the panel opens on alone.
+    expect((await call("notes.windowData", {})).current?.id).toBe(groceries);
     // Remove the copy again so later steps see the original three notes.
     await call("notes.delete", { id: copy.id });
     await call("notes.permanentlyDelete", { id: copy.id });

@@ -167,7 +167,7 @@ public final class RPCDispatcher: Sendable {
                 text: try p.optionalString("text") ?? "",
                 title: try p.optionalString("title") ?? "")
             let show = try p.optionalBool("show") ?? false
-            let note = try repository.create(content)
+            let note = try repository.create(content, makeCurrent: show)
             await changed([note.id], source: source)
             if show {
                 await host.emit("note.new", ["note": note.json])

@@ -184,6 +184,41 @@ struct UpdateConflictTests {
     }
 }
 
+@Suite("Current note")
+struct CurrentNoteTests {
+    /// A background create or duplicate (an agent writing through the socket) must not move the
+    /// note the panel opens on; only a create that shows the panel does.
+    @Test func onlyAShownCreateMovesTheCurrentNote() async throws {
+        let f = try Fixture()
+        let host = RecordingHost()
+        let dispatcher = RPCDispatcher(repository: f.repository, host: host)
+        func call(_ method: String, _ params: JSONValue) async throws -> JSONValue {
+            try await dispatcher.handle(method: method, params: params, source: .socket)
+        }
+        let content: JSONValue = ["rawContent": #"{"type":"doc"}"#, "text": "x", "markdown": "x", "title": "x"]
+        func with(_ extra: [String: JSONValue]) -> JSONValue {
+            guard case .object(var object) = content else { return content }
+            object.merge(extra) { _, new in new }
+            return .object(object)
+        }
+
+        let open = try f.make("open")
+        try f.repository.setCurrentNote(open.id)
+        let quiet = try await call("notes.create", content)
+        let hidden = try await call("notes.create", with(["show": false]))
+        _ = try await call("notes.duplicate", ["id": .string(open.id)])
+        #expect(try f.repository.currentNoteId() == open.id)
+        #expect(quiet["id"] != hidden["id"])
+        #expect(host.events.allSatisfy { $0.0 != "note.new" })
+        #expect(!host.calls.contains(.show))
+
+        let shown = try await call("notes.create", with(["show": true]))
+        #expect(try f.repository.currentNoteId() == shown["id"]?.stringValue)
+        #expect(host.events.contains { $0.0 == "note.new" })
+        #expect(host.calls.contains(.show))
+    }
+}
+
 @Suite("RPC framing")
 struct FramingTests {
     @Test func malformedLinesGetErrorsWithTheRightId() async throws {

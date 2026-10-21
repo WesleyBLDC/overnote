@@ -33,6 +33,15 @@ export async function calls(page: Page, method?: string): Promise<RecordedCall[]
   }, method);
 }
 
+/** The current note id the mock persisted, as the helper's settings key `currentNoteId` would hold it. */
+export async function storedCurrentNoteId(page: Page): Promise<string | null> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __overnoteMock: { store: { currentNoteId: string | null } } }).__overnoteMock.store
+        .currentNoteId,
+  );
+}
+
 export async function clearCalls(page: Page): Promise<void> {
   await page.evaluate(() =>
     (window as unknown as { __overnoteMock: { clearCalls(): void } }).__overnoteMock.clearCalls(),

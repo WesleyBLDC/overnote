@@ -453,6 +453,8 @@ export class NoteSession {
     const windowData = await this.api.notes.windowData({ noteId: note.id });
     if (previous && previous !== note.id) this.history.visit(previous);
     this.apply({ ...windowData, current: windowData.current ?? note }, true);
+    // notes.create without show leaves the persisted current note alone.
+    void this.api.notes.setCurrentNote(note.id).catch(() => undefined);
     return note;
   }
 
@@ -492,6 +494,8 @@ export class NoteSession {
     const windowData = await this.api.notes.windowData({ noteId: copy.id });
     this.history.visit(note.id);
     this.apply({ ...windowData, current: windowData.current ?? copy }, true);
+    // notes.duplicate leaves the persisted current note alone.
+    void this.api.notes.setCurrentNote(copy.id).catch(() => undefined);
     this.notify("Note duplicated", "info");
     return true;
   }
