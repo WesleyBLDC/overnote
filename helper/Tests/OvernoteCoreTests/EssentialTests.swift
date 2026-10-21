@@ -219,6 +219,52 @@ struct CurrentNoteTests {
     }
 }
 
+@Suite("Duplicate")
+struct DuplicateTests {
+    /// A renamed copy must keep its title and first line in step, and the helper never derives
+    /// content, so it stores the content core built verbatim and refuses the old title-only suffix.
+    @Test func storesTheGivenContentAndRefusesATitleOnlySuffix() async throws {
+        let f = try Fixture()
+        let dispatcher = RPCDispatcher(repository: f.repository, host: RecordingHost())
+        func call(_ method: String, _ params: JSONValue) async throws -> JSONValue {
+            try await dispatcher.handle(method: method, params: params, source: .socket)
+        }
+        let source = try f.make("Groceries\n\nmilk", title: "Groceries")
+
+        let plain = try await call("notes.duplicate", ["id": .string(source.id)])
+        #expect(plain["title"] == "Groceries")
+        #expect(plain["rawContent"]?.stringValue == source.content.rawContent)
+
+        let copy = try await call(
+            "notes.duplicate",
+            [
+                "id": .string(source.id), "rawContent": #"{"type":"doc","copy":true}"#,
+                "markdown": "# Groceries copy\n\nmilk", "text": "Groceries copy\n\nmilk", "title": "Groceries copy",
+            ])
+        #expect(copy["title"] == "Groceries copy")
+        #expect(copy["text"] == "Groceries copy\n\nmilk")
+        #expect(copy["markdown"] == "# Groceries copy\n\nmilk")
+        #expect(copy["rawContent"] == #"{"type":"doc","copy":true}"#)
+        #expect(copy["caretPosition"] == 0)
+        #expect(try f.listIds(filter: "groceries COPY") == [copy["id"]?.stringValue])
+        #expect(try f.repository.get(source.id).content == source.content)
+
+        func errorCode(_ params: JSONValue) async -> Int? {
+            do {
+                _ = try await call("notes.duplicate", params)
+                return nil
+            } catch {
+                return (error as? RPCError)?.code
+            }
+        }
+        let count = try f.repository.count()
+        #expect(await errorCode(["id": .string(source.id), "titleSuffix": " copy"]) == RPCError.badParamsCode)
+        #expect(await errorCode(["id": .string(source.id), "title": "Groceries copy"]) == RPCError.badParamsCode)
+        #expect(await errorCode(["id": "missing", "rawContent": "{}"]) == RPCError.noteNotFound("missing").code)
+        #expect(try f.repository.count() == count)
+    }
+}
+
 @Suite("RPC framing")
 struct FramingTests {
     @Test func malformedLinesGetErrorsWithTheRightId() async throws {

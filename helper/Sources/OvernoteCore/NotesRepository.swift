@@ -286,15 +286,14 @@ public final class NotesRepository: @unchecked Sendable {
         return ids
     }
 
-    /// Copies a note's content into a new live note with fresh timestamps, no pin, and caret 0.
-    /// `titleSuffix`, when given, is appended to the stored title only. The current note does not
-    /// change; a caller that opens the copy persists it with `setCurrentNote`.
-    public func duplicate(_ id: String, titleSuffix: String? = nil) throws -> Note {
+    /// Copies a note into a new live note with fresh timestamps, no pin, and caret 0.
+    /// With `content` (built by core, for example with a title suffix in its first line), the copy
+    /// stores that content verbatim instead of the source's; the helper never derives content.
+    /// The current note does not change; a caller that opens the copy persists it with `setCurrentNote`.
+    public func duplicate(_ id: String, content: NoteContent? = nil) throws -> Note {
         try transaction {
-            var content = try requireNote(id).content
-            if let titleSuffix {
-                content.title += titleSuffix
-            }
+            let source = try requireNote(id).content
+            let content = content ?? source
             let newId = try insertNote(content, now: clock())
             return try requireNote(newId)
         }

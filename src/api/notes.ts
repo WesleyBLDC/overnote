@@ -3,7 +3,16 @@ import { closeMainWindow } from "@raycast/api";
 import { normalizeFilter, titleMatchesFirst } from "../domain/fold";
 import { summaryTitle } from "../domain/format";
 import { ReadOnlyNotesDb } from "../domain/readonly-db";
-import type { DeletedNoteSummary, ListParams, Note, NoteContent, NoteId, NoteSummary, Page } from "../domain/types";
+import type {
+  DeletedNoteSummary,
+  ListParams,
+  Note,
+  NoteContent,
+  NoteId,
+  NoteSummary,
+  Page,
+  RpcParams,
+} from "../domain/types";
 import { callHelper, getLauncher, helperPaths } from "./helper";
 import { refreshMenuBar } from "./menu-bar";
 
@@ -106,10 +115,19 @@ export function movePinnedDown(id: NoteId): Promise<void> {
   });
 }
 
-/** Duplicates a note and makes the copy current, so the panel opens on it next. */
+/**
+ * Duplicates a note and makes the copy current, so the panel opens on it next. A title suffix
+ * goes into the copy's first line through core, so its title and content agree.
+ */
 export function duplicateNote(id: NoteId, titleSuffix?: string): Promise<Note> {
   return write(async () => {
-    const copy = await callHelper("notes.duplicate", titleSuffix === undefined ? { id } : { id, titleSuffix });
+    let params: RpcParams<"notes.duplicate"> = { id };
+    if (titleSuffix) {
+      // Loaded lazily, like the menu bar does, so list commands that import this file stay light.
+      const { duplicateContent } = await import("./content");
+      params = { id, ...duplicateContent(await callHelper("notes.get", { id }), titleSuffix) };
+    }
+    const copy = await callHelper("notes.duplicate", params);
     await callHelper("notes.setCurrentNote", { noteId: copy.id });
     return copy;
   });

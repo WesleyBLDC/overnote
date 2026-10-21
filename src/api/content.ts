@@ -1,5 +1,8 @@
 import { docToClipboard, docToHTML, loadDoc, noteContentFromMarkdown } from "@overnote/core";
 
+/** A copy's content with a title suffix in its first line, built in core so title and content agree. */
+export { duplicateContent } from "@overnote/core";
+
 import type { Note, NoteContent } from "../domain/types";
 
 /** Builds every stored content field from markdown, in core (the helper never parses markdown). */

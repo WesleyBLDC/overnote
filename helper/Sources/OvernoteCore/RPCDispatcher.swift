@@ -161,11 +161,7 @@ public final class RPCDispatcher: Sendable {
 
         // MARK: notes
         case "notes.create":
-            let content = NoteContent(
-                rawContent: try p.string("rawContent"),
-                markdown: try p.optionalString("markdown") ?? "",
-                text: try p.optionalString("text") ?? "",
-                title: try p.optionalString("title") ?? "")
+            let content = try Self.noteContent(p)
             let show = try p.optionalBool("show") ?? false
             let note = try repository.create(content, makeCurrent: show)
             await changed([note.id], source: source)
@@ -214,7 +210,13 @@ public final class RPCDispatcher: Sendable {
             await changed(ids, source: source)
             return ["count": .int(Int64(ids.count))]
         case "notes.duplicate":
-            let note = try repository.duplicate(try p.id(), titleSuffix: try p.optionalString("titleSuffix"))
+            // The helper never derives content, so a renamed copy arrives fully built by core.
+            if p.values["titleSuffix"] != nil {
+                throw RPCError.badParams(
+                    "titleSuffix was removed in protocol v3.0; send the copy's content built with core's duplicateContent")
+            }
+            let hasContent = Self.noteContentKeys.contains { p.values[$0] != nil }
+            let note = try repository.duplicate(try p.id(), content: hasContent ? try Self.noteContent(p) : nil)
             await changed([note.id], source: source)
             return note.json
         case "notes.pin":
@@ -278,6 +280,17 @@ public final class RPCDispatcher: Sendable {
     }
 
     /// At most this many drag rects; the editor sends a handful at most.
+    static let noteContentKeys = ["rawContent", "markdown", "text", "title"]
+
+    /// `NoteContent` fields as callers send them (built with core): `rawContent` is required.
+    private static func noteContent(_ p: Params) throws -> NoteContent {
+        NoteContent(
+            rawContent: try p.string("rawContent"),
+            markdown: try p.optionalString("markdown") ?? "",
+            text: try p.optionalString("text") ?? "",
+            title: try p.optionalString("title") ?? "")
+    }
+
     static let maxDragRects = 64
 
     /// Validates `{ rects: [{ x, y, width, height }] }`: finite numbers, no negative sizes.

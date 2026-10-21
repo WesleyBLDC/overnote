@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { highlightMarkdownMatches } from "@overnote/core/text";
 
-import { contentFromMarkdown } from "../api/content";
+import { contentFromMarkdown, duplicateContent } from "../api/content";
 import { titleMatchesFirst } from "../domain/fold";
 import { summaryTitle } from "../domain/format";
 import { HelperLauncher } from "../domain/launcher";
@@ -133,8 +133,18 @@ describe("extension domain layer against the real helper", () => {
 
     await call("notes.unpin", { id: second });
     await call("notes.setCurrentNote", { noteId: groceries });
-    const copy = await call("notes.duplicate", { id: second, titleSuffix: " (Copy)" });
-    expect(copy).toMatchObject({ title: "Second note (Copy)", pinned: null });
+    // Search Notes' Duplicate: the suffix goes into the copy's first line, so every field agrees.
+    const source = await call("notes.get", { id: second });
+    const copy = await call("notes.duplicate", { id: second, ...duplicateContent(source, " (Copy)") });
+    expect(copy).toMatchObject({ title: "Second note (Copy)", pinned: null, caretPosition: 0 });
+    expect(copy.markdown.split("\n")[0]).toBe("Second note (Copy)");
+    expect(copy.text.split("\n")[0]).toBe("Second note (Copy)");
+    expect((await call("notes.list", { filter: "note (copy" })).items.map((note) => note.id)).toEqual([copy.id]);
+    // The next content write derives the title from the document again, and it stays suffixed.
+    const edited = await call("notes.update", { id: copy.id, ...contentFromMarkdown(`${copy.markdown}\n\nmore`) });
+    expect(edited.note.title).toBe("Second note (Copy)");
+    expect(await rpcCode(call("notes.duplicate", { id: second, titleSuffix: " (Copy)" } as never))).toBe(-32602);
+    expect((await call("notes.get", { id: second })).title).toBe("Second note");
     // A duplicate, like a create without show, leaves the note the panel opens on alone.
     expect((await call("notes.windowData", {})).current?.id).toBe(groceries);
     // Remove the copy again so later steps see the original three notes.

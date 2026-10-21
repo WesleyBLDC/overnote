@@ -10,6 +10,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { duplicateContent } from "@overnote/core";
 import { expect, test, type Page } from "@playwright/test";
 import { pauseClock } from "./harness";
 
@@ -198,6 +199,68 @@ test("a socket write that lands while the person types is merged into their edit
     await page.clock.runFor(400);
     await expect.poll(async () => (await note()).text).toBe("Draft mine\n\nFrom outside");
     await expect(page.locator(".note-editor")).toHaveText("Draft mineFrom outside");
+  } finally {
+    await helper.stop();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a duplicate keeps its suffixed title in the first line through edits, and ⌘D copies it whole", async ({
+  page,
+}) => {
+  const root = fs.mkdtempSync("/tmp/overnote-real-");
+  const helper = new RealHelper(root);
+  type Stored = { id: string; title: string; text: string; markdown: string; rawContent: string };
+  const get = async (id: string) => (await helper.call("notes.get", { id })) as Stored;
+  try {
+    await helper.start();
+    await bridgeTo(page, helper);
+    await page.goto("http://127.0.0.1:5198/index.html");
+    await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
+    await expect(page.locator(".note-editor")).toBeFocused();
+    await page.keyboard.type("# Groceries");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("milk");
+    const original = (await page.getByTestId("app").getAttribute("data-note-id")) ?? "";
+    await expect.poll(async () => (await get(original)).text).toBe("Groceries\n\nmilk");
+
+    // Search Notes' Duplicate, as the extension sends it: content built by core, then the copy is current.
+    const source = await get(original);
+    const copy = (await helper.call("notes.duplicate", {
+      id: original,
+      ...duplicateContent(source, " (Copy)"),
+    })) as Stored;
+    await helper.call("notes.setCurrentNote", { noteId: copy.id });
+    expect(copy).toMatchObject({
+      title: "Groceries (Copy)",
+      markdown: "# Groceries (Copy)\n\nmilk",
+      text: "Groceries (Copy)\n\nmilk",
+    });
+
+    // The panel opens on the copy with the suffix in its first line, and an edit keeps the title.
+    await page.reload();
+    await expect(page.getByTestId("app")).toHaveAttribute("data-note-id", copy.id);
+    await expect(page.getByTestId("title")).toHaveText("Groceries (Copy)");
+    await expect(page.locator(".note-editor h1")).toHaveText("Groceries (Copy)");
+    await page.locator(".note-editor p").last().click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" and eggs");
+    await expect.poll(async () => (await get(copy.id)).text).toBe("Groceries (Copy)\n\nmilk and eggs");
+    expect((await get(copy.id)).title).toBe("Groceries (Copy)");
+
+    // ⌘D in the editor copies the note whole: no suffix, and title and first line still agree.
+    await page.keyboard.press("Meta+d");
+    await expect(page.getByTestId("notices")).toContainText("Note duplicated");
+    await expect(page.getByTestId("app")).not.toHaveAttribute("data-note-id", copy.id);
+    const second = (await page.getByTestId("app").getAttribute("data-note-id")) ?? "";
+    const edited = await get(copy.id);
+    expect(await get(second)).toMatchObject({
+      title: edited.title,
+      markdown: edited.markdown,
+      text: edited.text,
+      rawContent: edited.rawContent,
+    });
+    expect((await get(original)).title).toBe("Groceries");
   } finally {
     await helper.stop();
     fs.rmSync(root, { recursive: true, force: true });

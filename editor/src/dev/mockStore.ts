@@ -279,12 +279,19 @@ export class MockStore {
       return { count };
     },
     "notes.duplicate": (params) => {
-      const source = this.require(params.id);
+      const { id, ...content } = params;
+      if ("titleSuffix" in content) {
+        throw new MockRpcError(rpc.ErrorCode.BadParams, "titleSuffix was removed in protocol v3.0");
+      }
+      if (Object.keys(content).length > 0 && !("rawContent" in content)) {
+        throw new MockRpcError(rpc.ErrorCode.BadParams, "rawContent is required");
+      }
+      const source = this.require(id);
       const at = this.now();
       const copy: Note = {
         ...source,
+        ...content,
         id: makeUlid(at),
-        title: params.titleSuffix ? `${source.title}${params.titleSuffix}` : source.title,
         pinned: null,
         createdAt: at,
         updatedAt: at,

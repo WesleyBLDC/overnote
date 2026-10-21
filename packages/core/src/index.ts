@@ -7,7 +7,7 @@ export { docToPlainText, deriveTitle } from "./plainText";
 export { displayTitle, countCharacters, countWords, fold, highlightMarkdownMatches, UNTITLED } from "./lite";
 export { docToHTML } from "./serialize/html";
 export { docToClipboard } from "./serialize/clipboard";
-export { buildNoteContent, noteContentFromMarkdown } from "./content";
+export { buildNoteContent, duplicateContent, noteContentFromMarkdown } from "./content";
 export { mergeDocs } from "./merge";
 export type { DocMerge } from "./merge";
 export { parsePastedText, looksLikeMarkdown, plainTextToDoc, MAX_MARKDOWN_PASTE } from "./paste";

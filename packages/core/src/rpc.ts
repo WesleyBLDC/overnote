@@ -187,7 +187,8 @@ export interface Methods {
   "notes.recover": { params: { id: NoteId }; result: Note };
   "notes.permanentlyDelete": { params: { id: NoteId }; result: Empty };
   "notes.emptyTrash": { params: Empty; result: { count: number } };
-  "notes.duplicate": { params: { id: NoteId; titleSuffix?: string }; result: Note };
+  /** With content (built by core's duplicateContent), the copy stores it instead of the source's. */
+  "notes.duplicate": { params: { id: NoteId } | ({ id: NoteId } & NoteContent); result: Note };
   "notes.pin": { params: { id: NoteId }; result: Note };
   "notes.unpin": { params: { id: NoteId }; result: Note };
   "notes.movePinnedUp": { params: { id: NoteId }; result: Empty };

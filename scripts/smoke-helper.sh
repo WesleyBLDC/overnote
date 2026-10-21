@@ -268,15 +268,30 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   // The copy becomes the newest note, which is also what an unset current note falls back to, so
   // set the current note first to tell "left alone" from "moved to the copy".
   await call("notes.setCurrentNote", { noteId: a.id });
-  const dup = await call("notes.duplicate", { id: a.id, titleSuffix: " copy" });
+  const dup = await call("notes.duplicate", { id: a.id });
   assert.notEqual(dup.id, a.id);
-  assert.equal(dup.title, "Café list copy");
-  assert.equal(dup.text, updated.note.text);
+  for (const field of ["title", "text", "markdown", "rawContent"]) assert.equal(dup[field], updated.note[field]);
   assert.equal(dup.caretPosition, 0);
   assert.equal(dup.pinned, null);
   assert.ok(dup.createdAt >= updated.note.updatedAt);
   assert.equal((await call("notes.windowData")).current.id, a.id);
-  ok("duplicate: fresh timestamps, no pin, caret 0, title suffix, and the current note stays the original");
+  ok("duplicate: an exact copy with fresh timestamps, no pin, caret 0, and the current note stays the original");
+
+  // A renamed copy carries content built by core (its first line suffixed); the helper stores it
+  // verbatim, folds its title for filtering, and refuses the old title-only suffix.
+  const renamed = { ...content("Café list copy\nmilk and eggs"), rawContent: JSON.stringify({ type: "doc", copy: true }) };
+  const named = await call("notes.duplicate", { id: a.id, ...renamed });
+  for (const field of ["title", "text", "markdown", "rawContent"]) assert.equal(named[field], renamed[field]);
+  assert.deepEqual((await call("notes.list", { filter: "CAFE LIST COPY" })).items.map((n) => n.id), [named.id]);
+  assert.equal((await call("notes.get", { id: a.id })).title, "Café list");
+  const before = (await call("notes.count")).count;
+  await expectError(-32602, "notes.duplicate", { id: a.id, titleSuffix: " copy" });
+  await expectError(-32602, "notes.duplicate", { id: a.id, title: "Café list copy" });
+  await expectError(404, "notes.duplicate", { id: "missing", ...renamed });
+  assert.equal((await call("notes.count")).count, before);
+  await call("notes.delete", { id: named.id });
+  await call("notes.permanentlyDelete", { id: named.id });
+  ok("duplicate with content stores it verbatim; titleSuffix and partial content are refused");
 
   // ---- lists and filters
   const german = await call("notes.create", content("Straße ÜBER alles"));

@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v2.15 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v3.0 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -152,7 +152,7 @@ The helper stores `NoteContent` verbatim.
 | `notes.recover` | `{ id }` | `Note` | Clears `deletedAt` (pin stays cleared), `updatedAt` = old + 1 ms |
 | `notes.permanentlyDelete` | `{ id }` | `{}` | Only affects notes already in the trash; no-op on live notes |
 | `notes.emptyTrash` | `{}` | `{ count }` | |
-| `notes.duplicate` | `{ id, titleSuffix?: string }` | `Note` | Fresh created/updated/lastAccessed, no pin, caret 0. The current note stays as it was; a caller that opens the copy persists it with `notes.setCurrentNote` (the editor's ⌘D and Search Notes' Duplicate do) or shows it with `window.show { noteId }` |
+| `notes.duplicate` | `{ id } \| { id } & NoteContent` | `Note` | Fresh created/updated/lastAccessed, no pin, caret 0. With only `id` the copy has the source's content verbatim. With content (`rawContent` required, as in `notes.create`), the copy stores that content instead, still verbatim: a caller that renames the copy builds it with core's `duplicateContent`, so the title and the first line agree (see below). `titleSuffix` was removed in v3.0 and is refused with `-32602`, as is content without `rawContent`; 404 if the source is missing. The current note stays as it was; a caller that opens the copy persists it with `notes.setCurrentNote` (the editor's ⌘D and Search Notes' Duplicate do) or shows it with `window.show { noteId }` |
 | `notes.pin` | `{ id }` | `Note` | Appends to the end of the pinned list: key = max pinned key + 1000 (first pin 1000). Does not change `updatedAt` |
 | `notes.unpin` | `{ id }` | `Note` | Does not change `updatedAt` |
 | `notes.movePinnedUp` / `notes.movePinnedDown` | `{ id }` | `{}` | Swap keys with the neighbor pin; no-op at the ends |
@@ -166,6 +166,13 @@ The helper stores `NoteContent` verbatim.
 | `settings.get` | `{}` | `Settings` | |
 | `settings.set` | `Partial<Settings>` | `Settings` | Emits `settings.changed` |
 | `settings.reset` | `{}` | `Settings` | Deletes every stored setting so each reads as its default (the panel frame included, so the panel returns to its first open size and place); the current note and the restore offer stay. Emits `settings.changed` |
+
+**Duplicate titles:** a copy's title is never changed apart from its document, since the title is derived from the first line and the next content save would derive it again.
+Search Notes' Duplicate adds the suffix " (Copy)" by sending `duplicateContent(source, " (Copy)")` with `notes.duplicate`.
+`duplicateContent` inserts the suffix as plain text into the line the title comes from: the first textblock with any text (empty blocks are skipped, as in the title rule), right after the last non-space character before its first hard break or newline, or at the start of that line when it is blank.
+Every field is then derived from the suffixed document, so `title`, `rawContent`, `markdown`, `text`, and the helper's `title_fold` agree, and previews show the suffixed first line.
+For example `# Groceries` becomes `# Groceries (Copy)`, and `**Plan**` becomes `**Plan** (Copy)`.
+The editor's ⌘D sends only `id` and makes an exact copy, with no suffix.
 
 **Filter matching:** case-insensitive substring match on title or text, folding case for all of Unicode and removing diacritics (an intentional improvement over ASCII-only folding).
 **Fold rule (exact, identical in TS and Swift):** Unicode NFKD normalization, then remove every scalar whose general category is a mark (Mn, Mc, Me), then lowercase with the root locale (TS `toLowerCase()`, Swift `lowercased()`).
@@ -295,6 +302,7 @@ export function deriveTitle(doc: JSONContent): string;        // first line of p
 export function displayTitle(n: { title: string; text: string }): string; // title, else first non-empty text line trimmed, else "Untitled"
 export function buildNoteContent(doc: JSONContent): NoteContent; // rawContent + markdown + text + title
 export function noteContentFromMarkdown(markdown: string): NoteContent;
+export function duplicateContent(note: { rawContent: string; text: string }, titleSuffix: string): NoteContent; // the copy's content with titleSuffix in the title's line (section 5)
 export function mergeDocs(base: JSONContent, local: JSONContent, remote: JSONContent): { doc: JSONContent; conflicted: boolean; matchesRemote: boolean };
 // three-way merge by top-level block (one list item is one block): changes to different blocks all apply; where both sides
 // changed the same blocks into different non-empty versions, local's version comes first and remote's right after it
@@ -380,9 +388,10 @@ The extension honors `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`), which t
 
 ## Protocol versioning
 
-The protocol described here is v2.15 (v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v3.0 (v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.
 Helper 0.4.0 is the first release that speaks v2.14 and v2.15, so a socket client can tell from `system.ping` (or `system.status`) `version` whether the editor merges outside changes and whether a create or duplicate leaves the current note alone.
+The first helper release after 0.4.0 speaks v3.0; a socket client that sent `titleSuffix` to 0.4.0 or earlier sends the copy's content instead.
 Bump the version at the top of this document in the same pull request as the code change, and name the new version in the pull request description.

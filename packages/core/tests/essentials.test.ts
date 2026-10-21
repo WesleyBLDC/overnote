@@ -6,11 +6,13 @@ import {
   countWords,
   docToMarkdown,
   docToPlainText,
+  duplicateContent,
   fold,
   highlightMarkdownMatches,
   loadDoc,
   markdownToDoc,
   mergeDocs,
+  noteContentFromMarkdown,
 } from "../src/index";
 
 describe("text rules", () => {
@@ -48,6 +50,23 @@ describe("stored content", () => {
     const saved = JSON.parse(buildNoteContent(loadDoc(JSON.stringify(stored), "")).rawContent);
     expect(saved).toEqual(stored);
     expect(loadDoc("{broken", "a\nb").content?.[0]?.content?.map((n) => n.type)).toEqual(["text", "hardBreak", "text"]);
+  });
+
+  it("puts a duplicate's title suffix on the line the title comes from", () => {
+    const copy = (markdown: string) => {
+      const content = duplicateContent(noteContentFromMarkdown(markdown), " copy");
+      // Every field comes from the suffixed document, so a later save derives the same title.
+      expect(content).toEqual(buildNoteContent(loadDoc(content.rawContent, "")));
+      return content;
+    };
+    expect(copy("# Groceries\n\n- milk")).toMatchObject({
+      title: "Groceries copy",
+      markdown: "# Groceries copy\n\n- milk",
+      text: "Groceries copy\n\nmilk",
+    });
+    expect(copy("**Plan**  \nsecond line").markdown).toBe("**Plan** copy  \nsecond line");
+    expect(copy("```\nfirst\nsecond\n```").text).toBe("first copy\nsecond");
+    expect(copy("").title).toBe("copy");
   });
 });
 

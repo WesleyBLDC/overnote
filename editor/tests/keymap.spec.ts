@@ -44,6 +44,15 @@ test("⌘K runs actions, ⌘N refuses a blank note, history goes back and forwar
   const copy = await page.getByTestId("app").getAttribute("data-note-id");
   expect(copy).not.toBe(original);
   await expect.poll(() => storedCurrentNoteId(page)).toBe(copy);
+  // ⌘D adds no title suffix: the copy's title, markdown, and text are the original's.
+  const stored = await storedNotes(page);
+  const fields = (id: string | null) => {
+    const note = stored.find((n) => n.id === id);
+    return note && { title: note.title, markdown: note.markdown, text: note.text };
+  };
+  expect(fields(copy)).toMatchObject({ title: "Beta", text: "Beta" });
+  expect(fields(copy)).toEqual(fields(original));
+  await expect(title(page)).toHaveText("Beta");
 });
 
 test("⌘P browses, pins work with ⇧⌘P and ⌘1, ⌃X deletes", async ({ page }) => {
