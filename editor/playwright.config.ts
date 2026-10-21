@@ -1,8 +1,16 @@
+import os from "node:os";
+import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+
+// The build smoke test builds and serves the editor from a temp folder, never assets/editor: a
+// running helper started with --watch-editor reloads its panel whenever assets/editor changes.
+// Workers inherit the variable, so they agree with the web servers on the folder.
+process.env.OVERNOTE_EDITOR_OUT_DIR ||= path.join(os.tmpdir(), "overnote-editor-e2e");
 
 /**
  * End-to-end flows against the real editor UI. The dev server serves the editor with the in-memory
- * mock bridge (src/dev/mockBridge.ts); the build smoke test serves assets/editor with a tiny stub.
+ * mock bridge (src/dev/mockBridge.ts); the build smoke test serves a fresh production build with a tiny
+ * stub, written to OVERNOTE_EDITOR_OUT_DIR.
  */
 export default defineConfig({
   testDir: "tests",

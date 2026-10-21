@@ -3,6 +3,7 @@
  * headless with test hooks): every bridge message the page sends goes over the helper's socket
  * through test.asBridge, so typing reaches the helper's SQLite database exactly as in the panel.
  * `npm run verify` builds the helper first; run `npm run build:helper` before running this alone.
+ * OVERNOTE_HELPER_BIN points it at another build, such as helper/.build/release/OvernoteHelper.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -12,7 +13,8 @@ import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 import { pauseClock } from "./harness";
 
-const HELPER = fileURLToPath(new URL("../../assets/bin/OvernoteHelper", import.meta.url));
+const HELPER =
+  process.env.OVERNOTE_HELPER_BIN || fileURLToPath(new URL("../../assets/bin/OvernoteHelper", import.meta.url));
 
 interface RpcFailure {
   code: number;

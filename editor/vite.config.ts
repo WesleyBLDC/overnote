@@ -2,7 +2,12 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
-const OUT_DIR = fileURLToPath(new URL("../assets/editor", import.meta.url));
+/**
+ * The bundle goes to assets/editor, which a running helper started with --watch-editor reloads.
+ * OVERNOTE_EDITOR_OUT_DIR moves it elsewhere; the Playwright suite always sets it, so tests never
+ * touch assets/editor.
+ */
+const OUT_DIR = process.env.OVERNOTE_EDITOR_OUT_DIR || fileURLToPath(new URL("../assets/editor", import.meta.url));
 
 /**
  * Production HTML for the WKWebView: a strict CSP, and no crossorigin attributes,
