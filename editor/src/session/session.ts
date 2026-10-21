@@ -639,7 +639,13 @@ export class NoteSession {
       return;
     }
     const synced = this.state.current ?? current;
-    const contentChanged = stored.rawContent !== synced.rawContent && stored.updatedAt !== synced.updatedAt;
+    // A reply older than what the editor already synced with (a save landed while it was in
+    // flight) says nothing new about this note; reloading it would bring back older content.
+    if (stored.updatedAt < synced.updatedAt) {
+      this.apply({ ...windowData, current: synced }, false);
+      return;
+    }
+    const contentChanged = stored.updatedAt > synced.updatedAt && stored.rawContent !== synced.rawContent;
     if (contentChanged && !this.isDirty && !this.isTyping()) {
       this.loadNote(stored, this.editor.getCaret());
       this.apply(windowData, false);

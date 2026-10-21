@@ -189,6 +189,9 @@ const compose = (page: Page, type: "compositionstart" | "compositionend") =>
     document.querySelector(".note-editor")?.dispatchEvent(new CompositionEvent(name, { bubbles: true, data: "" }));
   }, type);
 
+const bothKept = (page: Page) =>
+  page.getByTestId("notices").getByText("This note also changed elsewhere, so both versions were kept");
+
 test("an outside change while typing is merged into the typing at once, and the caret stays", async ({ page }) => {
   await page.clock.install();
   await openHarness(page, ["Draft"]);
@@ -329,6 +332,38 @@ test("a composition whose end never arrives holds a save for at most 5 s, and th
   await page.clock.runFor(100);
   await expect(page.getByTestId("title")).toHaveText("Other");
   expect((await storedNotes(page)).find((n) => n.id === draft?.id)?.text).toBe("Draft mine\n\nFrom outside");
+});
+
+test("a window data reply older than the last save is not loaded over the editor", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  const [note] = await storedNotes(page);
+  // A notes.windowData reply that the save below overtakes, as a slow reply would be.
+  await page.evaluate((id) => {
+    type Handler = (params: Record<string, unknown>) => unknown;
+    const { store } = (window as unknown as { __overnoteMock: { store: { handlers: Record<string, Handler> } } })
+      .__overnoteMock;
+    const windowData = store.handlers["notes.windowData"] as Handler;
+    const stale = windowData({ noteId: id });
+    store.handlers["notes.windowData"] = () => {
+      store.handlers["notes.windowData"] = windowData;
+      return stale;
+    };
+  }, note?.id ?? "");
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  await page.clock.runFor(400);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine");
+  // Idle (past the typing window) with nothing unsaved, which is when a newer stored note reloads.
+  await page.clock.runFor(1100);
+  await emit(page, "notes.changed", { ids: [note?.id] });
+  await page.clock.runFor(100);
+  await expect(editor(page)).toHaveText("Draft mine");
+  await page.keyboard.type("!");
+  await page.clock.runFor(400);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine!");
+  await expect(bothKept(page)).toHaveCount(0);
 });
 
 test("a save that keeps meeting newer outside changes gives up after three tries, keeps the edits, and says so once", async ({

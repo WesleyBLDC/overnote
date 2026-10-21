@@ -234,7 +234,8 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - Content autosave and caret save are debounced 300 ms and flushed on switch, hide, and blur.
 - Every content save sends `expectedUpdatedAt`, the `updatedAt` of the version the editor last loaded or saved.
 - Outside changes are merged, never overwritten.
-  On `notes.changed` the editor reloads the stored note when it has no unsaved edits and the person is not typing (within 1 s of an edit), as before.
+  On `notes.changed` the editor reloads the stored note when it is newer (a later `updatedAt`) than the version the editor last synced with, it has no unsaved edits, and the person is not typing (within 1 s of an edit).
+  A stored note that is not newer, such as a reply that raced a save, is never loaded over the editor.
   Otherwise it merges the stored version into what it shows with `mergeDocs` (base: the version it last synced with), in place, keeping the caret and scroll, and saves the merge if it differs from the stored note.
   The merge adds no undo step: undo takes back only the person's own edits and never removes the outside change.
   A save that gets `conflict` (a socket write the editor was not told about, or one that raced the save) merges the same way and retries against the returned note, up to 3 attempts; after that the edits stay unsaved, the editor shows one "Could not save note" error (not one per attempt), and the next save tries again.
