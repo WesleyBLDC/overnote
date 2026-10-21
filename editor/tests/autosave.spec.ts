@@ -292,3 +292,71 @@ test("an outside change during an input method composition waits until the compo
   expect(await composing()).toBe(false);
   await expect(editor(page)).toHaveText("DraftFrom outside");
 });
+
+test("a save that keeps meeting newer outside changes gives up after three tries, keeps the edits, and says so once", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  // Another writer saves a new paragraph right before each of the editor's next three saves.
+  await page.evaluate(() => {
+    type Update = (params: Record<string, unknown>) => unknown;
+    const { store } = (
+      window as unknown as {
+        __overnoteMock: {
+          store: { handlers: Record<string, Update>; notes: Map<string, { rawContent: string; text: string }> };
+        };
+      }
+    ).__overnoteMock;
+    const update = store.handlers["notes.update"] as Update;
+    let writes = 0;
+    store.handlers["notes.update"] = (params) => {
+      const note = store.notes.get(String(params.id));
+      if ("rawContent" in params && note && writes < 3) {
+        writes++;
+        const doc = JSON.parse(note.rawContent) as { content: object[] };
+        doc.content.push({ type: "paragraph", content: [{ type: "text", text: `Outside ${writes}` }] });
+        const text = `${note.text}\n\nOutside ${writes}`;
+        update({ id: params.id, rawContent: JSON.stringify(doc), text, markdown: text, title: "Draft" });
+      }
+      return update(params);
+    };
+  });
+  const failures = page.getByRole("alert").getByText("Could not save note. Try again.");
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  await page.clock.runFor(350);
+  await expect.poll(async () => (await contentSaves(page)).length).toBe(3);
+  await expect(failures).toHaveCount(1);
+  // Each refused save merged the newer version in, but the edits themselves stay unsaved.
+  await expect(editor(page)).toHaveText("Draft mineOutside 1Outside 2Outside 3");
+  expect((await storedNotes(page))[0]?.text).toBe("Draft\n\nOutside 1\n\nOutside 2\n\nOutside 3");
+
+  // The next save, against the last version it merged, goes through.
+  await page.keyboard.type("!");
+  await page.clock.runFor(350);
+  await expect
+    .poll(async () => (await storedNotes(page))[0]?.text)
+    .toBe("Draft mine!\n\nOutside 1\n\nOutside 2\n\nOutside 3");
+  expect(await contentSaves(page)).toHaveLength(4);
+  await expect(failures).toHaveCount(1);
+});
+
+test("undo after an outside change merged in place reverts only the person's typing", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  const [note] = await storedNotes(page);
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  await outsideWrite(page, note?.id ?? "", ["Draft", "From outside"], { announce: true });
+  await expect(editor(page)).toHaveText("Draft mineFrom outside");
+  // The merge is not an undo step of its own: undo takes back the typing and keeps the outside change.
+  await page.keyboard.press("Meta+z");
+  await expect(editor(page)).toHaveText("DraftFrom outside");
+  await page.keyboard.press("Meta+z");
+  await expect(editor(page)).toHaveText("DraftFrom outside");
+  await page.keyboard.press("Meta+Shift+z");
+  await expect(editor(page)).toHaveText("Draft mineFrom outside");
+});

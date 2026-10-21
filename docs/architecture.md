@@ -235,8 +235,9 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - Every content save sends `expectedUpdatedAt`, the `updatedAt` of the version the editor last loaded or saved.
 - Outside changes are merged, never overwritten.
   On `notes.changed` the editor reloads the stored note when it has no unsaved edits and the person is not typing (within 1 s of an edit), as before.
-  Otherwise it merges the stored version into what it shows with `mergeDocs` (base: the version it last synced with), in place, keeping the caret, scroll, and undo history, and saves the merge if it differs from the stored note.
-  A save that gets `conflict` (a socket write the editor was not told about, or one that raced the save) merges the same way and retries against the returned note, up to 3 attempts; after that the edits stay unsaved and the next save tries again.
+  Otherwise it merges the stored version into what it shows with `mergeDocs` (base: the version it last synced with), in place, keeping the caret and scroll, and saves the merge if it differs from the stored note.
+  The merge adds no undo step: undo takes back only the person's own edits and never removes the outside change.
+  A save that gets `conflict` (a socket write the editor was not told about, or one that raced the save) merges the same way and retries against the returned note, up to 3 attempts; after that the edits stay unsaved, the editor shows one "Could not save note" error (not one per attempt), and the next save tries again.
   When both sides changed the same block differently, the merge keeps both versions and the editor shows "This note also changed elsewhere, so both versions were kept".
   When one side deleted a block the other changed, the change is kept and no notice shows, since only one version exists.
   While an input method composition is in progress, every merge waits until it ends, because replacing the document mid composition would break the text being composed.
