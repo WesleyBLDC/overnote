@@ -14,13 +14,15 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await settle(page);
   expect(await reports()).toEqual([]);
 
-  // With auto-sizing on, a one-line note is about 143 points (one 120% line between the bars), footer at the bottom.
+  // With auto-sizing on, a one-line note is about 143 points (one 120% line between the bars), so
+  // the panel rests at the 197 point minimum, footer at the bottom.
   await page.keyboard.press("Meta+Shift+Slash");
   await expect.poll(async () => (await reports()).length).toBeGreaterThan(0);
   const start = (await last())?.contentHeight ?? 0;
   expect(start).toBeGreaterThanOrEqual(134);
   expect(start).toBeLessThanOrEqual(146);
-  await expect.poll(appHeight).toBe(start);
+  const resting = Math.max(197, start);
+  await expect.poll(appHeight).toBe(resting);
   const footerGap = await page
     .getByTestId("footer")
     .evaluate((el) => el.closest(".app")!.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom);
@@ -40,7 +42,7 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   // ⌘K in a short panel never resizes it: the panel stays inside the note and its list scrolls.
   const reportsBeforePanel = (await reports()).length;
   // The harness applies a reported height a moment after the report; open ⌘K on the short note.
-  await expect.poll(appHeight).toBe(start);
+  await expect.poll(appHeight).toBe(resting);
   await page.keyboard.press("Meta+k");
   const panel = page.getByTestId("command-panel");
   await expect(panel).toBeVisible();
@@ -49,11 +51,11 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
     (el) => el.closest(".app")!.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom,
   );
   expect(bottomGap).toBeGreaterThanOrEqual(9.5);
-  expect(await appHeight()).toBe(start);
+  expect(await appHeight()).toBe(resting);
   await page.keyboard.press("Escape");
   await settle(page);
   expect((await reports()).slice(reportsBeforePanel)).toEqual([]);
-  expect(await appHeight()).toBe(start);
+  expect(await appHeight()).toBe(resting);
 
   // With auto-sizing off, content changes are not reported, and browse stays inside the same way.
   await page.keyboard.press("Meta+Shift+Slash");
@@ -73,6 +75,61 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
     .getByTestId("new-note")
     .evaluate((el) => el.getBoundingClientRect().top - el.closest(".app")!.getBoundingClientRect().top);
   expect(buttonTop).toBeGreaterThanOrEqual(12);
+});
+
+test("the minimum size is the bars plus one line at the current zoom, never below 405 x 197", async ({ page }) => {
+  await openHarness(page, ["One line"]);
+  const minimum = async () =>
+    (await calls(page, "window.setMinimumSize")).at(-1)?.params as { width: number; height: number };
+  const box = () =>
+    page.getByTestId("app").evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    });
+  await expect.poll(minimum).toBeTruthy();
+
+  // At 100% the bars plus one line are what a one-line note reports as its content height.
+  await page.keyboard.press("Meta+Shift+Slash");
+  await expect.poll(async () => (await calls(page, "window.resize")).length).toBeGreaterThan(0);
+  const oneLine = ((await calls(page, "window.resize")).at(-1)?.params.contentHeight as number) ?? 0;
+  const atDefault = await minimum();
+  expect(Math.abs(atDefault.height - oneLine)).toBeLessThanOrEqual(1);
+  expect(atDefault.width).toBeLessThanOrEqual(405);
+  await expect.poll(box).toEqual({ width: 640, height: 197 });
+
+  // At 200% the bars and the line double, past the floor: the panel grows to the new minimum.
+  await page.keyboard.press("Meta+Equal");
+  for (let i = 0; i < 19; i++) await page.keyboard.press("Meta+Equal");
+  await expect.poll(async () => (await minimum()).height).toBeGreaterThanOrEqual(2 * oneLine - 8);
+  const atDouble = await minimum();
+  expect(atDouble.height).toBeLessThanOrEqual(2 * oneLine + 2);
+  expect(atDouble.width).toBeGreaterThan(600);
+  await expect.poll(async () => (await box()).height).toBe(atDouble.height);
+  await expect.poll(async () => (await box()).width).toBe(atDouble.width);
+
+  // Every bar fits: the toolbar controls, some of the title, and the format bar all stay inside.
+  await page.keyboard.press("Alt+Meta+Comma");
+  await expect(page.getByTestId("format-bar")).toBeVisible();
+  await expect.poll(async () => (await minimum()).width).toBeGreaterThan(atDouble.width);
+  await expect.poll(async () => (await box()).width).toBe((await minimum()).width);
+  const fits = await page.getByTestId("app").evaluate((app) => {
+    const edge = app.getBoundingClientRect();
+    const inside = (el: Element | null) => {
+      const r = el!.getBoundingClientRect();
+      return r.left >= edge.left - 0.5 && r.right <= edge.right + 0.5;
+    };
+    const title = app.querySelector<HTMLElement>("[data-testid=title]")!;
+    const formatBar = app.querySelector("[data-testid=format-bar]")!.getBoundingClientRect();
+    const toggle = app.querySelector("[data-testid=format-toggle]")!.getBoundingClientRect();
+    return {
+      actions: inside(app.querySelector(".toolbar-actions")),
+      formatBar: inside(app.querySelector("[data-testid=format-bar]")),
+      clearOfToggle: formatBar.right <= toggle.left + 0.5,
+      // A short title shows in full; the room kept for it is 6rem.
+      titleShown: title.scrollWidth <= title.clientWidth && title.clientWidth > 0,
+    };
+  });
+  expect(fits).toEqual({ actions: true, formatBar: true, clearOfToggle: true, titleShown: true });
 });
 
 test("note text is 120% of the UI base and zoom scales it", async ({ page }) => {

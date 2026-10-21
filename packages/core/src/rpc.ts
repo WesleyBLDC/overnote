@@ -32,7 +32,7 @@ export const Method = {
   WindowShow: "window.show",
   WindowHide: "window.hide",
   WindowResize: "window.resize",
-  WindowSetOverhang: "window.setOverhang",
+  WindowSetMinimumSize: "window.setMinimumSize",
   WindowResignFocus: "window.resignFocus",
   WindowSetDragRegions: "window.setDragRegions",
   ClipboardCopy: "clipboard.copy",
@@ -68,7 +68,7 @@ export type MethodName = (typeof Method)[keyof typeof Method];
 export const BRIDGE_ONLY_METHODS = [
   Method.SystemReady,
   Method.WindowResize,
-  Method.WindowSetOverhang,
+  Method.WindowSetMinimumSize,
   Method.WindowResignFocus,
   Method.WindowSetDragRegions,
   Method.ClipboardCopy,
@@ -172,8 +172,8 @@ export interface Methods {
   "window.show": { params: { noteId?: NoteId }; result: { visible: true } };
   "window.hide": { params: Empty; result: { visible: false } };
   "window.resize": { params: { contentHeight: number; temporary?: boolean }; result: Empty };
-  /** Lets a dropdown hang `height` points past the note's bottom edge; the note keeps its size. 0 gives the room back. */
-  "window.setOverhang": { params: { height: number }; result: Empty };
+  /** The smallest the panel may be, in points: the editor's bars plus one line at the current zoom (the helper keeps at least 405 x 197). */
+  "window.setMinimumSize": { params: { width: number; height: number }; result: Empty };
   "window.resignFocus": { params: Empty; result: Empty };
   "window.setDragRegions": { params: { rects: DragRect[] }; result: Empty };
   "clipboard.copy": { params: { text: string; html?: string }; result: Empty };

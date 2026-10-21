@@ -26,7 +26,7 @@ public final class RPCDispatcher: Sendable {
 
     /// Methods only the editor may call.
     public static let bridgeOnlyMethods: Set<String> = [
-        "system.ready", "window.resize", "window.setOverhang", "window.setDragRegions", "window.resignFocus", "app.openURL", "clipboard.copy", "file.saveAs",
+        "system.ready", "window.resize", "window.setMinimumSize", "window.setDragRegions", "window.resignFocus", "app.openURL", "clipboard.copy", "file.saveAs",
     ]
 
     public init(
@@ -129,10 +129,13 @@ public final class RPCDispatcher: Sendable {
             guard height >= 0 else { throw RPCError.badParams("contentHeight must not be negative") }
             await host.resizeWindow(contentHeight: height, temporary: try p.optionalBool("temporary") ?? false)
             return [:]
-        case "window.setOverhang":
+        case "window.setMinimumSize":
+            let width = try p.double("width")
             let height = try p.double("height")
-            guard height >= 0, height.isFinite else { throw RPCError.badParams("height must not be negative") }
-            await host.setOverhang(height)
+            guard width > 0, height > 0, width.isFinite, height.isFinite else {
+                throw RPCError.badParams("width and height must be positive numbers")
+            }
+            await host.setMinimumSize(width: width, height: height)
             return [:]
         case "window.setDragRegions":
             await host.setDragRegions(try Self.dragRects(p))

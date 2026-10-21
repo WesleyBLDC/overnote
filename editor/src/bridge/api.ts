@@ -15,7 +15,7 @@ export function createApi(client: BridgeClient) {
       hide: () => call(M.WindowHide, {}),
       resize: (contentHeight: number, temporary = false) =>
         call(M.WindowResize, temporary ? { contentHeight, temporary } : { contentHeight }),
-      setOverhang: (height: number) => call(M.WindowSetOverhang, { height }),
+      setMinimumSize: (width: number, height: number) => call(M.WindowSetMinimumSize, { width, height }),
       resignFocus: () => call(M.WindowResignFocus, {}),
       setDragRegions: (rects: rpc.DragRect[]) => call(M.WindowSetDragRegions, { rects }),
     },

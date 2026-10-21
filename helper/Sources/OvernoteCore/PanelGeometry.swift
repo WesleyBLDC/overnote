@@ -4,13 +4,13 @@ import CoreGraphics
 /// tested. Rects are AppKit screen rects (points, origin at the bottom left of the primary
 /// display, y up); a stored `PanelFrame` keeps the **top** edge in `y`.
 public enum PanelGeometry {
-    /// Clamps the width to the display and nudges the frame fully onto its visible area,
-    /// keeping the top edge where it was whenever the frame fits. A frame already inside the
-    /// visible area (a tiled half, a frame flush with any edge) comes back unchanged.
-    public static func keepOnScreen(_ frame: CGRect, visible: CGRect, minimumWidth: CGFloat) -> CGRect {
+    /// Grows the frame to the minimum size (`PanelSizing`), clamps it to the display, and
+    /// nudges it fully onto its visible area, keeping the top edge where it was whenever the
+    /// frame fits. A frame already inside the visible area and at least the minimum (a tiled
+    /// half, a frame flush with any edge) comes back unchanged.
+    public static func keepOnScreen(_ frame: CGRect, visible: CGRect, minimum: CGSize) -> CGRect {
         var result = frame
-        result.size.width = min(max(frame.width, minimumWidth), visible.width)
-        result.size.height = min(frame.height, visible.height)
+        result.size = PanelSizing.clamped(frame.size, minimum: minimum, available: visible.size)
         result.origin.y = frame.maxY - result.height
         if result.maxY > visible.maxY { result.origin.y = visible.maxY - result.height }
         if result.minY < visible.minY { result.origin.y = visible.minY }
@@ -24,7 +24,7 @@ public enum PanelGeometry {
     /// just under the menu bar; then kept on screen.
     public static func placement(
         stored: PanelFrame?, displayKey: String, visible: CGRect, width: CGFloat, height: CGFloat,
-        minimumWidth: CGFloat
+        minimum: CGSize
     ) -> CGRect {
         var topLeft = CGPoint(x: visible.midX - width / 2, y: visible.maxY)
         if let saved = stored?.displays[displayKey] {
@@ -33,7 +33,7 @@ public enum PanelGeometry {
             topLeft = CGPoint(x: stored.x, y: stored.y)
         }
         let frame = CGRect(x: topLeft.x, y: topLeft.y - height, width: width, height: height)
-        return keepOnScreen(frame, visible: visible, minimumWidth: minimumWidth)
+        return keepOnScreen(frame, visible: visible, minimum: minimum)
     }
 
     /// The stored frame once the note settled at `note` on display `displayKey`, however it got

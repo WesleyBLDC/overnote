@@ -385,7 +385,7 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   // ---- errors and events
   await expectError(-32601, "notes.search", { query: "x" });
   await expectError(-32601, "notes.navigate", { direction: "back" });
-  for (const method of ["system.ready", "window.resize", "window.setOverhang", "window.setDragRegions", "window.resignFocus", "app.openURL",
+  for (const method of ["system.ready", "window.resize", "window.setMinimumSize", "window.setDragRegions", "window.resignFocus", "app.openURL",
     "clipboard.copy", "file.saveAs"]) {
     await expectError(-32601, method, {});
   }

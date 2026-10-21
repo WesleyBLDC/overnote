@@ -37,6 +37,8 @@ interface MockWindow {
 
 /** The helper's first-open panel height in points when auto-sizing is off (docs/architecture.md section 4). */
 const FIRST_OPEN_HEIGHT = 560;
+/** The smallest panel at any zoom (PanelSizing.floorSize in the helper). */
+const FLOOR = { width: 405, height: 197 };
 
 function seedFromUrl(control: MockControl, search: string): void {
   const params = new URLSearchParams(search);
@@ -56,15 +58,17 @@ function seedFromUrl(control: MockControl, search: string): void {
 }
 
 export function installMockBridge(target: MockWindow & Window): MockControl {
-  // Emulates the helper's panel sizing: clamp to 128 to 860 points times zoom. With auto-sizing off
-  // the panel opens at the roomy first-open size. Temporary heights only ever grow the panel (a tall
-  // enough panel stays as it is) and the next normal report restores the resting height.
+  // Emulates the helper's panel sizing: heights from the minimum size (the editor's report, at least
+  // 405 x 197) to 860 points times zoom. With auto-sizing off the panel opens at the roomy first-open
+  // size. Temporary heights only ever grow the panel (a tall enough panel stays as it is) and the next
+  // normal report restores the resting height. A new minimum grows a smaller panel.
   let restingHeight: number | null = null;
+  let minimum = { ...FLOOR };
   const applyPanelHeight = ({ contentHeight, temporary }: { contentHeight: number; temporary?: boolean }) => {
     const root = target.document.getElementById("root");
     if (!root) return;
     const zoom = control.store.settings.zoom;
-    const clamp = (value: number) => Math.min(860 * zoom, Math.max(128 * zoom, value));
+    const clamp = (value: number) => Math.min(Math.max(860 * zoom, minimum.height), Math.max(minimum.height, value));
     if (temporary) {
       const current = root.getBoundingClientRect().height;
       if (current < contentHeight) root.style.height = `${clamp(contentHeight)}px`;
@@ -91,10 +95,10 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
     setPanelSize: (width, height) => {
       const root = target.document.getElementById("root");
       if (!root) return;
-      restingHeight = height;
+      restingHeight = Math.max(height, minimum.height);
       root.style.maxWidth = "none";
-      root.style.width = `${width}px`;
-      root.style.height = `${height}px`;
+      root.style.width = `${Math.max(width, minimum.width)}px`;
+      root.style.height = `${restingHeight}px`;
     },
   };
 
@@ -115,11 +119,22 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
             try {
               if (message.method === "window.resize")
                 applyPanelHeight(params as { contentHeight: number; temporary?: boolean });
-              // The harness panel cannot grow a transparent strip like the helper's window does,
-              // so it lets the dropdown draw past its bottom edge instead.
-              if (message.method === "window.setOverhang") {
+              if (message.method === "window.setMinimumSize") {
+                const size = params as { width: number; height: number };
+                minimum = {
+                  width: Math.max(FLOOR.width, Math.ceil(size.width)),
+                  height: Math.max(FLOOR.height, Math.ceil(size.height)),
+                };
                 const root = target.document.getElementById("root");
-                if (root) root.style.overflow = (params as { height: number }).height > 0 ? "visible" : "";
+                const box = root?.getBoundingClientRect();
+                if (root && box && box.height < minimum.height) {
+                  restingHeight = Math.max(restingHeight ?? 0, minimum.height);
+                  root.style.height = `${minimum.height}px`;
+                }
+                if (root && box && box.width < minimum.width) {
+                  root.style.maxWidth = "none";
+                  root.style.width = `${minimum.width}px`;
+                }
               }
               receiver()?.resolve(message.id, control.store.dispatch(message.method, params));
             } catch (error) {

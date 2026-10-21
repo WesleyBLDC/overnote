@@ -1,10 +1,11 @@
+import CoreGraphics
 import Foundation
 import Testing
 @testable import OvernoteCore
 
 // Unit tests are limited to logic end to end tests cannot reach cheaply (the testing policy in
 // CONTRIBUTING.md): fold rules, ordering and cursor math, pins, trash purge, the update conflict, RPC
-// framing, the security checks on file names and asset paths, and the panel frame memory. Everything else is covered
+// framing, the panel size limits and frame memory, and the security checks on file names and asset paths. Everything else is covered
 // by scripts/smoke-helper.sh and scripts/e2e-window.sh against the real binary.
 
 @Suite("Fold rule")
@@ -175,12 +176,12 @@ struct PanelFrameTests {
     /// helper keeps that frame, and the next show opens it exactly there again.
     @Test func aTiledFrameIsStoredAndPlacedBackExactly() {
         let tiled = CGRect(x: visible.minX, y: visible.minY, width: visible.width / 2, height: visible.height)
-        #expect(PanelGeometry.keepOnScreen(tiled, visible: visible, minimumWidth: 396) == tiled)
+        #expect(PanelGeometry.keepOnScreen(tiled, visible: visible, minimum: PanelSizing.floorSize) == tiled)
         let stored = PanelGeometry.recording(tiled, displayKey: key, in: nil, autoSize: false, temporary: false)
         #expect(stored == PanelFrame(x: 0, y: 876, width: 720, height: 876, displays: [key: PanelPoint(x: 0, y: 876)]))
         let placed = PanelGeometry.placement(
             stored: stored, displayKey: key, visible: visible, width: CGFloat(stored.width),
-            height: CGFloat(stored.height ?? 0), minimumWidth: 396)
+            height: CGFloat(stored.height ?? 0), minimum: PanelSizing.floorSize)
         #expect(placed == tiled)
         // A move to another display remembers both, and the legacy point follows the last move.
         let other = CGRect(x: 1500, y: 100, width: 720, height: 876)
@@ -199,7 +200,11 @@ struct PanelFrameTests {
         #expect(PanelGeometry.changesHeight(from: frame, to: frame.insetBy(dx: 0, dy: 2), tolerance: 2))
         // A frame past the display edge comes back on screen with its top edge kept.
         let off = CGRect(x: -50, y: 700, width: 640, height: 300)
-        #expect(PanelGeometry.keepOnScreen(off, visible: visible, minimumWidth: 396) == CGRect(x: 0, y: 576, width: 640, height: 300))
+        #expect(PanelGeometry.keepOnScreen(off, visible: visible, minimum: PanelSizing.floorSize) == CGRect(x: 0, y: 576, width: 640, height: 300))
+        // A frame set from outside below the minimum (a window manager's quarter tile on a small
+        // display) grows to it, keeping its top left corner.
+        let small = CGRect(x: 0, y: 676, width: 300, height: 100)
+        #expect(PanelGeometry.keepOnScreen(small, visible: visible, minimum: PanelSizing.floorSize) == CGRect(x: 0, y: 579, width: 405, height: 197))
     }
 }
 
@@ -300,6 +305,65 @@ struct DuplicateTests {
         #expect(await errorCode(["id": .string(source.id), "title": "Groceries copy"]) == RPCError.badParamsCode)
         #expect(await errorCode(["id": "missing", "rawContent": "{}"]) == RPCError.noteNotFound("missing").code)
         #expect(try f.repository.count() == count)
+    }
+}
+
+@Suite("Panel size")
+struct PanelSizeTests {
+    @Test func theMinimumIsTheEditorsReportButNeverBelowTheFloor() {
+        let floor = CGSize(width: 405, height: 197)
+        #expect(PanelSizing.minimumSize(reported: nil) == floor)
+        // 100%: the bars plus one line fit well inside the floor.
+        #expect(PanelSizing.minimumSize(reported: CGSize(width: 341, height: 142.3)) == floor)
+        // 200% with the format bar: wider and taller than the floor, rounded up to whole points.
+        #expect(PanelSizing.minimumSize(reported: CGSize(width: 746.2, height: 277.9)) == CGSize(width: 747, height: 278))
+    }
+
+    @Test func contentHeightsStayBetweenTheMinimumAndTheZoomedMaximum() {
+        #expect(PanelSizing.autoHeight(50, minimum: 197, zoom: 1) == 197)
+        #expect(PanelSizing.autoHeight(300, minimum: 197, zoom: 1) == 300)
+        #expect(PanelSizing.autoHeight(5000, minimum: 197, zoom: 1) == 860)
+        #expect(PanelSizing.autoHeight(5000, minimum: 278, zoom: 1.5) == 1290)
+        #expect(PanelSizing.autoHeight(50, minimum: 278, zoom: 2) == 278)
+    }
+
+    @Test func savedFramesGrowToTheMinimumAndStayOnTheDisplay() {
+        let minimum = CGSize(width: 405, height: 197)
+        let display = CGSize(width: 1512, height: 944)
+        // A frame saved by an older build, at its old 396 x 128 minimum.
+        #expect(PanelSizing.clamped(CGSize(width: 396, height: 128), minimum: minimum, available: display) == minimum)
+        #expect(
+            PanelSizing.clamped(CGSize(width: 640, height: 560), minimum: minimum, available: display)
+                == CGSize(width: 640, height: 560))
+        #expect(
+            PanelSizing.clamped(CGSize(width: 3000, height: 100), minimum: minimum, available: display)
+                == CGSize(width: 1512, height: 197))
+    }
+
+    @Test func theBridgeChecksTheEditorsMinimumAndTheSocketCannotSendIt() async throws {
+        let f = try Fixture()
+        let host = RecordingHost()
+        let dispatcher = RPCDispatcher(repository: f.repository, host: host)
+        func code(_ params: JSONValue, source: RPCSource = .bridge) async -> Int? {
+            do {
+                _ = try await dispatcher.handle(method: "window.setMinimumSize", params: params, source: source)
+                return nil
+            } catch {
+                return (error as? RPCError)?.code
+            }
+        }
+        #expect(await code(["width": 669, "height": 277.9]) == nil)
+        #expect(host.calls == [.minimumSize(669, 277.9)])
+        #expect(await code(["width": 0, "height": 200]) == RPCError.badParamsCode)
+        #expect(await code(["width": 400, "height": -1]) == RPCError.badParamsCode)
+        #expect(await code(["width": "wide", "height": 200]) == RPCError.badParamsCode)
+        #expect(await code(["width": 400, "height": 200], source: .socket) == RPCError.methodNotFoundCode)
+        #expect(await code(["height": 0], source: .bridge) == RPCError.badParamsCode)
+        #expect(host.calls.count == 1)
+        // The old overhang method is gone.
+        await #expect(throws: RPCError.self) {
+            _ = try await dispatcher.handle(method: "window.setOverhang", params: ["height": 0], source: .bridge)
+        }
     }
 }
 

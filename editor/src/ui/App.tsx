@@ -35,7 +35,15 @@ import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
 import { FindBar, type FindBarHandle } from "./FindBar";
 import { Footer } from "./Footer";
 import { ExitGhost } from "./ExitGhost";
-import { useDragRegions, useLatest, useNotices, useResizeReporter, useScrollEdges, useSettings } from "./hooks";
+import {
+  useDragRegions,
+  useLatest,
+  useMinimumSizeReporter,
+  useNotices,
+  useResizeReporter,
+  useScrollEdges,
+  useSettings,
+} from "./hooks";
 import { LinkPopover } from "./LinkPopover";
 import { Notices } from "./Notices";
 import { SlashMenu, type SlashMenuHandle } from "./SlashMenu";
@@ -342,6 +350,8 @@ export function App({ api }: { api: Api }) {
   const overlayRem = confirm ? 34 : null;
   const hasSelection = !editor.state.selection.empty;
   const inList = editor.isActive("list");
+  // Before the height reports, so a cold start knows the minimum when it first sizes the panel.
+  useMinimumSizeReporter(app, api);
   useResizeReporter(app, api, { autoSize: settings.windowAutoSize, overlayRem });
   useDragRegions(app, api, settings.zoom);
   useScrollEdges(app);

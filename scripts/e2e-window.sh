@@ -12,10 +12,12 @@
 #
 # Checks: the 640 x 560 first open (auto-sizing off by default), three way toggle, no app
 # activation, key status and first responder, modal panel level, all Spaces plus full screen
-# auxiliary, the dark material under a transparent web view, height clamping (128 to 860
-# scaled by zoom, 2 pt tolerance, top edge fixed), temporary growth that only grows, the user
+# auxiliary, the dark material under a transparent web view, height clamping (the minimum
+# size, at least 405 x 197, up to 860 scaled by zoom, 2 pt tolerance, top edge fixed), the
+# editor's minimum size report, temporary growth that only grows, the user
 # height rule, editor drag regions and the drag strip, first mouse, resize hit zones and real
-# resize drags, a frame set through Accessibility (as tiling and window managers do), ⌘W, per display position memory, persistence across a restart, and the first
+# resize drags, a frame set through Accessibility (as tiling and window managers do, grown
+# to the minimum size when smaller), ⌘W, per display position memory, persistence across a restart, and the first
 # show with auto-sizing on, which waits hidden for the editor's first height report (up to
 # 3 s) so a cold start never flashes the default height.
 #
@@ -318,25 +320,6 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     assert.equal(sharedAgain?.sharing, 1, "sharing state after turning it off");
   });
 
-  // A dropdown that hangs past the note (window.setOverhang): the window grows downward, while
-  // the note (its frame, material, and resize zones) keeps its size and place.
-  const beforeHang = await state();
-  await call("test.asBridge", { method: "window.setOverhang", params: { height: 120 } });
-  const hanging = await state();
-  await call("test.asBridge", { method: "window.setOverhang", params: { height: 0 } });
-  const afterHang = await state();
-  await check("window.setOverhang hangs room below the note without resizing it, and gives it back", () => {
-    assert.equal(hanging.overhang, 120, "overhang");
-    assert.equal(hanging.frame.height, beforeHang.frame.height + 120, "window height");
-    assert.equal(hanging.frame.top, beforeHang.frame.top, "window top");
-    assert.deepEqual(hanging.noteFrame, { x: beforeHang.frame.x, y: beforeHang.frame.y, width: beforeHang.frame.width, height: beforeHang.frame.height }, "note frame");
-    assert.equal(hanging.materialFrame.height, beforeHang.frame.height, "material height");
-    assert.equal(hanging.materialFrame.y, 120, "material sits above the overhang");
-    assert.equal(hanging.resizeZonesHidden, true, "resize zones off while a dropdown hangs");
-    assert.equal(afterHang.overhang, 0, "overhang after");
-    assert.deepEqual(afterHang.frame, beforeHang.frame, "frame restored");
-    assert.equal(afterHang.resizeZonesHidden, false, "resize zones back");
-  });
   await check("first open: 640 x 560, centered, top just under the menu bar, on the pointer's display", () => {
     const vf = s.visibleFrame;
     assert.equal(s.frame.width, 640, "width");
@@ -359,14 +342,19 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   // panel has applied the new settings, so no wait is needed after it.
   await call("settings.set", { windowAutoSize: true });
 
-  // Height: 128 to 860 at 100%, scaled by zoom, top edge fixed, 2 pt tolerance.
+  // Height: the minimum (at least 197) to 860 at 100%, the maximum scaled by zoom, top edge
+  // fixed, 2 pt tolerance. The placeholder editor reports no minimum, so the floor applies.
   const top = s.frame.top;
   const height = async (contentHeight) => {
     await bridge("window.resize", { contentHeight });
     return (await state()).frame;
   };
   let f = await height(50);
-  await check("auto-height minimum 128", () => { assert.equal(f.height, 128, "height"); assert.equal(f.top, top, "top"); });
+  await check("auto-height minimum 197 (the floor)", () => {
+    assert.equal(f.height, 197, "height");
+    assert.equal(f.top, top, "top");
+    assert.deepEqual(s.minSize, { width: 405, height: 197 }, "minSize");
+  });
   f = await height(300);
   await check("auto-height follows content with the top edge fixed", () => {
     assert.equal(f.height, 300, "height");
@@ -377,23 +365,47 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   f = await height(5000);
   const maxAt100 = Math.min(860, s.visibleFrameHeight);
   await check("auto-height maximum 860 (or the display)", () => assert.equal(f.height, Math.floor(maxAt100), "height"));
+  // At 150% the editor reports a larger minimum (its bars plus one line): a smaller panel grows
+  // to it at once, keeping its top edge, and content reports never go below it.
+  await check("window.setMinimumSize validates its size", async () => {
+    await assert.rejects(bridge("window.setMinimumSize", { width: 0, height: 200 }), /positive/);
+    await assert.rejects(bridge("window.setMinimumSize", { width: "wide", height: 200 }), /number/);
+  });
   await call("settings.set", { zoom: 1.5 });
+  const beforeMinimum = await height(50);
+  await bridge("window.setMinimumSize", { width: 700.4, height: 277.9 });
+  const grownToMinimum = await state();
+  const autoAfterMinimum = (await call("settings.get")).windowAutoSize;
   f = await height(50);
-  await check("limits scale with zoom (128 x 1.5 = 192)", () => assert.equal(f.height, 192, "height"));
+  await check("an editor minimum above the floor grows the panel and holds content reports", () => {
+    assert.deepEqual(grownToMinimum.minSize, { width: 701, height: 278 }, "minSize");
+    assert.equal(grownToMinimum.frame.width, Math.max(701, beforeMinimum.width), "width");
+    assert.equal(grownToMinimum.frame.height, 278, "height");
+    assert.equal(grownToMinimum.frame.top, beforeMinimum.top, "top");
+    assert.equal(beforeMinimum.height, 197, "height before the report");
+    assert.equal(f.height, 278, "height after a small report");
+    // The growth is the helper's own frame change, never read as the person's resize.
+    assert.equal(autoAfterMinimum, true, "windowAutoSize after the minimum growth");
+  });
+  await bridge("window.setMinimumSize", { width: 300, height: 120 });
   await call("settings.set", { zoom: 1 });
-  f = await height(140);
-  await check("back at 100% zoom, a 140 pt report gives 140", () => assert.equal(f.height, 140, "height"));
+  f = await height(150);
+  await check("back at 100% zoom, the floor holds: a 150 pt report gives 197", () => {
+    assert.equal(f.height, 197, "height");
+  });
+  f = await height(240);
+  await check("a 240 pt report gives 240", () => assert.equal(f.height, 240, "height"));
 
-  // While ⌘K, browse, or a dialog is open the editor sends a temporary taller report, then a
+  // While a confirmation dialog is open the editor sends a temporary taller report, then a
   // normal one. Reports are programmatic: they never turn auto-sizing off.
   await bridge("window.resize", { contentHeight: 442, temporary: true });
   const grown = (await state()).frame;
-  const restored = await height(140);
+  const restored = await height(240);
   const autoAfterTemporary = (await call("settings.get")).windowAutoSize;
   await check("auto-sizing on: a temporary report grows to 442 and the next normal report restores", () => {
     assert.equal(grown.height, 442, "grown height");
     assert.equal(grown.top, top, "grown top");
-    assert.equal(restored.height, 140, "restored height");
+    assert.equal(restored.height, 240, "restored height");
     assert.equal(autoAfterTemporary, true, "windowAutoSize after programmatic reports");
   });
 
@@ -407,7 +419,7 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     assert.equal(tallTemp.top, top, "top");
     assert.equal(tallAfter.height, 600, "height after");
   });
-  await height(140);
+  await height(240);
 
   const menuItems = await call("test.menuItems");
   const menu = menuItems.filter((item) => item.menu === "Edit");
@@ -624,9 +636,9 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   });
   await call("test.mouseDrag", { x: r4.width - 3, y: r4.height - 3, dx: -3000, dy: -3000 });
   const r5 = (await state()).frame;
-  await check("a corner drag stops at the minimum size (396 x 128 at 100%)", () => {
-    assert.equal(r5.width, 396, "width");
-    assert.equal(r5.height, 128, "height");
+  await check("a corner drag stops at the minimum size (405 x 197 at 100%)", () => {
+    assert.equal(r5.width, 405, "width");
+    assert.equal(r5.height, 197, "height");
     assert.equal(r5.x, r4.x, "x");
     assert.equal(r5.top, r4.top, "top");
   });
@@ -657,6 +669,13 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   await check("the tiled top left point is remembered for this display", async () => {
     const point = (await call("settings.get")).panelFrame.displays[s.screenKey];
     assert.deepEqual(point, { x: tile.x, y: tile.top });
+  });
+  // A frame set from outside below the minimum size grows to it, keeping its top left corner.
+  const smallTile = { x: beforeTile.frame.x, top: beforeTile.frame.top, width: 300, height: 100 };
+  await call("test.accessibilityResize", smallTile);
+  const smallTiled = (await state()).frame;
+  await check("a frame set through Accessibility below the minimum grows to 405 x 197", () => {
+    assert.deepEqual(smallTiled, { x: smallTile.x, y: smallTile.top - 197, width: 405, height: 197, top: smallTile.top }, "frame");
   });
   // Later checks move the panel relative to where it was, so put it back off the display edge.
   await call("test.moveTo", { x: beforeTile.frame.x, top: beforeTile.frame.top });
@@ -774,7 +793,7 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     calls = await helper.call("test.bridgeCalls");
     const st = await editorState();
     const reported = calls.resizes.at(-1) ?? 0;
-    expected = Math.min(Math.max(Math.ceil(reported), 128), Math.floor(Math.min(860, st.visibleFrameHeight)));
+    expected = Math.min(Math.max(Math.ceil(reported), st.minimumSize.height), Math.floor(Math.min(860, st.visibleFrameHeight)));
     return st;
   }, (st) => Math.abs(st.frame.height - expected) <= 2);
   await check("with auto-sizing on, the panel height follows the real editor's report", () => {
@@ -795,7 +814,7 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     assert.equal(coldState.visible, true, "visible");
     assert.equal(coldState.key, true, "key");
     assert.ok(calls.resizes.length > 0, `no window.resize before the panel showed (shown heights ${calls.shownHeights.join(", ")})`);
-    const firstReport = Math.min(Math.max(Math.ceil(calls.resizes[0]), 128), Math.floor(Math.min(860, coldState.visibleFrameHeight)));
+    const firstReport = Math.min(Math.max(Math.ceil(calls.resizes[0]), coldState.minimumSize.height), Math.floor(Math.min(860, coldState.visibleFrameHeight)));
     assert.ok(Math.abs(calls.shownHeights[0] - firstReport) <= 2,
       `first shown height ${calls.shownHeights[0]}, first content report ${firstReport} (reports ${calls.resizes.join(", ")})`);
   });

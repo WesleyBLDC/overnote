@@ -8,9 +8,6 @@ import WebKit
 /// position memory, content driven height with the top edge fixed, and the user height rule.
 @MainActor
 final class PanelController: NSObject, HelperHost, NSWindowDelegate {
-    /// Auto-height limits at 100% zoom; both scale with zoom.
-    static let autoMinimumHeight: CGFloat = 128
-    static let autoMaximumHeight: CGFloat = 860
     /// Height changes this small are ignored.
     static let heightTolerance: CGFloat = 2
 
@@ -22,9 +19,10 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     let panel: NotesPanel
     private var webView: NotesWebView?
-    private var bodyView: PanelBodyView?
-    /// Points of window below the note while a dropdown hangs past its bottom edge (`window.setOverhang`).
-    private(set) var overhang: CGFloat = 0
+    /// The editor's bars plus one line at the current zoom (`window.setMinimumSize`), nil until it reports.
+    private var reportedMinimum: CGSize?
+    /// The smallest the panel may be, for every way its size is set (`PanelSizing`).
+    var minimumSize: CGSize { PanelSizing.minimumSize(reported: reportedMinimum) }
     /// The app that was frontmost when the panel was shown; focus returns to it.
     private var previousApp: NSRunningApplication?
     private(set) var settings: Settings
@@ -88,7 +86,6 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     func prewarm(dispatcher: RPCDispatcher?) {
         let body = PanelBodyView(frame: NSRect(origin: .zero, size: panel.frame.size))
         body.autoresizingMask = [.width, .height]
-        bodyView = body
 
         let background = NSVisualEffectView(frame: body.bounds)
         // A dark, dense material: under the editor's darker tint it reads as solid dark glass.
@@ -142,8 +139,6 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         body.addSubview(webView)
         body.addSubview(strip)
         body.addSubview(overlay)
-        body.background = background
-        body.resizeOverlay = overlay
         panel.contentView = body
         self.webView = webView
         panel.onUserResize = { [weak self] start, end in self?.userDidResize(from: start, to: end) }
@@ -202,8 +197,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private func applyWindowSettings() {
         // Our own optional setting, default off.
         panel.sharingType = settings.hideWhileScreenSharing ? .none : .readOnly
-        let zoom = CGFloat(settings.zoom)
-        panel.minSize = NSSize(width: NotesPanel.minimumWidth, height: (Self.autoMinimumHeight * zoom).rounded())
+        panel.minSize = minimumSize
     }
 
     // MARK: - Showing and hiding
@@ -274,7 +268,6 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     func hide() {
         cancelPendingShow()
         guard panel.isVisible else { return }
-        applyOverhang(0)
         saveFrameNow()
         panel.orderOut(nil)
         // We never activate on purpose, but a save sheet can; give focus back.
@@ -312,37 +305,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         setFrame(
             PanelGeometry.placement(
                 stored: settings.panelFrame, displayKey: screen.positionKey, visible: screen.visibleFrame, width: width,
-                height: targetHeight(on: screen), minimumWidth: NotesPanel.minimumWidth))
-    }
-
-    /// The note's frame: the window without the room a hanging dropdown borrows below it.
-    var noteFrame: NSRect {
-        var frame = panel.frame
-        frame.origin.y += overhang
-        frame.size.height -= overhang
-        return frame
-    }
-
-    /// Lets a dropdown hang `height` points past the note's bottom edge: the window grows
-    /// downward by that much (never past the display's visible area), while the note keeps its
-    /// size and place. Zero gives the room back.
-    func applyOverhang(_ height: CGFloat) {
-        guard let bodyView else { return }
-        var wanted = max(0, height.rounded(.up))
-        if wanted > 0, let screen = panel.screen ?? screenUnderPointer {
-            wanted = min(wanted, max(0, noteFrame.minY - screen.visibleFrame.minY))
-        }
-        guard abs(wanted - overhang) >= 1 else { return }
-        let note = noteFrame
-        overhang = wanted
-        bodyView.overhang = wanted
-        setFrame(NSRect(x: note.minX, y: note.minY - wanted, width: note.width, height: note.height + wanted))
-        bodyView.placeBodyViews()
-        panel.invalidateShadow()
-        if wanted == 0 {
-            // Heights that arrived while the dropdown was open apply now.
-            applyHeight()
-        }
+                height: targetHeight(on: screen), minimum: minimumSize))
     }
 
     /// The first open frame: the default size, centered at the top of the display under the pointer.
@@ -358,13 +321,13 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     /// The height the panel should have now, before keeping it on screen.
     private func targetHeight(on screen: NSScreen) -> CGFloat {
-        let zoom = CGFloat(settings.zoom)
+        let minimum = minimumSize.height
         var height: CGFloat
         if let temporaryHeight {
-            height = min(max(temporaryHeight, Self.autoMinimumHeight * zoom), Self.autoMaximumHeight * zoom)
+            height = PanelSizing.autoHeight(temporaryHeight, minimum: minimum, zoom: settings.zoom)
         } else if settings.windowAutoSize {
             let content = contentHeight ?? (panel.isVisible ? panel.frame.height : NotesPanel.defaultHeight)
-            height = min(max(content, Self.autoMinimumHeight * zoom), Self.autoMaximumHeight * zoom)
+            height = PanelSizing.autoHeight(content, minimum: minimum, zoom: settings.zoom)
         } else if let saved = settings.panelFrame?.height {
             height = CGFloat(saved)
         } else {
@@ -372,13 +335,13 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
             // temporary growth.
             height = heightBeforeTemporary ?? panel.frame.height
         }
-        return min(max(height, panel.minSize.height), screen.visibleFrame.height).rounded()
+        return min(max(height, minimum), screen.visibleFrame.height).rounded()
     }
 
-    /// Clamps the width to the display and nudges the frame fully onto it, keeping the top
-    /// edge where it was whenever the frame fits.
+    /// Grows the frame to the minimum size, clamps it to the display, and nudges it fully onto
+    /// it, keeping the top edge where it was whenever the frame fits.
     private func keepOnScreen(_ frame: NSRect, visible: NSRect) -> NSRect {
-        PanelGeometry.keepOnScreen(frame, visible: visible, minimumWidth: NotesPanel.minimumWidth)
+        PanelGeometry.keepOnScreen(frame, visible: visible, minimum: minimumSize)
     }
 
     /// Every frame change the helper makes goes through here, so the window delegate never
@@ -395,8 +358,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     /// Applies the current target height with the top edge fixed.
     private func applyHeight(force: Bool = false) {
-        // While a dropdown hangs below the note, the note keeps its size; heights apply after.
-        guard overhang == 0, !panel.isUserResizing, !panel.inLiveResize, let screen = panel.screen ?? screenUnderPointer else { return }
+        guard !panel.isUserResizing, !panel.inLiveResize, let screen = panel.screen ?? screenUnderPointer else { return }
         let height = targetHeight(on: screen)
         guard force || abs(height - panel.frame.height) > Self.heightTolerance else { return }
         var frame = panel.frame
@@ -423,7 +385,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         saveFrameWork = nil
         guard let screen = panel.screen else { return }
         let saved = PanelGeometry.recording(
-            noteFrame, displayKey: screen.positionKey, in: settings.panelFrame, autoSize: settings.windowAutoSize,
+            panel.frame, displayKey: screen.positionKey, in: settings.panelFrame, autoSize: settings.windowAutoSize,
             temporary: temporaryHeight != nil)
         guard saved != settings.panelFrame else { return }
         do {
@@ -465,20 +427,21 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         if panel.isVisible { scheduleFrameSave() }
     }
 
-    /// While a dropdown hangs below the note, the window's bottom edge is not the note's, so
-    /// only the helper resizes it. Everything else may resize the panel as any window.
-    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        applyingFrame || overhang == 0 ? frameSize : sender.frame.size
-    }
-
     /// A resize the helper did not make and that is not a live resize: system tiling or a
     /// window manager setting the frame through Accessibility. The panel keeps that frame as
-    /// the person's own resize.
+    /// the person's own resize, grown to the minimum size first if it is smaller (a frame set
+    /// from outside skips the window's `minSize`). A frame at least the minimum stays exactly.
     func windowDidResize(_ notification: Notification) {
         guard !applyingFrame, !panel.isUserResizing, !panel.inLiveResize else { return }
         let start = lastFrame
         lastFrame = panel.frame
-        guard panel.isVisible, overhang == 0, start != .zero else { return }
+        guard panel.isVisible, start != .zero else { return }
+        let minimum = minimumSize
+        if panel.frame.width < minimum.width || panel.frame.height < minimum.height,
+            let screen = panel.screen ?? screenUnderPointer
+        {
+            setFrame(keepOnScreen(panel.frame, visible: screen.visibleFrame))
+        }
         userDidResize(from: start, to: panel.frame)
     }
 
@@ -550,16 +513,10 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     func resizeWindow(contentHeight height: Double, temporary: Bool) async {
         if recordEvents { resizeReports.append(height) }
         let rounded = CGFloat(height).rounded(.up)
-        if overhang > 0 {
-            // The note keeps its size while a dropdown hangs below it; remember the content height.
-            if !temporary { contentHeight = rounded }
-            return
-        }
         if temporary {
             // Temporary growth only grows: a panel that is already tall enough stays as it is,
             // and so does an earlier, taller temporary growth.
-            let zoom = CGFloat(settings.zoom)
-            let wanted = min(max(rounded, Self.autoMinimumHeight * zoom), Self.autoMaximumHeight * zoom)
+            let wanted = PanelSizing.autoHeight(rounded, minimum: minimumSize.height, zoom: settings.zoom)
             guard panel.frame.height < wanted.rounded() - Self.heightTolerance else { return }
             if temporaryHeight == nil { heightBeforeTemporary = panel.frame.height }
             temporaryHeight = wanted
@@ -580,8 +537,17 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         }
     }
 
-    func setOverhang(_ height: Double) async {
-        applyOverhang(CGFloat(height))
+    /// A new minimum from the editor (its bars or the zoom changed): a smaller panel grows to it,
+    /// keeping its top edge. The growth goes through `setFrame`, so it is the helper's own frame
+    /// change and never reads as the person's resize.
+    func setMinimumSize(width: Double, height: Double) async {
+        let reported = CGSize(width: width, height: height)
+        guard reported != reportedMinimum else { return }
+        reportedMinimum = reported
+        panel.minSize = minimumSize
+        if panel.frame.width < minimumSize.width || panel.frame.height < minimumSize.height {
+            applyHeight(force: true)
+        }
     }
 
     func setDragRegions(_ rects: [DragRect]) async {

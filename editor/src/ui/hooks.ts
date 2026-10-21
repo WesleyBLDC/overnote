@@ -146,6 +146,114 @@ export function useResizeReporter(app: HTMLElement | null, api: Api, options: Re
   }, [app, api, autoSize, overlayRem]);
 }
 
+/** Room kept for the title when the panel is at its narrowest, in rem, so a few characters always show. */
+const TITLE_MIN_REM = 6;
+
+/** The width of a bar's contents: its children side by side, with their margins, the gaps, and its padding. */
+function contentWidth(element: Element | null): number {
+  if (!element) return 0;
+  const style = getComputedStyle(element);
+  const children = (Array.from(element.children) as HTMLElement[]).filter((child) => {
+    const childStyle = getComputedStyle(child);
+    return childStyle.display !== "none" && childStyle.position !== "absolute" && childStyle.position !== "fixed";
+  });
+  let total = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  for (const child of children) {
+    const childStyle = getComputedStyle(child);
+    total +=
+      child.getBoundingClientRect().width + parseFloat(childStyle.marginLeft) + parseFloat(childStyle.marginRight);
+  }
+  return total + (parseFloat(style.columnGap) || 0) * Math.max(0, children.length - 1);
+}
+
+/**
+ * The smallest panel that still shows every bar and one line of the note, in points (CSS px, which
+ * already include zoom): the toolbar with its controls and some of the title, the bottom bar with the
+ * counter or the format bar, and one line of note text between them.
+ */
+export function measureMinimumSize(app: HTMLElement): { width: number; height: number } | null {
+  const toolbar = app.querySelector<HTMLElement>(".toolbar");
+  const footer = app.querySelector<HTMLElement>(".footer");
+  const content = app.querySelector<HTMLElement>(".content");
+  const note = app.querySelector<HTMLElement>(".note-editor");
+  if (!toolbar || !footer || !content || !note) return null;
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 14;
+  const bar = getComputedStyle(toolbar);
+  const sides = Math.max(
+    contentWidth(toolbar.querySelector(".toolbar-leading")),
+    contentWidth(toolbar.querySelector(".toolbar-actions")),
+  );
+  const toolbarWidth =
+    parseFloat(bar.paddingLeft) +
+    parseFloat(bar.paddingRight) +
+    2 * sides +
+    2 * (parseFloat(bar.columnGap) || 0) +
+    TITLE_MIN_REM * rem;
+  const bottom = getComputedStyle(footer);
+  const columns = bottom.gridTemplateColumns.split(" ").map(parseFloat);
+  const footerWidth =
+    parseFloat(bottom.paddingLeft) +
+    parseFloat(bottom.paddingRight) +
+    (columns[0] ?? 0) +
+    (columns.at(-1) ?? 0) +
+    contentWidth(footer.querySelector(".footer-center"));
+  const inner = getComputedStyle(content);
+  const height =
+    toolbar.getBoundingClientRect().height +
+    footer.getBoundingClientRect().height +
+    parseFloat(inner.paddingTop) +
+    parseFloat(inner.paddingBottom) +
+    parseFloat(getComputedStyle(note).lineHeight);
+  if (!Number.isFinite(height) || height <= 0) return null;
+  return { width: Math.ceil(Math.max(toolbarWidth, footerWidth)), height: Math.ceil(height) };
+}
+
+/**
+ * Tells the helper the smallest the panel may be (window.setMinimumSize): the bars plus one line at
+ * the current zoom. It reports again whenever a bar changes size, for example on a zoom change or when
+ * the format bar replaces the counter; the helper keeps at least 405 x 197 and grows a smaller panel.
+ */
+export function useMinimumSizeReporter(app: HTMLElement | null, api: Api) {
+  useEffect(() => {
+    if (!app) return;
+    let last = "";
+    let scheduled = false;
+    const report = () => {
+      scheduled = false;
+      const size = measureMinimumSize(app);
+      if (!size) return;
+      const key = `${size.width}x${size.height}`;
+      if (key === last) return;
+      last = key;
+      void api.window.setMinimumSize(size.width, size.height).catch(() => undefined);
+    };
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(report);
+    };
+    const resizes = new ResizeObserver(schedule);
+    const observeBars = () => {
+      resizes.disconnect();
+      for (const bar of Array.from(app.querySelectorAll(".toolbar, .toolbar-actions, .footer, .footer-center > *"))) {
+        resizes.observe(bar);
+      }
+    };
+    const mutations = new MutationObserver(() => {
+      observeBars();
+      schedule();
+    });
+    const footer = app.querySelector(".footer");
+    if (footer) mutations.observe(footer, { childList: true, subtree: true });
+    observeBars();
+    schedule();
+    return () => {
+      resizes.disconnect();
+      mutations.disconnect();
+    };
+  }, [app, api]);
+}
+
 const INTERACTIVE = "button, a[href], input, select, textarea, [role=button], [contenteditable=true]";
 
 /** The parts of `rect` not covered by `hole`: up to four rectangles (above, below, left, right). */
