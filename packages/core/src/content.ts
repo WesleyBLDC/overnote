@@ -62,22 +62,26 @@ function hasPlainText(block: PMNode): boolean {
 /**
  * Inserts `suffix` as plain text at the end of the line the title comes from: the first textblock
  * with any text (as in deriveTitle, which skips empty blocks), after its last non-space character
- * on the first line, or the first textblock when the note has no text.
+ * on the first line, or the first textblock when the note has no text. On a blank line the suffix
+ * starts the line, so its leading spaces are dropped rather than added to the document.
  */
 function appendToTitleLine(node: PMNode, suffix: string): PMNode {
   let at: number | null = null;
-  let firstBlock: number | null = null;
+  let lineStart: number | null = null;
   node.descendants((child, pos) => {
     if (at !== null) return false;
     if (!child.isTextblock) return true;
-    firstBlock ??= pos + 1;
-    if (hasPlainText(child)) at = titleLineEnd(child, pos + 1);
+    const hasText = hasPlainText(child);
+    if (hasText || lineStart === null) lineStart = pos + 1;
+    if (hasText) at = titleLineEnd(child, pos + 1);
     return false;
   });
   // Every valid document has a textblock: a doc and a list item both start with a paragraph or a list.
-  const position = at ?? firstBlock;
-  if (position === null) return node;
-  return new Transform(node).insert(position, node.type.schema.text(suffix)).doc;
+  if (lineStart === null) return node;
+  const position = at ?? lineStart;
+  const text = position === lineStart ? suffix.trimStart() : suffix;
+  if (text === "") return node;
+  return new Transform(node).insert(position, node.type.schema.text(text)).doc;
 }
 
 /**

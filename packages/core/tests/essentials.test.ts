@@ -66,7 +66,9 @@ describe("stored content", () => {
     });
     expect(copy("**Plan**  \nsecond line").markdown).toBe("**Plan** copy  \nsecond line");
     expect(copy("```\nfirst\nsecond\n```").text).toBe("first copy\nsecond");
-    expect(copy("").title).toBe("copy");
+    // A blank title line starts with the suffix, without its leading space.
+    expect(copy("```\n\nsecond\n```").markdown).toBe("```\ncopy\nsecond\n```");
+    expect(copy("")).toMatchObject({ title: "copy", text: "copy" });
   });
 });
 

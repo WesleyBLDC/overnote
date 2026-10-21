@@ -169,7 +169,7 @@ The helper stores `NoteContent` verbatim.
 
 **Duplicate titles:** a copy's title is never changed apart from its document, since the title is derived from the first line and the next content save would derive it again.
 Search Notes' Duplicate adds the suffix " (Copy)" by sending `duplicateContent(source, " (Copy)")` with `notes.duplicate`.
-`duplicateContent` inserts the suffix as plain text into the line the title comes from: the first textblock with any text (empty blocks are skipped, as in the title rule), right after the last non-space character before its first hard break or newline, or at the start of that line when it is blank.
+`duplicateContent` inserts the suffix as plain text into the line the title comes from: the first textblock with any text (empty blocks are skipped, as in the title rule), right after the last non-space character before its first hard break or newline, or at the start of that line when it is blank (the suffix's leading spaces are then dropped).
 Every field is then derived from the suffixed document, so `title`, `rawContent`, `markdown`, `text`, and the helper's `title_fold` agree, and previews show the suffixed first line.
 For example `# Groceries` becomes `# Groceries (Copy)`, and `**Plan**` becomes `**Plan** (Copy)`.
 The editor's ⌘D sends only `id` and makes an exact copy, with no suffix.

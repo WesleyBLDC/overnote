@@ -279,7 +279,7 @@ public final class RPCDispatcher: Sendable {
         return backups
     }
 
-    /// At most this many drag rects; the editor sends a handful at most.
+    /// The `NoteContent` fields; any of them in `notes.duplicate` means the caller sent content.
     static let noteContentKeys = ["rawContent", "markdown", "text", "title"]
 
     /// `NoteContent` fields as callers send them (built with core): `rawContent` is required.
@@ -291,6 +291,7 @@ public final class RPCDispatcher: Sendable {
             title: try p.optionalString("title") ?? "")
     }
 
+    /// At most this many drag rects; the editor sends a handful at most.
     static let maxDragRects = 64
 
     /// Validates `{ rects: [{ x, y, width, height }] }`: finite numbers, no negative sizes.

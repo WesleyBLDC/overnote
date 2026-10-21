@@ -279,14 +279,24 @@ export class MockStore {
       return { count };
     },
     "notes.duplicate": (params) => {
-      const { id, ...content } = params;
-      if ("titleSuffix" in content) {
+      if ("titleSuffix" in params) {
         throw new MockRpcError(rpc.ErrorCode.BadParams, "titleSuffix was removed in protocol v3.0");
       }
-      if (Object.keys(content).length > 0 && !("rawContent" in content)) {
+      const sent = "rawContent" in params || "markdown" in params || "text" in params || "title" in params;
+      if (sent && !("rawContent" in params)) {
         throw new MockRpcError(rpc.ErrorCode.BadParams, "rawContent is required");
       }
-      const source = this.require(id);
+      const source = this.require(params.id);
+      // Like the helper: sent content is stored as given, with missing optional fields empty.
+      const content =
+        "rawContent" in params
+          ? {
+              rawContent: params.rawContent,
+              markdown: params.markdown ?? "",
+              text: params.text ?? "",
+              title: params.title ?? "",
+            }
+          : {};
       const at = this.now();
       const copy: Note = {
         ...source,
