@@ -252,6 +252,8 @@ export class NoteSession {
   }
 
   private async saveContent(note: Note): Promise<boolean> {
+    // Each refused attempt may keep both versions again; one save says so at most once.
+    let toldBothKept = false;
     for (let attempt = 0; attempt < SAVE_ATTEMPTS; attempt++) {
       const synced = this.state.current?.id === note.id ? this.state.current : note;
       const version = this.editVersion;
@@ -276,17 +278,27 @@ export class NoteSession {
       // Still composing after the wait: no merge, so the edits stay unsaved for the next save.
       if (!(await this.whenComposed())) return false;
       if (this.state.current?.id !== note.id) return false;
-      if (!this.rebase(synced, result.note)) return true;
+      const merge = this.rebase(synced, result.note);
+      if (merge.conflicted && !toldBothKept) {
+        toldBothKept = true;
+        this.noticeBothKept();
+      }
+      if (!merge.unsaved) return true;
     }
     return false;
   }
 
+  private noticeBothKept(): void {
+    this.notify("This note also changed elsewhere, so both versions were kept", "info");
+  }
+
   /**
    * Merges the editor's content, which started from `synced`, onto the newer `stored` version, shows
-   * the result, and makes `stored` the version the next save expects. Returns true when the merge
-   * still has unsaved edits, false when the editor now matches the stored note.
+   * the result, and makes `stored` the version the next save expects. `unsaved` is true when the
+   * merge still has unsaved edits, false when the editor now matches the stored note; `conflicted`
+   * when both versions of some blocks were kept (the caller tells the person).
    */
-  private rebase(synced: Note, stored: Note): boolean {
+  private rebase(synced: Note, stored: Note): { unsaved: boolean; conflicted: boolean } {
     const merge = mergeDocs(docFromNote(synced), this.editor.getDoc(), docFromNote(stored));
     this.loading = true;
     try {
@@ -295,10 +307,9 @@ export class NoteSession {
       this.loading = false;
     }
     this.setState({ current: stored });
-    if (merge.conflicted) this.notify("This note also changed elsewhere, so both versions were kept", "info");
-    if (!merge.matchesRemote) return true;
+    if (!merge.matchesRemote) return { unsaved: true, conflicted: merge.conflicted };
     this.savedVersion = this.editVersion;
-    return false;
+    return { unsaved: false, conflicted: merge.conflicted };
   }
 
   /**
@@ -335,7 +346,9 @@ export class NoteSession {
     const current = this.state.current;
     // A save that ran first may already have merged this version, or saved past it.
     if (this.paused || current?.id !== stored.id || current.updatedAt >= stored.updatedAt) return true;
-    if (this.rebase(current, stored)) this.schedule();
+    const merge = this.rebase(current, stored);
+    if (merge.conflicted) this.noticeBothKept();
+    if (merge.unsaved) this.schedule();
     return true;
   }
 

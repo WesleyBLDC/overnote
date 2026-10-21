@@ -366,6 +366,46 @@ test("a window data reply older than the last save is not loaded over the editor
   await expect(bothKept(page)).toHaveCount(0);
 });
 
+test("a save whose retries each keep both versions says so once", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  // Right before each of the editor's next two saves, another writer changes the same place as the
+  // editor: first it rewrites the paragraph being typed in, then it adds a paragraph where the
+  // editor's kept copy of that paragraph sits. Both merges keep both versions.
+  await page.evaluate(() => {
+    type Update = (params: Record<string, unknown>) => unknown;
+    const { store } = (
+      window as unknown as {
+        __overnoteMock: {
+          store: { handlers: Record<string, Update>; notes: Map<string, { rawContent: string; text: string }> };
+        };
+      }
+    ).__overnoteMock;
+    const update = store.handlers["notes.update"] as Update;
+    let writes = 0;
+    store.handlers["notes.update"] = (params) => {
+      const note = store.notes.get(String(params.id));
+      if ("rawContent" in params && note && writes < 2) {
+        writes++;
+        const doc = JSON.parse(note.rawContent) as { content: object[] };
+        const paragraph = { type: "paragraph", content: [{ type: "text", text: `Outside ${writes}` }] };
+        doc.content.splice(0, writes === 1 ? 1 : 0, paragraph);
+        const text = writes === 1 ? "Outside 1" : `Outside ${writes}\n\n${note.text}`;
+        update({ id: params.id, rawContent: JSON.stringify(doc), text, markdown: text, title: `Outside ${writes}` });
+      }
+      return update(params);
+    };
+  });
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  await page.clock.runFor(350);
+  // Two refused saves, each merge keeping both versions, then the third save goes through.
+  await expect.poll(async () => (await contentSaves(page)).length).toBe(3);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine\n\nOutside 2\n\nOutside 1");
+  await expect(bothKept(page)).toHaveCount(1);
+});
+
 test("a save that keeps meeting newer outside changes gives up after three tries, keeps the edits, and says so once", async ({
   page,
 }) => {
