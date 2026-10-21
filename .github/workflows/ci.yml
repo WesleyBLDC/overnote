@@ -22,9 +22,6 @@ env:
   # image ever lacks one, set the repository variable OVERNOTE_WINDOW_E2E to 0 to skip only
   # that step; unset, scripts/verify.sh runs it whenever CI is true.
   OVERNOTE_WINDOW_E2E: ${{ vars.OVERNOTE_WINDOW_E2E }}
-  # The panel window step also saves a picture of the panel with every dropdown open, at the
-  # minimum size and one a little larger, light and dark, for the panel-screenshots artifact.
-  OVERNOTE_E2E_SCREENSHOTS: ${{ github.workspace }}/.ci-screenshots
 
 jobs:
   verify:
@@ -75,13 +72,17 @@ jobs:
       # the Raycast build. It names the step that failed.
       - name: Verify
         run: npm run verify
+        env:
+          # The panel window step also saves a picture of the panel with every dropdown open, at
+          # the minimum size and one a little larger, light and dark (panel-screenshots below).
+          OVERNOTE_E2E_SCREENSHOTS: ${{ runner.temp }}/panel-screenshots
 
       - name: Upload panel screenshots
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: panel-screenshots
-          path: ${{ env.OVERNOTE_E2E_SCREENSHOTS }}
+          path: ${{ runner.temp }}/panel-screenshots
           if-no-files-found: warn
           retention-days: 14
 
