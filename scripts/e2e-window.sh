@@ -788,14 +788,17 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   }
   await helper.call("settings.set", { windowAutoSize: true });
   // The editor may still report new heights (fonts, lazy chunks); follow the latest report.
+  // The state is read before the reports, so a report that lands between the two reads is
+  // never missed: with no report yet the expected height would be the minimum, which a panel
+  // already resized to that report also has.
   let expected = 0;
   const followed = await poll(async () => {
-    calls = await helper.call("test.bridgeCalls");
     const st = await editorState();
+    calls = await helper.call("test.bridgeCalls");
     const reported = calls.resizes.at(-1) ?? 0;
     expected = Math.min(Math.max(Math.ceil(reported), st.minimumSize.height), Math.floor(Math.min(860, st.visibleFrameHeight)));
     return st;
-  }, (st) => Math.abs(st.frame.height - expected) <= 2);
+  }, (st) => calls.resizes.length > 0 && Math.abs(st.frame.height - expected) <= 2);
   await check("with auto-sizing on, the panel height follows the real editor's report", () => {
     assert.ok(calls.resizes.at(-1) > 0, "no window.resize");
     assert.ok(Math.abs(followed.frame.height - expected) <= 2, `height ${followed.frame.height}, expected ${expected}`);
