@@ -100,7 +100,8 @@ test("highlighting waits for a pause in typing and ignores edits outside the blo
   await page.keyboard.press("Enter");
   await page.keyboard.type("import os");
   await expect(editor(page).locator(".hljs-keyword")).toHaveText(["return", "import"]);
-  expect((await highlight()).stale).toBe(false);
+  // A slow runner can pause mid line, highlight "import", and owe one more pass for " os".
+  await expect.poll(async () => (await highlight()).stale).toBe(false);
 });
 
 test("Backspace in an empty code block makes a paragraph", async ({ page }) => {
