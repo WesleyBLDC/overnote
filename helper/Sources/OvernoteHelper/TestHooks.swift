@@ -33,6 +33,7 @@ final class TestHooks {
             let frame = panel.frame
             return [
                 "visible": .bool(panel.isVisible),
+                "windowNumber": .int(Int64(panel.windowNumber)),
                 "showPending": .bool(controller.isShowPending),
                 "key": .bool(panel.isKeyWindow),
                 "appActive": .bool(NSApp.isActive),
@@ -95,15 +96,33 @@ final class TestHooks {
                 }
             })
         case "test.keyDown":
-            // A key event dispatched inside this process only (NSApp.sendEvent), the way AppKit
-            // delivers a real key press to our key panel. Never global input.
-            let key = try p.string("key")
-            guard let event = NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: (try p.optionalBool("command") ?? false) ? [.command] : [],
-                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber, context: nil,
-                characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: try Self.keyCode(key))
-            else { throw RPCError.internal("Could not make a key event") }
-            NSApp.sendEvent(event)
+            // A key press (down, then up) dispatched inside this process only (NSApp.sendEvent),
+            // the way AppKit delivers a real key press to our key panel. Never global input.
+            // `key` is a character ("k", ",", ":") or a named key ("Return", "ArrowDown").
+            let key = try Self.key(try p.string("key"))
+            var flags: NSEvent.ModifierFlags = key.flags
+            if try p.optionalBool("command") ?? false { flags.insert(.command) }
+            if try p.optionalBool("option") ?? false { flags.insert(.option) }
+            if try p.optionalBool("shift") ?? false { flags.insert(.shift) }
+            if try p.optionalBool("control") ?? false { flags.insert(.control) }
+            for type in [NSEvent.EventType.keyDown, .keyUp] {
+                guard let event = NSEvent.keyEvent(
+                    with: type, location: .zero, modifierFlags: flags,
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber, context: nil,
+                    characters: key.characters, charactersIgnoringModifiers: key.characters, isARepeat: false,
+                    keyCode: key.code)
+                else { throw RPCError.internal("Could not make a key event") }
+                NSApp.sendEvent(event)
+            }
+            return [:]
+        case "test.setAppearance":
+            // Light or dark for this app only, as the system setting would give it; the page's
+            // prefers-color-scheme follows the web view's effective appearance.
+            switch try p.string("name") {
+            case "light": NSApp.appearance = NSAppearance(named: .aqua)
+            case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+            case let name: throw RPCError.badParams("Unknown appearance: \(name)")
+            }
             return [:]
         case "test.hitTest":
             // Which view a click at { x, y } (points from the content's top left) would reach.
@@ -247,13 +266,36 @@ final class TestHooks {
         return event
     }
 
-    private static func keyCode(_ key: String) throws -> UInt16 {
-        switch key.lowercased() {
-        case "w": return 13
-        case "a": return 0
-        case "c": return 8
-        default: throw RPCError.badParams("Unsupported key: \(key)")
+    /// ANSI virtual key codes, for the characters the end to end checks type.
+    private static let keyCodes: [Character: UInt16] = [
+        "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12,
+        "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23,
+        "=": 24, "9": 25, "7": 26, "-": 27, "8": 28, "0": 29, "]": 30, "o": 31, "u": 32, "[": 33, "i": 34,
+        "p": 35, "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42, ",": 43, "/": 44, "n": 45, "m": 46,
+        ".": 47, " ": 49, "`": 50,
+    ]
+    /// Characters typed with Shift, and the key that types them.
+    private static let shifted: [Character: Character] = [
+        ":": ";", "?": "/", "<": ",", ">": ".", "_": "-", "+": "=", "!": "1", "@": "2", "#": "3",
+    ]
+
+    private static func key(_ name: String) throws -> (code: UInt16, characters: String, flags: NSEvent.ModifierFlags) {
+        let arrows: NSEvent.ModifierFlags = [.function, .numericPad]
+        switch name {
+        case "Return": return (36, "\r", [])
+        case "Tab": return (48, "\t", [])
+        case "Escape": return (53, "\u{1b}", [])
+        case "ArrowLeft": return (123, String(UnicodeScalar(NSLeftArrowFunctionKey)!), arrows)
+        case "ArrowRight": return (124, String(UnicodeScalar(NSRightArrowFunctionKey)!), arrows)
+        case "ArrowDown": return (125, String(UnicodeScalar(NSDownArrowFunctionKey)!), arrows)
+        case "ArrowUp": return (126, String(UnicodeScalar(NSUpArrowFunctionKey)!), arrows)
+        default: break
         }
+        guard name.count == 1, let character = name.first else { throw RPCError.badParams("Unsupported key: \(name)") }
+        if let base = shifted[character], let code = keyCodes[base] { return (code, name, [.shift]) }
+        if character.isUppercase, let code = keyCodes[Character(character.lowercased())] { return (code, name, [.shift]) }
+        guard let code = keyCodes[character] else { throw RPCError.badParams("Unsupported key: \(name)") }
+        return (code, name, [])
     }
 }
 

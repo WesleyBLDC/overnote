@@ -30,9 +30,16 @@
 # a condition with a timeout, and every assertion carries the name of its check. A failure
 # prints that name, the script line, and a snapshot of the window state.
 #
+# With OVERNOTE_E2E_SCREENSHOTS set to a folder (CI only), a last pass loads the real editor
+# with a long note, sizes the panel to 405 x 197 and 480 x 260, opens every dropdown with
+# in-process key and mouse events, checks it stays inside the panel, and saves a picture of
+# the panel window (screencapture -l) for each, in light and dark appearance, plus the panel
+# at rest and in a frame set through Accessibility (tiled to the left half).
+#
 # Environment:
-#   HELPER            helper binary (default assets/bin/OvernoteHelper)
-#   OVERNOTE_LOG_DIR  on failure, copy the helper logs here (CI uploads this folder)
+#   HELPER                     helper binary (default assets/bin/OvernoteHelper)
+#   OVERNOTE_LOG_DIR           on failure, copy the helper logs here (CI uploads this folder)
+#   OVERNOTE_E2E_SCREENSHOTS   save the screenshot pass here (CI uploads it as panel-screenshots)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -82,6 +89,7 @@ const { spawn, execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 
 const { HELPER, PROBE, TMP, CAPTURE, EDITOR_DIR } = process.env;
+const SHOTS = process.env.OVERNOTE_E2E_SCREENSHOTS || "";
 const socketPath = `${TMP}/run/helper.sock`;
 const argsFor = (support, editorDir) => ["--support-dir", support, "--socket", socketPath,
   "--pid-file", `${TMP}/run/helper.pid`, "--editor-dir", editorDir, "--test-hooks"];
@@ -211,6 +219,197 @@ const panelWindow = (pid, state) =>
 /** Mouse downs the page saw, as rounded client x positions, in arrival order. */
 const pageDownsSetup = "(window.__bnDowns = [], document.addEventListener('mousedown', (e) => window.__bnDowns.push(Math.round(e.clientX)), true), 0)";
 const near = (x) => (value) => Math.abs(value - x) <= 1;
+
+/**
+ * The screenshot pass (OVERNOTE_E2E_SCREENSHOTS): the real editor at the minimum size and one
+ * a little larger, every dropdown open in turn, light and dark, each one checked to stay inside
+ * the panel and saved as a picture of the panel window alone.
+ */
+async function screenshots() {
+  fs.mkdirSync(SHOTS, { recursive: true });
+  args = argsFor(`${TMP}/support-shots`, EDITOR_DIR);
+  helper = await start();
+  const rpc = helper.call;
+  const st = async () => (lastState = await rpc("test.windowState"));
+  const js = (expression) => rpc("test.js", { expression });
+  const key = (k, mods = {}) => rpc("test.keyDown", { key: k, ...mods });
+  const readies = async () => (await rpc("test.bridgeCalls")).methods.filter((m) => m === "system.ready").length;
+  await until("screenshots: the real editor loads", readies, (n) => n === 1, PAGE_LOAD_MS);
+  await rpc("settings.set", { windowAutoSize: false, showFormatBar: false });
+
+  // A note long enough to scroll at every size: a title, a line with a link, then numbered lines.
+  const text = (t, marks) => ({ type: "text", text: t, ...(marks ? { marks } : {}) });
+  const paragraph = (...content) => ({ type: "paragraph", content });
+  const lines = [
+    paragraph(text("Shopping list")),
+    paragraph(text("Visit "), text("the market", [{ type: "link", attrs: { href: "https://example.com" } }]),
+      text(" early for milk, eggs, and bread.")),
+  ];
+  for (let i = 1; i <= 24; i++) lines.push(paragraph(text(`Line ${i}: apples, pears, and a loaf of rye bread`)));
+  lines.push(paragraph(text("Last line of the list")));
+  const rawContent = JSON.stringify({ type: "doc", content: lines });
+  const plain = lines.map((p) => p.content.map((t) => t.text).join("")).join("\n");
+
+  /** A fresh page showing a fresh copy of the seeded note, focused, with nothing open. */
+  const openSeeded = async () => {
+    const before = await readies();
+    await rpc("settings.set", { showFormatBar: false });
+    await js("(location.reload(), 0)");
+    await until("screenshots: the editor reloads", readies, (n) => n === before + 1, PAGE_LOAD_MS);
+    const note = await rpc("notes.create", { rawContent, markdown: plain, text: plain, title: "Shopping list" });
+    await rpc("window.show", { noteId: note.id });
+    await until("screenshots: the seeded note is open and focused", () => js(
+      "(() => { const e = document.querySelector('.note-editor'); return !!e && e.textContent.includes('Last line of the list') && !!document.activeElement?.closest('.note-editor'); })()",
+    ), (ok) => ok === true, PAGE_LOAD_MS);
+    await until("screenshots: the panel is key", st, (s) => s.visible && s.key);
+    // ProseMirror puts back a caret that a key moves within 200 ms of a focus; let that pass.
+    await sleep(300);
+  };
+
+  /** Waits until the element is laid out, unmoving, and done animating. */
+  const settled = async (selector) => {
+    let last = "";
+    let same = 0;
+    await until(`screenshots: ${selector} opens and settles`, () => js(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const moving = document.getAnimations().some((a) => a.playState === "running");
+      return moving ? "moving" : [r.left, r.top, r.width, r.height].map(Math.round).join(",");
+    })()`), (value) => {
+      if (value && value !== "moving" && value === last) same++; else same = 0;
+      last = value;
+      return same >= 3;
+    }, UI_MS);
+  };
+
+  /** Where the element sits in the panel, and whether anything covers it, as the Playwright check reads it. */
+  const measure = (selector) => js(`(() => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    const app = element.closest(".app").getBoundingClientRect();
+    const box = element.getBoundingClientRect();
+    let opacity = 1;
+    for (let node = element; node; node = node.parentElement) opacity *= parseFloat(getComputedStyle(node).opacity);
+    const background = getComputedStyle(element).backgroundColor;
+    const alpha = /rgba\\([^)]*,\\s*([\\d.]+)\\)/.exec(background)?.[1];
+    const r = parseFloat(getComputedStyle(element).borderTopLeftRadius) + 2;
+    const points = [[box.left + r, box.top + r], [box.right - r, box.top + r], [box.left + r, box.bottom - r],
+      [box.right - r, box.bottom - r], [(box.left + box.right) / 2, (box.top + box.bottom) / 2]];
+    return {
+      app: [app.width, app.height],
+      inside: { top: box.top - app.top, bottom: app.bottom - box.bottom, left: box.left - app.left, right: app.right - box.right },
+      opacity, alpha: alpha === undefined ? 1 : parseFloat(alpha),
+      covered: points.filter(([x, y]) => !element.contains(document.elementFromPoint(x, y))).length,
+      height: box.height,
+    };
+  })()`);
+
+  const capture = async (name) => {
+    const s = await st();
+    const file = `${SHOTS}/${name}.png`;
+    await until(`screenshots: the window server shows the panel for ${name}`,
+      () => panelWindow(helper.child.pid, s), (w) => w?.onscreen === true && w.id === s.windowNumber);
+    execFileSync("screencapture", ["-x", "-o", "-l", String(s.windowNumber), file]);
+    assert.ok(fs.statSync(file).size > 0, `${file} is empty`);
+    console.log(`[e2e] captured ${name}.png (${s.frame.width} x ${s.frame.height})`);
+  };
+
+  const resize = async (width, height) => {
+    await rpc("test.simulateUserResize", { width, height });
+    await until(`screenshots: the panel and page are ${width} x ${height}`, async () => {
+      const s = await st();
+      const page = await js("[innerWidth, innerHeight]");
+      return [s.frame.width, s.frame.height, ...page];
+    }, (v) => v[0] === width && v[1] === height && v[2] === width && Math.abs(v[3] - height) <= 1);
+  };
+
+  /** Clicks the element's middle with an in-process mouse event. */
+  const click = async (selector) => {
+    const [x, y] = await js(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    await rpc("test.mouseDown", { x, y });
+  };
+
+  // Puts the caret inside the link text through the DOM selection, which ProseMirror follows.
+  const caretInLink = "(() => { const a = document.querySelector('.note-editor a'); getSelection().collapse(a.firstChild, 2); return true; })()";
+  const dropdowns = [
+    { name: "settings", selector: "[data-testid=command-panel]", open: () => key(",", { command: true }) },
+    { name: "actions", selector: "[data-testid=command-panel]", open: () => key("k", { command: true }) },
+    { name: "browse", selector: "[data-testid=command-panel]", open: () => key("p", { command: true }) },
+    {
+      name: "slash-menu-last-line", selector: "[data-testid=slash-menu]",
+      open: async () => { await key("ArrowDown", { command: true }); await key("Return"); await key("/"); },
+    },
+    {
+      name: "emoji-picker", selector: "[data-testid=emoji-picker]",
+      open: async () => {
+        await key("ArrowUp", { command: true });
+        await key("ArrowRight", { command: true });
+        for (const k of [" ", ":", "s", "m"]) await key(k);
+      },
+    },
+    {
+      name: "link-popover", selector: "[data-testid=link-popover]",
+      open: async () => {
+        await js(caretInLink);
+        await poll(() => js("getSelection().anchorNode?.parentElement?.closest('a') !== null"), (ok) => ok === true);
+        await key("l", { command: true });
+      },
+    },
+    {
+      name: "format-bar-heading-menu", selector: ".menu",
+      open: async () => {
+        await key(",", { command: true, option: true });
+        await until("screenshots: the format bar shows", () => js("!!document.querySelector('[data-testid=format-bar]')"), (ok) => ok);
+        await click("[data-testid=format-bar] button[aria-label=Heading]");
+      },
+    },
+  ];
+
+  await rpc("window.show");
+  visibleSince = visibleSince || Date.now();
+  for (const scheme of ["light", "dark"]) {
+    await rpc("test.setAppearance", { name: scheme });
+    await until(`screenshots: the page follows the ${scheme} appearance`,
+      () => js("matchMedia('(prefers-color-scheme: dark)').matches"), (dark) => dark === (scheme === "dark"));
+    for (const [width, height] of [[405, 197], [480, 260]]) {
+      await openSeeded();
+      await resize(width, height);
+      await check(`screenshots: ${scheme} ${width} x ${height} at rest`, () => capture(`${scheme}-${width}x${height}-rest`));
+      for (const dropdown of dropdowns) {
+        await openSeeded();
+        await resize(width, height);
+        await dropdown.open();
+        await settled(dropdown.selector);
+        const m = await measure(dropdown.selector);
+        const label = `${dropdown.name} at ${width} x ${height} (${scheme})`;
+        await check(`screenshots: ${label} stays inside the panel, solid and on top`, async () => {
+          // Clear of the native drag strip (12 points) and of the 10 point resize zones.
+          assert.ok(m.inside.top >= 12, `top ${JSON.stringify(m)}`);
+          assert.ok(m.inside.bottom >= 9.5, `bottom ${JSON.stringify(m)}`);
+          assert.ok(m.inside.left >= 9.5, `left ${JSON.stringify(m)}`);
+          assert.ok(m.inside.right >= 9.5, `right ${JSON.stringify(m)}`);
+          assert.equal(m.opacity, 1, "opacity");
+          assert.equal(m.alpha, 1, "background alpha");
+          assert.equal(m.covered, 0, "covered points");
+          assert.ok(m.height > 30, `height ${m.height}`);
+          const s = await st();
+          assert.deepEqual([s.frame.width, s.frame.height], [width, height], "the panel never resizes for a dropdown");
+          await capture(`${scheme}-${width}x${height}-${dropdown.name}`);
+        });
+      }
+    }
+    // Tiled to the left half of the display through Accessibility, as a window manager does.
+    await openSeeded();
+    const vf = (await st()).visibleFrame;
+    const half = Math.floor(vf.width / 2);
+    await rpc("test.accessibilityResize", { x: vf.x, top: vf.y + vf.height, width: half, height: vf.height });
+    await until("screenshots: the tiled frame reaches the page", () => js("innerWidth"), (w) => w === half);
+    await check(`screenshots: ${scheme} tiled to the left half`, () => capture(`${scheme}-tiled-left-half`));
+    await rpc("test.moveTo", { x: vf.x + 80, top: vf.y + vf.height - 40 });
+  }
+  await stop(helper);
+  helper = null;
+}
 
 (async () => {
   helper = await start();
@@ -955,6 +1154,8 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   });
   await stop(helper);
   helper = null;
+
+  if (SHOTS) await screenshots();
 
   console.log(`[e2e] warm show round trip ${showMs.toFixed(1)} ms; panel visible ${(visibleTotal / 1000).toFixed(1)} s in total`);
   console.log(`[e2e] ${passed} window checks passed`);
