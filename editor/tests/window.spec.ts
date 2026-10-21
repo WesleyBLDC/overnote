@@ -396,8 +396,19 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   expect(await notice.evaluate((el) => getComputedStyle(el).transitionDuration)).toBe("0.18s, 0.18s");
   await page.clock.runFor(1980);
   await expect(notice).not.toHaveAttribute("data-leaving");
+  // The fade runs on real time and can remove the notice before a poll sees it leaving, so record
+  // the mark as it lands.
+  await notice.evaluate((element) => {
+    const host = window as unknown as { __noticeLeft?: boolean };
+    host.__noticeLeft = false;
+    new MutationObserver(() => {
+      if (element.getAttribute("data-leaving") === "true") host.__noticeLeft = true;
+    }).observe(element, { attributes: true });
+  });
   await page.clock.runFor(20);
-  await expect(notice).toHaveAttribute("data-leaving", "true");
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __noticeLeft?: boolean }).__noticeLeft))
+    .toBe(true);
   await expect(notice).toHaveCount(0);
 
   // Checking a task plays its check animation once; the next edit clears it, and a loaded note has none.
