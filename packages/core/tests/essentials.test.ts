@@ -8,11 +8,13 @@ import {
   docToPlainText,
   duplicateContent,
   fold,
+  getNoteSchema,
   highlightMarkdownMatches,
   loadDoc,
   markdownToDoc,
   mergeDocs,
   noteContentFromMarkdown,
+  orderedMarkerLabels,
 } from "../src/index";
 
 describe("text rules", () => {
@@ -195,5 +197,26 @@ describe("search highlighting", () => {
     expect(hl("*it* after", "it")).toBe("***it*** after");
     expect(hl("file.md and a.md", ".md")).toBe("file.md and a.md");
     expect(hl("see .md files", ".md")).toBe("see **.md** files");
+  });
+});
+
+describe("ordered list markers", () => {
+  it("follows ordered parents only, restarts runs, and skips a list that opens with a list", () => {
+    const item = (kind: string, text: string | null, ...children: object[]) => ({
+      type: "list",
+      attrs: { kind, order: null, checked: false, collapsed: false },
+      content: [...(text === null ? [] : [{ type: "paragraph", content: [{ type: "text", text }] }]), ...children],
+    });
+    const doc = getNoteSchema().nodeFromJSON({
+      type: "doc",
+      content: [
+        item("ordered", "a", item("ordered", "a1", item("ordered", "a11")), item("bullet", "b", item("ordered", "b1"))),
+        item("ordered", "c"),
+        { type: "paragraph" },
+        item("ordered", null, item("ordered", "d1")),
+        item("ordered", "e"),
+      ],
+    });
+    expect([...orderedMarkerLabels(doc).values()]).toEqual(["1.", "1.1", "1.1.1", "1.", "2.", "1.", "1."]);
   });
 });

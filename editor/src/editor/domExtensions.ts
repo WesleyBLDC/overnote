@@ -7,6 +7,7 @@ import {
   looksLikeMarkdown,
   looksLikeUrl,
   normalizeLinkHref,
+  orderedMarkerLabels,
   parsePastedText,
   plainTextToDoc,
   taskAt,
@@ -156,6 +157,32 @@ function listSelectionPlugin(): Plugin {
         });
         return decorations.length ? DecorationSet.create(state.doc, decorations) : DecorationSet.empty;
       },
+    },
+  });
+}
+
+/**
+ * Numbers ordered items with their parent's number path (3, 3.1, 3.1.1), which CSS counters cannot do
+ * reliably across flat-list's nesting. The label goes on the item as data-list-marker for the stylesheet
+ * to show; it is a decoration, so stored content and copies keep standard 1. numbering.
+ */
+function orderedMarkerPlugin(): Plugin {
+  const key = new PluginKey<DecorationSet>("orderedMarkers");
+  const build = (doc: PMNode) => {
+    const decorations: Decoration[] = [];
+    orderedMarkerLabels(doc).forEach((label, pos) => {
+      decorations.push(Decoration.node(pos, pos + doc.nodeAt(pos)!.nodeSize, { "data-list-marker": label }));
+    });
+    return DecorationSet.create(doc, decorations);
+  };
+  return new Plugin<DecorationSet>({
+    key,
+    state: {
+      init: (_config, state) => build(state.doc),
+      apply: (tr, set) => (tr.docChanged ? build(tr.doc) : set),
+    },
+    props: {
+      decorations: (state) => key.getState(state),
     },
   });
 }
@@ -311,6 +338,7 @@ export const NoteDomBehavior = Extension.create<DomOptions, DomStorage>({
       pastePlugin(takePlainPaste),
       copyPlugin(),
       listSelectionPlugin(),
+      orderedMarkerPlugin(),
       taskCheckPlugin(),
       new Plugin({
         key: new PluginKey("noFileDrop"),

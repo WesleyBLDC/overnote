@@ -177,35 +177,18 @@
   box-shadow: none;
 }
 
-/* Ordered numbering restarts after any sibling that is not an ordered item. */
-.note-editor .prosemirror-flat-list[data-list-kind="ordered"] {
-  counter-increment: bn-ordered;
-}
-
-.note-editor .prosemirror-flat-list[data-list-kind="ordered"]:first-child,
-.note-editor :not(.prosemirror-flat-list[data-list-kind="ordered"]) + .prosemirror-flat-list[data-list-kind="ordered"] {
-  counter-reset: bn-ordered;
-}
-
-.note-editor .prosemirror-flat-list[data-list-kind="ordered"]:first-child[data-list-order],
-.note-editor
-  :not(.prosemirror-flat-list[data-list-kind="ordered"])
-  + .prosemirror-flat-list[data-list-kind="ordered"][data-list-order] {
-  counter-set: bn-ordered var(--prosemirror-flat-list-order);
-}
-
+/*
+ * Ordered markers come from data-list-marker, set by the editor's orderedMarkerPlugin: 3. at the top
+ * level, 3.1 and 3.1.1 when nested in ordered items. The marker ends at the gutter, so a long path
+ * grows to the left, into the indent.
+ */
 .note-editor .prosemirror-flat-list[data-list-kind="ordered"]::before {
-  content: counter(bn-ordered, decimal) ".";
+  content: attr(data-list-marker);
   position: absolute;
-  left: 0;
-  width: calc(var(--list-gutter) - 0.35em);
-  text-align: right;
+  right: calc(100% - var(--list-gutter) + 0.35em);
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
-}
-
-.note-editor .prosemirror-flat-list[data-list-kind="ordered"] > .list-content > * {
-  contain: style;
 }
 
 /*

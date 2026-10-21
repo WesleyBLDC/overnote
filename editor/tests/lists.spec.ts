@@ -1,6 +1,6 @@
 /** Lists and tasks. */
 import { expect, test, type Page } from "@playwright/test";
-import { blocks, docJSON, editor, openHarness } from "./harness";
+import { blocks, docJSON, editor, openHarness, storedNotes } from "./harness";
 
 interface ListNode {
   type: string;
@@ -116,4 +116,107 @@ test("list toggles keep attributes and move items", async ({ page }) => {
   await page.keyboard.type("b");
   await page.keyboard.press("Control+Meta+ArrowUp");
   await expect(editor(page).locator(".prosemirror-flat-list")).toHaveText(["b", "a"]);
+});
+
+/** What each list item's marker shows, in document order: the ordered number, or "" for other kinds. */
+async function markers(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll(".note-editor .prosemirror-flat-list")].map((item) => {
+      if (item.getAttribute("data-list-kind") !== "ordered") return "";
+      return getComputedStyle(item, "::before").content.replace(/^"|"$/g, "");
+    }),
+  );
+}
+
+async function pasteText(page: Page, text: string): Promise<void> {
+  await page.evaluate((plain) => {
+    const transfer = new DataTransfer();
+    transfer.setData("text/plain", plain);
+    const event = new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true });
+    document.querySelector(".note-editor")?.dispatchEvent(event);
+  }, text);
+}
+
+const OUTLINE = [
+  "1. Demo",
+  "2. Your solution",
+  "   1. sub a",
+  "      1. sub sub",
+  "3. Edge cases",
+  "   1. a",
+  "   2. b",
+  "   3. c",
+  "4. Productionization",
+  "   1. a",
+  "   2. b",
+  "   3. c",
+  "   4. d",
+].join("\n");
+
+const OUTLINE_MARKERS = ["1.", "2.", "2.1", "2.1.1", "3.", "3.1", "3.2", "3.3", "4.", "4.1", "4.2", "4.3", "4.4"];
+
+test("nested ordered items show their parent's number path, and Markdown keeps 1. numbering", async ({ page }) => {
+  await pasteText(page, OUTLINE);
+  await expect.poll(() => markers(page)).toEqual(OUTLINE_MARKERS);
+
+  await expect.poll(async () => (await storedNotes(page))[0]?.markdown).toBe(OUTLINE);
+  await page.keyboard.press("Meta+a");
+  const copied = await page.evaluate(() => {
+    const transfer = new DataTransfer();
+    const event = new ClipboardEvent("copy", { clipboardData: transfer, bubbles: true, cancelable: true });
+    document.querySelector(".note-editor")?.dispatchEvent(event);
+    return { text: transfer.getData("text/plain"), html: transfer.getData("text/html") };
+  });
+  expect(copied.text).toBe(OUTLINE);
+  expect(copied.html).not.toContain("3.1");
+});
+
+test("typed nested ordered items number the same way", async ({ page }) => {
+  await page.keyboard.type("1. Demo");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Your solution");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("sub a");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("sub sub");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.type("Edge cases");
+  for (const word of ["a", "b", "c"]) {
+    await page.keyboard.press("Enter");
+    if (word === "a") await page.keyboard.press("Tab");
+    await page.keyboard.type(word);
+  }
+  await expect.poll(() => markers(page)).toEqual(["1.", "2.", "2.1", "2.1.1", "3.", "3.1", "3.2", "3.3"]);
+
+  // Moving an item renumbers it under its new parent.
+  await page.keyboard.press("Shift+Tab");
+  await expect.poll(() => markers(page)).toEqual(["1.", "2.", "2.1", "2.1.1", "3.", "3.1", "3.2", "4."]);
+});
+
+test("an explicit start holds, and paths only follow ordered parents", async ({ page }) => {
+  await pasteText(
+    page,
+    [
+      "5. five",
+      "6. six",
+      "   1. inner",
+      "",
+      "Between.",
+      "",
+      "- bullet",
+      "  1. one",
+      "  2. two",
+      "",
+      "1. top",
+      "   - nested bullet",
+      "     1. under bullet",
+      "   - [ ] task",
+      "   3. three",
+    ].join("\n"),
+  );
+  await expect.poll(() => markers(page)).toEqual(["5.", "6.", "6.1", "", "1.", "2.", "1.", "", "1.", "", "1.3"]);
 });
