@@ -1286,7 +1286,16 @@ html[data-scrollbars="legacy"] :not(.scrollbar-probe)::-webkit-scrollbar-thumb:h
   background-color: var(--scrollbar-thumb-hover);
 }
 
-/* An open dropdown hides the note's scrollbar, so only the dropdown's own shows beside it. */
+/*
+ * An open dropdown hides the note's scrollbar, so only the dropdown's own shows beside it. WebKit
+ * restyles a scrollbar only when its scroller's own style changes, so the scroller takes a marker
+ * property too: without it, a dropdown that leaves focus in the note (slash menu, emoji picker)
+ * kept the thumb showing.
+ */
+html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content {
+  --dropdown-open: 1;
+}
+
 html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrollbar-thumb {
   background-color: transparent;
 }
