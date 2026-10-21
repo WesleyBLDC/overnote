@@ -635,7 +635,8 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   // Accessibility) is kept like the person's own resize: flush left at half width and full
   // height, it stays exactly there, is stored, and turns auto-sizing off.
   await call("settings.set", { windowAutoSize: true });
-  const vf = (await state()).visibleFrame;
+  const beforeTile = await state();
+  const vf = beforeTile.visibleFrame;
   const tile = { x: vf.x, top: vf.y + vf.height, width: Math.floor(vf.width / 2), height: vf.height };
   await call("test.accessibilityResize", tile);
   const tiled = (await state()).frame;
@@ -657,6 +658,8 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     const point = (await call("settings.get")).panelFrame.displays[s.screenKey];
     assert.deepEqual(point, { x: tile.x, y: tile.top });
   });
+  // Later checks move the panel relative to where it was, so put it back off the display edge.
+  await call("test.moveTo", { x: beforeTile.frame.x, top: beforeTile.frame.top });
   await call("test.simulateUserResize", { height: 300, width: 700 });
 
   // ⌘W hides the panel through the menu, the same path as the Close control.
