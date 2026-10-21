@@ -267,3 +267,28 @@ test("when an outside change deletes the paragraph being typed in, the typing is
   // Only one version of that paragraph exists, so the editor does not claim it kept two.
   await expect(page.getByTestId("notices")).not.toContainText("both versions");
 });
+
+test("an outside change during an input method composition waits until the composition ends", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  const [note] = await storedNotes(page);
+  const composing = () =>
+    page.evaluate(
+      () => (window as unknown as { __bnEditor: { view: { composing: boolean } } }).__bnEditor.view.composing,
+    );
+  const compose = (type: "compositionstart" | "compositionend") =>
+    page.evaluate((name) => {
+      document.querySelector(".note-editor")?.dispatchEvent(new CompositionEvent(name, { bubbles: true, data: "" }));
+    }, type);
+  await compose("compositionstart");
+  expect(await composing()).toBe(true);
+  // Replacing the document now would break the text being composed, so the merge waits.
+  await outsideWrite(page, note?.id ?? "", ["Draft", "From outside"], { announce: true });
+  await page.clock.runFor(500);
+  await expect(editor(page)).toHaveText("Draft");
+  await compose("compositionend");
+  await page.clock.runFor(200);
+  expect(await composing()).toBe(false);
+  await expect(editor(page)).toHaveText("DraftFrom outside");
+});

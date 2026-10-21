@@ -239,6 +239,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   A save that gets `conflict` (a socket write the editor was not told about, or one that raced the save) merges the same way and retries against the returned note, up to 3 attempts; after that the edits stay unsaved and the next save tries again.
   When both sides changed the same block differently, the merge keeps both versions and the editor shows "This note also changed elsewhere, so both versions were kept".
   When one side deleted a block the other changed, the change is kept and no notice shows, since only one version exists.
+  While an input method composition is in progress, every merge waits until it ends, because replacing the document mid composition would break the text being composed.
 
 ## 6. Database schema (owned by the helper)
 

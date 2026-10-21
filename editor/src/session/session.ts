@@ -21,6 +21,8 @@ export const SAVE_DEBOUNCE_MS = 300;
 export const TYPING_WINDOW_MS = 1000;
 /** Saves tried in a row when another writer keeps changing the note; the edits stay unsaved after. */
 const SAVE_ATTEMPTS = 3;
+/** How often a merge that waits for an input method composition to end checks again. */
+const COMPOSITION_POLL_MS = 50;
 
 /** What the session needs from the editor view. */
 export interface EditorPort {
@@ -265,6 +267,8 @@ export class NoteSession {
       // Conflict: someone else saved this note since the editor last synced with it. Their change
       // is merged into the edits (never overwritten), and the merge is what the next attempt saves.
       if (this.state.current?.id !== note.id) return false;
+      await this.whenComposed();
+      if (this.state.current?.id !== note.id) return false;
       if (!this.rebase(synced, result.note)) return true;
     }
     return false;
@@ -290,6 +294,21 @@ export class NoteSession {
     return false;
   }
 
+  /**
+   * Resolves once no input method composition is in progress. Replacing the document mid
+   * composition would break the text being composed, so every merge waits for this first.
+   */
+  private whenComposed(): Promise<void> {
+    if (!this.editor.isComposing()) return Promise.resolve();
+    return new Promise((resolve) => {
+      const check = () => {
+        if (this.editor.isComposing()) this.setTimer(check, COMPOSITION_POLL_MS);
+        else resolve();
+      };
+      this.setTimer(check, COMPOSITION_POLL_MS);
+    });
+  }
+
   /** Queues a rebase onto `stored` behind any save in flight, so each merge starts from what was saved. */
   private queueRebase(stored: Note): Promise<boolean> {
     this.chain = this.chain.then(
@@ -300,6 +319,7 @@ export class NoteSession {
   }
 
   private async rebaseNow(stored: Note): Promise<boolean> {
+    await this.whenComposed();
     const current = this.state.current;
     // A save that ran first may already have merged this version, or saved past it.
     if (this.paused || current?.id !== stored.id || current.updatedAt >= stored.updatedAt) return true;
