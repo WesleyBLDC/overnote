@@ -37,31 +37,34 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await page.keyboard.press("Meta+0");
   await expect.poll(async () => (await last())?.contentHeight ?? 0).toBe(start);
 
-  // ⌘K in a short panel never resizes the note: the panel hangs past its bottom edge through
-  // window.setOverhang, and closing gives the room back.
-  const overhangs = async () => (await calls(page, "window.setOverhang")).map((c) => c.params.height as number);
+  // ⌘K in a short panel never resizes it: the panel stays inside the note and its list scrolls.
   const reportsBeforePanel = (await reports()).length;
   // The harness applies a reported height a moment after the report; open ⌘K on the short note.
   await expect.poll(appHeight).toBe(start);
   await page.keyboard.press("Meta+k");
-  await expect.poll(async () => (await overhangs()).at(-1) ?? 0).toBeGreaterThan(200);
+  const panel = page.getByTestId("command-panel");
+  await expect(panel).toBeVisible();
+  await settle(page);
+  const bottomGap = await panel.evaluate(
+    (el) => el.closest(".app")!.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom,
+  );
+  expect(bottomGap).toBeGreaterThanOrEqual(9.5);
   expect(await appHeight()).toBe(start);
   await page.keyboard.press("Escape");
-  await expect.poll(async () => (await overhangs()).at(-1)).toBe(0);
   await settle(page);
-  expect((await reports()).slice(reportsBeforePanel).filter((r) => r.temporary)).toEqual([]);
+  expect((await reports()).slice(reportsBeforePanel)).toEqual([]);
   expect(await appHeight()).toBe(start);
 
-  // With auto-sizing off, content changes are not reported, and browse hangs the same way.
+  // With auto-sizing off, content changes are not reported, and browse stays inside the same way.
   await page.keyboard.press("Meta+Shift+Slash");
   const count = (await reports()).length;
   for (let i = 0; i < 3; i++) await page.keyboard.press("Enter");
   await settle(page);
   expect((await reports()).length).toBe(count);
   await page.keyboard.press("Meta+p");
-  await expect.poll(async () => (await overhangs()).at(-1) ?? 0).toBeGreaterThan(0);
+  await expect(panel).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect.poll(async () => (await overhangs()).at(-1)).toBe(0);
+  await settle(page);
   expect((await reports()).length).toBe(count);
 
   // The top 12 points stay free of controls for the native drag strip.

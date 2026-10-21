@@ -12,7 +12,6 @@ interface FooterProps {
   onToggleCount: () => void;
   onToggleFormatBar: () => void;
   openLink: () => void;
-  onMenuChange?: (open: boolean) => void;
 }
 
 /** Bottom bar: the counter (or the format bar) in the middle and the format bar toggle on the right. */
@@ -23,7 +22,7 @@ export function Footer(props: FooterProps) {
       <div className="footer-spacer" />
       <div className="footer-center">
         {props.showFormatBar && props.editor ? (
-          <FormatBar editor={props.editor} openLink={props.openLink} onMenuChange={props.onMenuChange} />
+          <FormatBar editor={props.editor} openLink={props.openLink} />
         ) : (
           <button
             type="button"

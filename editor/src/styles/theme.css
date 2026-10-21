@@ -92,6 +92,9 @@
   --drag-strip: 12px;
   /* The helper's resize zones: 10 pt along edges, 24 pt squares at corners; controls stay outside. */
   --corner-clearance: 24px;
+  --edge-zone: 10px;
+  /* Dropdowns keep this far from the panel's sides and bottom: clear of the edge zones, and never touching. */
+  --dropdown-inset: max(var(--edge-zone), var(--space-2));
   /* One line note at 100%: 52 (toolbar) + 7 + 27.7 (one 16.8 px line at 1.65) + 4.2 + 48 (footer), about 139 points. */
   --toolbar-height: 3.715rem;
   --content-top: 0.5rem;

@@ -505,11 +505,11 @@ kbd {
   }
 }
 
-/* Footer menus are centered with a transform, so their animation keeps it. */
-@keyframes menu-in {
+/* The same, for a dropdown that opened above its anchor: it rises from just below its resting place. */
+@keyframes pop-up-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(0.25rem) scale(var(--pop-scale));
+    transform: translateY(calc(-1 * var(--pop-offset))) scale(var(--pop-scale));
   }
 }
 
@@ -534,15 +534,29 @@ kbd {
 
 .menu {
   position: absolute;
-  bottom: calc(100% + var(--space-2));
-  left: 50%;
   z-index: 30;
   width: 15rem;
   padding: var(--space-1);
-  transform: translateX(-50%);
-  transform-origin: bottom center;
+  overflow-y: auto;
+  transform-origin: top center;
   outline: none;
-  animation: menu-in var(--motion-slow) var(--ease-out);
+  animation: pop-in var(--motion-slow) var(--ease-out);
+}
+
+/*
+ * Dropdowns placed by useDropdownPlacement (hooks.ts) stay inside the panel: --room-y and --room-x
+ * are the room next to their anchor, and they scroll inside when their content is taller.
+ */
+.popover:not(.panel),
+.menu {
+  max-width: var(--room-x, none);
+  max-height: var(--room-y, none);
+}
+
+/* A dropdown that opened above its anchor grows up out of it. */
+:is(.popover, .menu)[data-side="above"] {
+  transform-origin: bottom center;
+  animation-name: pop-up-in;
 }
 
 .menu-item {
@@ -593,12 +607,13 @@ kbd {
 
 .slash-menu {
   width: 20rem;
-  max-height: 20rem;
+  max-height: min(20rem, var(--room-y, 20rem));
   overflow-y: auto;
   padding: var(--space-1);
 }
 
 .link-popover {
+  width: 20rem;
   padding: var(--space-1);
   outline: none;
 }
@@ -714,11 +729,6 @@ kbd {
   z-index: 40;
 }
 
-/* The whole window, including the strip a hanging panel borrows below the note. */
-.panel-backdrop {
-  position: fixed;
-}
-
 .dialog-backdrop {
   display: flex;
   align-items: center;
@@ -739,8 +749,8 @@ kbd {
   display: flex;
   flex-direction: column;
   width: min(var(--panel-width), calc(100% - 2 * var(--toolbar-inset-right)));
-  /* Against the window, not the note: a panel hangs past the note's bottom edge (usePanelOverhang). */
-  max-height: min(30rem, calc(100vh - var(--drag-strip) - var(--chrome-hit) - 1.4rem));
+  /* Inside the panel, whatever its size: the list scrolls when the panel is short. */
+  max-height: min(30rem, calc(100% - var(--drag-strip) - var(--chrome-hit) - 0.6rem - var(--dropdown-inset)));
   padding: 0 var(--space-2) var(--space-2);
   overflow: hidden;
   transform-origin: var(--origin-x, calc(100% - 3rem)) 0;
@@ -1121,9 +1131,16 @@ kbd {
 
 /* ---- emoji picker ---- */
 
+/* A column, so in a short panel the grid shrinks and scrolls while the name line stays. */
 .emoji-picker {
+  display: flex;
+  flex-direction: column;
   width: 20.5rem;
   padding: var(--space-1);
+}
+
+.emoji-picker > :not(.emoji-grid) {
+  flex: none;
 }
 
 .emoji-picker.is-quick {
@@ -1132,6 +1149,7 @@ kbd {
 
 .emoji-grid {
   display: grid;
+  min-height: 0;
   grid-template-columns: repeat(9, 2.1rem);
   max-height: calc(5 * 2.1rem + 0.2rem);
   overflow-y: auto;

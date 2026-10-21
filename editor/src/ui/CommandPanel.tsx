@@ -6,7 +6,6 @@ import { fuzzyScore } from "../editor/slash";
 import { revealSelected } from "../lib/motion";
 import { characterLabel, relativeTime } from "../lib/relativeTime";
 import { Icon, type IconName } from "./icons";
-import { usePanelOverhang } from "./hooks";
 import { adjustSetting, filterSettings, SettingsList } from "./SettingsView";
 import { Keys } from "./Keys";
 
@@ -87,7 +86,6 @@ export function CommandPanel(props: CommandPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  usePanelOverhang(props.api, panelRef);
 
   // The panel grows out of the toolbar button that stands for its first view: Browse Notes for
   // browse, Actions for everything else. Measured once, so moving between views keeps the origin.

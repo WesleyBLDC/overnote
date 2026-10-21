@@ -1,7 +1,9 @@
 /** The slash formatting menu, anchored at the caret. */
 import type { Editor } from "@tiptap/core";
-import { forwardRef, useImperativeHandle, useLayoutEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { SlashItem } from "../editor/slash";
+import { revealSelected } from "../lib/motion";
+import { useDropdownPlacement } from "./hooks";
 import { Keys } from "./Keys";
 
 export interface SlashMenuHandle {
@@ -13,27 +15,23 @@ interface SlashMenuProps {
   editor: Editor;
   items: SlashItem[];
   from: number;
-  container: HTMLElement | null;
   onRun: (item: SlashItem) => void;
   onDismiss: () => void;
 }
 
 export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu(
-  { editor, items, from, container, onRun, onDismiss },
+  { editor, items, from, onRun, onDismiss },
   ref,
 ) {
   const [index, setIndex] = useState(0);
-  const [position, setPosition] = useState({ left: 0, top: 0 });
   const selected = Math.min(index, items.length - 1);
-
-  useLayoutEffect(() => {
-    const coords = editor.view.coordsAtPos(from);
-    const box = container?.getBoundingClientRect() ?? { left: 0, top: 0, width: window.innerWidth };
-    setPosition({
-      left: Math.max(8, Math.min(coords.left - box.left, box.width - 288)),
-      top: coords.bottom - box.top + 4,
-    });
-  }, [editor, from, container, items.length]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useDropdownPlacement(rootRef, () => editor.view.coordsAtPos(from), {
+    prefer: "below",
+    gapRem: 0.3,
+    align: "start",
+  });
+  useEffect(() => revealSelected(rootRef.current, true), [selected]);
 
   useImperativeHandle(ref, () => ({
     onKeyDown(event) {
@@ -52,12 +50,7 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
 
   let lastSection = "";
   return (
-    <div
-      className="popover slash-menu"
-      role="listbox"
-      data-testid="slash-menu"
-      style={{ left: position.left, top: position.top }}
-    >
+    <div className="popover slash-menu" role="listbox" data-testid="slash-menu" ref={rootRef}>
       {items.map((item, i) => {
         const header = item.section !== lastSection ? item.section : null;
         lastSection = item.section;

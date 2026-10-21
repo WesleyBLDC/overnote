@@ -137,7 +137,7 @@ The helper stores `NoteContent` verbatim.
 | `window.toggle` | `{}` | `{ visible: boolean }` | Show and focus, or hide |
 | `window.show` | `{ noteId?: NoteId }` | `{ visible: true }` | Shows the panel, optionally on a note (emits `note.open`) |
 | `window.hide` | `{}` | `{ visible: false }` | |
-| `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped 128 to 860 pt times zoom. `temporary: true` (dialogs and popups; panels hang past the note instead, see `window.setOverhang`) applies even when windowAutoSize is off and is restored by the next non-temporary report |
+| `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped 128 to 860 pt times zoom. `temporary: true` (confirmation dialogs; panels and dropdowns stay inside the panel instead) applies even when windowAutoSize is off and is restored by the next non-temporary report |
 | `window.setOverhang` (bridge) | `{ height: number }` | `{}` | Lets an open panel (⌘K, browse, settings) hang `height` points past the note's bottom edge: the window grows downward (never past the display's visible area) while the note, its material, and its resize zones keep their size and place; the strip below shows only the web view. Resize zones are off and height reports wait while it is above 0. `0` gives the room back. A hide gives it back too |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
 | `window.setDragRegions` (bridge) | `{ rects: { x: number, y: number, width: number, height: number }[] }` | `{}` | Points (CSS px times zoom), top-left origin, relative to the web view. A mouse down inside drags the window natively (title-bar behavior: it also works as the first click into an unfocused panel) |
@@ -213,7 +213,11 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 
 **Editor-owned behavior (no helper state):**
 - Zoom is applied by the editor in CSS; `window.resize.contentHeight` is in points (CSS px times zoom), measured from the content wrapper (never `documentElement.scrollHeight`).
-- While the ⌘K panel, browse, or a dialog is open the editor reports a larger `contentHeight` (about 34rem; 16rem for small popups) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
+- While a confirmation dialog is open the editor reports a larger `contentHeight` (about 34rem) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
+- Panels (⌘K, browse, settings) and dropdowns (the slash menu, the emoji picker, the link popover, and the format bar's menus) never resize the panel and never draw past it.
+  The panels drop from the toolbar and their lists scroll when the panel is short.
+  Each dropdown opens next to its anchor on its preferred side when it fits there, else on the side with more room, capped to that room so it scrolls inside, and slides sideways to stay inside.
+  All of them keep clear of the drag strip and of the 10 pt resize zones.
 - The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
 - The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. ⌘W hides the panel (helper menu item, like closing a window in any app).
 - The helper gives the borderless panel generous resize hit zones: 10 pt along edges and 24 pt squares at corners, with the matching resize cursors.

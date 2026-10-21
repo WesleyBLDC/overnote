@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, type rpc, type Settings } from "@overnote/core";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
 import { exitFallbackMs } from "../lib/motion";
+import { placeDropdown, type Box, type PlacementOptions } from "../lib/placement";
 
 export type NoticeKind = "info" | "error";
 
@@ -299,88 +300,107 @@ export function useLatest<T>(value: T) {
   return ref;
 }
 
-/** Room left under a hanging panel, so its shadow is not cut by the window edge. */
-const OVERHANG_MARGIN = 12;
-/** The tallest a panel grows, in rem (its CSS max-height). */
-const PANEL_MAX_REM = 30;
-/** A pending "give the room back" from a panel that just closed; a panel that opens cancels it. */
-let pendingRelease: (() => void) | null = null;
+/**
+ * Keeps a dropdown (slash menu, emoji picker, link popover, format menu) inside the panel: next to
+ * its anchor on the preferred side when it fits, else on the roomier side, capped to the room there
+ * so it scrolls inside, and slid sideways to stay clear of the panel's edges. The panel never
+ * resizes for a dropdown, so nothing it draws can ever cross the panel's edge or border.
+ *
+ * `anchor` returns the anchor's box in viewport coordinates, and `gapRem` is the space between the
+ * two, in rem so it follows zoom. The dropdown must be absolutely
+ * positioned in the app; the hook writes its top, left, and data-side, plus --room-y and --room-x,
+ * which the stylesheet uses as its maximum height and width. It places again on every render,
+ * when the dropdown or the panel changes size, and when anything scrolls.
+ */
+export function useDropdownPlacement(
+  ref: React.RefObject<HTMLElement | null>,
+  anchor: () => Box | null,
+  options: DropdownOptions,
+) {
+  const place = useLatest(() => placeDropdownElement(ref.current, anchor(), options));
+
+  useLayoutEffect(() => place.current());
+
+  useEffect(() => {
+    const element = ref.current;
+    const container = element?.offsetParent;
+    if (!element) return;
+    const update = () => place.current();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    if (container) observer.observe(container);
+    // The anchor moves when the note scrolls; the dropdown's own scrolling does not move it.
+    const onScroll = (event: Event) => {
+      if (!(event.target instanceof Node && element.contains(event.target))) update();
+    };
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [ref, place]);
+}
+
+type DropdownOptions = Omit<PlacementOptions, "gap"> & { gapRem: number };
+
+/** What each dropdown was last placed for, so a pass with nothing new leaves it alone. */
+const placedFor = new WeakMap<HTMLElement, string>();
 
 /**
- * Lets an open panel (⌘K, browse, settings) hang past the note's bottom edge instead of resizing
- * the note: the note's height is frozen, and the helper grows the window below it by exactly the
- * room the panel needs (window.setOverhang). When the panel closes, the room goes back after its
- * exit fade, and the note follows the window again once the window is back to the note's size.
+ * One placement pass for useDropdownPlacement: measures, places, and writes the result to the
+ * element. Measuring lifts the previous cap, which makes WebKit drop the scroll position, so a pass
+ * only measures when the anchor, the panel, or the dropdown changed, and keeps the scroll positions.
  */
-export function usePanelOverhang(api: Api, panelRef: React.RefObject<HTMLElement | null>) {
-  useLayoutEffect(() => {
-    const app = document.querySelector<HTMLElement>("[data-testid=app]");
-    const panel = panelRef.current;
-    if (!app || !panel) return;
-    pendingRelease?.();
-    pendingRelease = null;
-    const noteHeight = app.getBoundingClientRect().height;
-    app.style.height = `${noteHeight}px`;
-    let sent = 0;
-    const update = () => {
-      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 14;
-      const list = panel.querySelector<HTMLElement>(".panel-list");
-      const hidden = list ? list.scrollHeight - list.clientHeight : 0;
-      const wanted = Math.min(PANEL_MAX_REM * rem, panel.offsetHeight + hidden);
-      const height = Math.max(0, Math.ceil(panel.offsetTop + wanted + OVERHANG_MARGIN - noteHeight));
-      if (height === sent) return;
-      sent = height;
-      void api.window.setOverhang(height).catch(() => undefined);
-    };
-    // The panel's own size, and every row: a row can change height (fonts, keycaps) while the
-    // panel, still capped by the window, keeps its size.
-    const resizes = new ResizeObserver(update);
-    const observeRows = () => {
-      resizes.disconnect();
-      resizes.observe(panel);
-      for (const row of Array.from(panel.querySelectorAll(".panel-list > *"))) resizes.observe(row);
-    };
-    const rows = new MutationObserver(() => {
-      observeRows();
-      update();
-    });
-    rows.observe(panel, { childList: true, subtree: true });
-    observeRows();
-    update();
-    // A hide gives the room back; show the panel hanging again when the note comes back.
-    const offShow = api.on("window.didShow", () => {
-      sent = -1;
-      update();
-    });
-    return () => {
-      resizes.disconnect();
-      rows.disconnect();
-      offShow();
-      let unfreeze = 0;
-      const release = () => {
-        clearTimeout(timer);
-        clearTimeout(unfreeze);
-        window.removeEventListener("resize", onResize);
-        pendingRelease = null;
-      };
-      const thaw = () => {
-        release();
-        app.style.height = "";
-      };
-      const onResize = () => {
-        if (window.innerHeight <= noteHeight + 1) thaw();
-      };
-      // After the exit fade, so the closing panel is not cut off.
-      const timer = setTimeout(() => {
-        if (sent > 0) {
-          window.addEventListener("resize", onResize);
-          void api.window.setOverhang(0).catch(() => undefined);
-          unfreeze = window.setTimeout(thaw, 500);
-        } else {
-          thaw();
-        }
-      }, exitFallbackMs("--motion-fast"));
-      pendingRelease = release;
-    };
-  }, [api, panelRef]);
+function placeDropdownElement(element: HTMLElement | null, target: Box | null, options: DropdownOptions) {
+  const container = element?.offsetParent;
+  if (!element || !(container instanceof HTMLElement) || !target) return;
+  const style = getComputedStyle(document.documentElement);
+  const rem = parseFloat(style.fontSize) || 14;
+  const token = (name: string, fallback: number) => parseFloat(style.getPropertyValue(name)) || fallback;
+  // Clear of the native drag strip on top, and of the 10 point resize zones elsewhere.
+  const inset = Math.max(token("--edge-zone", 10), 0.5 * rem);
+  const bounds = {
+    top: token("--drag-strip", 12) + 0.25 * rem,
+    bottom: container.clientHeight - inset,
+    left: inset,
+    right: container.clientWidth - inset,
+  };
+  const box = container.getBoundingClientRect();
+  const anchor = {
+    top: target.top - box.top,
+    bottom: target.bottom - box.top,
+    left: target.left - box.left,
+    right: target.right - box.left,
+  };
+  const inputs = () =>
+    [
+      anchor.top,
+      anchor.bottom,
+      anchor.left,
+      anchor.right,
+      bounds.right,
+      bounds.bottom,
+      element.offsetWidth,
+      element.offsetHeight,
+      element.scrollHeight,
+    ]
+      .map(Math.round)
+      .join(" ");
+  if (placedFor.get(element) === inputs()) return;
+  const scrolled = [element, ...Array.from(element.children)].map((node) => [node, node.scrollTop] as const);
+  // The natural size, without the previous cap; layout sizes ignore the entrance transform.
+  element.style.removeProperty("--room-y");
+  element.style.removeProperty("--room-x");
+  const size = { width: element.offsetWidth, height: element.offsetHeight };
+  const { gapRem, ...rest } = options;
+  const placement = placeDropdown(anchor, size, bounds, { ...rest, gap: gapRem * rem });
+  element.style.setProperty("--room-y", `${placement.maxHeight}px`);
+  element.style.setProperty("--room-x", `${placement.maxWidth}px`);
+  element.style.top = `${placement.top}px`;
+  element.style.left = `${placement.left}px`;
+  element.dataset.side = placement.side;
+  for (const [node, top] of scrolled) if (node.scrollTop !== top) node.scrollTop = top;
+  placedFor.set(element, inputs());
 }

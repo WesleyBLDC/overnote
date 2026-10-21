@@ -1,6 +1,6 @@
 /** The format bar, shown in the bottom bar in place of the counter. */
 import type { Editor } from "@tiptap/core";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { activeListKind, isFormatActive, runFormat, type FormatId } from "../editor/commands";
 import { Icon, type IconName } from "./icons";
 import { Menu, type MenuItem } from "./Menu";
@@ -8,8 +8,6 @@ import { Menu, type MenuItem } from "./Menu";
 interface FormatBarProps {
   editor: Editor;
   openLink: () => void;
-  /** Tells the window a dropdown is open, so it can make room for it. */
-  onMenuChange?: (open: boolean) => void;
 }
 
 type MenuName = "heading" | "format" | "list" | null;
@@ -31,12 +29,10 @@ const LISTS: [FormatId, string, string][] = [
   ["task", "Task List", "⇧⌘9"],
 ];
 
-export function FormatBar({ editor, openLink, onMenuChange }: FormatBarProps) {
+export function FormatBar({ editor, openLink }: FormatBarProps) {
   const [open, setOpen] = useState<MenuName>(null);
-  useEffect(() => {
-    onMenuChange?.(open !== null);
-    return () => onMenuChange?.(false);
-  }, [open, onMenuChange]);
+  // The open menu's button: the menu drops up from it.
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const run = (id: FormatId) => {
     setOpen(null);
     runFormat(editor, id, openLink);
@@ -55,7 +51,10 @@ export function FormatBar({ editor, openLink, onMenuChange }: FormatBarProps) {
       aria-pressed={props.active}
       tabIndex={-1}
       onMouseDown={(event) => event.preventDefault()}
-      onClick={props.onClick}
+      onClick={(event) => {
+        if (props.menu) setAnchor(event.currentTarget);
+        props.onClick();
+      }}
     >
       <Icon name={props.icon} />
       {props.menu ? <Icon name="chevronDown" /> : null}
@@ -73,7 +72,12 @@ export function FormatBar({ editor, openLink, onMenuChange }: FormatBarProps) {
           menu: true,
         })}
         {open === "heading" ? (
-          <Menu items={items(HEADINGS)} onSelect={(id) => run(id as FormatId)} onClose={() => setOpen(null)} />
+          <Menu
+            items={items(HEADINGS)}
+            anchor={anchor}
+            onSelect={(id) => run(id as FormatId)}
+            onClose={() => setOpen(null)}
+          />
         ) : null}
       </div>
       <div className="format-group">
@@ -85,7 +89,12 @@ export function FormatBar({ editor, openLink, onMenuChange }: FormatBarProps) {
           menu: true,
         })}
         {open === "format" ? (
-          <Menu items={items(MARKS)} onSelect={(id) => run(id as FormatId)} onClose={() => setOpen(null)} />
+          <Menu
+            items={items(MARKS)}
+            anchor={anchor}
+            onSelect={(id) => run(id as FormatId)}
+            onClose={() => setOpen(null)}
+          />
         ) : null}
       </div>
       {button({ icon: "link", label: "Link (⌘L)", active: editor.isActive("link"), onClick: openLink })}
@@ -113,7 +122,12 @@ export function FormatBar({ editor, openLink, onMenuChange }: FormatBarProps) {
           menu: true,
         })}
         {open === "list" ? (
-          <Menu items={items(LISTS)} onSelect={(id) => run(id as FormatId)} onClose={() => setOpen(null)} />
+          <Menu
+            items={items(LISTS)}
+            anchor={anchor}
+            onSelect={(id) => run(id as FormatId)}
+            onClose={() => setOpen(null)}
+          />
         ) : null}
       </div>
     </div>

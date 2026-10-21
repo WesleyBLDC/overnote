@@ -118,7 +118,6 @@ export function App({ api }: { api: Api }) {
   const [slashDismissed, setSlashDismissed] = useState<number | null>(null);
   // Bumped on every transaction: the editor state is read while rendering (shouldRerenderOnTransaction is off).
   const [, setTick] = useState(0);
-  const [formatMenuOpen, setFormatMenuOpen] = useState(false);
   const [preview, setPreview] = useState<rpc.DeletedItem | null>(null);
 
   const copyText = useCallback(
@@ -339,8 +338,8 @@ export function App({ api }: { api: Api }) {
   const slashItems = slash && slash.from !== slashDismissed ? filterSlashItems(slash.query) : [];
   const emojiQuery = editor.isFocused ? emojiQueryAt(editor.state) : null;
   const showEmoji = emojiQuery !== null && emojiQuery.from !== emojiDismissed;
-  // Panels hang past the note instead (usePanelOverhang), so only dialogs and popups grow it.
-  const overlayRem = confirm ? 34 : slashItems.length || showEmoji || linkTarget || formatMenuOpen ? 16 : null;
+  // Only a dialog grows a short panel; panels and dropdowns stay inside it and scroll (useDropdownPlacement).
+  const overlayRem = confirm ? 34 : null;
   const hasSelection = !editor.state.selection.empty;
   const inList = editor.isActive("list");
   useResizeReporter(app, api, { autoSize: settings.windowAutoSize, overlayRem });
@@ -840,7 +839,6 @@ export function App({ api }: { api: Api }) {
         onToggleCount={() => updateSettings({ countMode: settings.countMode === "words" ? "characters" : "words" })}
         onToggleFormatBar={() => updateSettings({ showFormatBar: !settings.showFormatBar })}
         openLink={openLink}
-        onMenuChange={setFormatMenuOpen}
       />
       {slash && slashItems.length ? (
         <SlashMenu
@@ -848,7 +846,6 @@ export function App({ api }: { api: Api }) {
           editor={editor}
           items={slashItems}
           from={slash.from}
-          container={app}
           onRun={runSlash}
           onDismiss={() => setSlashDismissed(slash.from)}
         />
@@ -859,7 +856,6 @@ export function App({ api }: { api: Api }) {
           editor={editor}
           from={emojiQuery.from}
           query={emojiQuery.query}
-          container={app}
           onPick={(emoji) => {
             editor.chain().focus().insertContentAt({ from: emojiQuery.from, to: emojiQuery.to }, emoji).run();
             recordEmojiUse(emoji);
@@ -871,7 +867,6 @@ export function App({ api }: { api: Api }) {
         <LinkPopover
           editor={editor}
           target={linkTarget}
-          container={app}
           onClose={() => setLinkTarget(null)}
           notify={notify}
           openUrl={openUrl}

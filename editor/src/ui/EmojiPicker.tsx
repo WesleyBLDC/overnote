@@ -1,17 +1,9 @@
 /** Inline emoji picker: a quick strip, the full picker, and a search grid. */
 import type { Editor } from "@tiptap/core";
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { CATEGORIES, frequentEmoji, loadEmoji, quickEmoji, searchEmoji, type EmojiEntry } from "../editor/emoji";
 import { revealSelected } from "../lib/motion";
+import { useDropdownPlacement } from "./hooks";
 
 export interface EmojiPickerHandle {
   onKeyDown(event: KeyboardEvent): boolean;
@@ -21,7 +13,6 @@ interface EmojiPickerProps {
   editor: Editor;
   from: number;
   query: string;
-  container: HTMLElement | null;
   onPick: (emoji: string) => void;
   onDismiss: () => void;
 }
@@ -35,14 +26,19 @@ interface Cell {
 }
 
 export const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(function EmojiPicker(
-  { editor, from, query, container, onPick, onDismiss },
+  { editor, from, query, onPick, onDismiss },
   ref,
 ) {
   const [entries, setEntries] = useState<EmojiEntry[] | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [index, setIndex] = useState(0);
-  const [position, setPosition] = useState({ left: 0, top: 0 });
   const gridRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useDropdownPlacement(rootRef, () => editor.view.coordsAtPos(from), {
+    prefer: "below",
+    gapRem: 0.3,
+    align: "start",
+  });
 
   useEffect(() => {
     let alive = true;
@@ -53,15 +49,6 @@ export const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(funct
   }, []);
 
   useEffect(() => setIndex(0), [query, expanded]);
-
-  useLayoutEffect(() => {
-    const coords = editor.view.coordsAtPos(from);
-    const box = container?.getBoundingClientRect() ?? { left: 0, top: 0, width: window.innerWidth };
-    setPosition({
-      left: Math.max(8, Math.min(coords.left - box.left, box.width - 330)),
-      top: coords.bottom - box.top + 4,
-    });
-  }, [editor, from, container, query, expanded]);
 
   const byEmoji = useMemo(() => new Map((entries ?? []).map((entry) => [entry.emoji, entry])), [entries]);
   const labelOf = useCallback(
@@ -124,7 +111,7 @@ export const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(funct
     <div
       className={`popover emoji-picker is-${mode}`}
       data-testid="emoji-picker"
-      style={{ left: position.left, top: position.top }}
+      ref={rootRef}
       onMouseDown={(e) => e.preventDefault()}
     >
       {mode === "full" ? (

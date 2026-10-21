@@ -1,5 +1,8 @@
 /** A small dropdown menu with keyboard navigation, used by the format bar. */
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { revealSelected } from "../lib/motion";
+import { useDropdownPlacement } from "./hooks";
 import { Icon } from "./icons";
 import { Keys } from "./Keys";
 
@@ -12,13 +15,25 @@ export interface MenuItem {
 
 interface MenuProps {
   items: MenuItem[];
+  /** The button the menu drops up from. */
+  anchor: HTMLElement | null;
   onSelect: (id: string) => void;
   onClose: () => void;
 }
 
-export function Menu({ items, onSelect, onClose }: MenuProps) {
+/**
+ * Rendered in the app rather than in the format bar, so it is placed against the whole panel and
+ * never takes on the bar's dimmed opacity while the pointer is away.
+ */
+export function Menu({ items, anchor, onSelect, onClose }: MenuProps) {
   const [index, setIndex] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  useDropdownPlacement(ref, () => anchor?.getBoundingClientRect() ?? null, {
+    prefer: "above",
+    gapRem: 0.5,
+    align: "center",
+  });
+  useEffect(() => revealSelected(ref.current, true), [index]);
   useEffect(() => {
     ref.current?.focus();
     const onDown = (event: MouseEvent) => {
@@ -27,7 +42,9 @@ export function Menu({ items, onSelect, onClose }: MenuProps) {
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
   }, [onClose]);
-  return (
+  const container = anchor?.closest(".app");
+  if (!container) return null;
+  return createPortal(
     <div
       className="menu"
       role="menu"
@@ -62,6 +79,7 @@ export function Menu({ items, onSelect, onClose }: MenuProps) {
           {item.shortcut ? <Keys shortcut={item.shortcut} /> : null}
         </button>
       ))}
-    </div>
+    </div>,
+    container,
   );
 }

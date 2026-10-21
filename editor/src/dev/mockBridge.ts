@@ -25,6 +25,8 @@ export interface MockControl {
   callsTo(method: string): RecordedCall[];
   clearCalls(): void;
   seedMarkdown(markdowns: string[]): Note[];
+  /** Resizes the harness panel, as a person dragging the native panel's edges would. */
+  setPanelSize(width: number, height: number): void;
 }
 
 interface MockWindow {
@@ -86,6 +88,14 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
       control.calls.length = 0;
     },
     seedMarkdown: (markdowns) => control.store.seed(markdowns.map((md) => buildNoteContent(markdownToDoc(md)))),
+    setPanelSize: (width, height) => {
+      const root = target.document.getElementById("root");
+      if (!root) return;
+      restingHeight = height;
+      root.style.maxWidth = "none";
+      root.style.width = `${width}px`;
+      root.style.height = `${height}px`;
+    },
   };
 
   target.webkit = {
