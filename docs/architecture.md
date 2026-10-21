@@ -393,5 +393,5 @@ Any change to the wire shape (a method, its params or result, an event, a data t
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.
 Helper 0.4.0 is the first release that speaks v2.14 and v2.15, so a socket client can tell from `system.ping` (or `system.status`) `version` whether the editor merges outside changes and whether a create or duplicate leaves the current note alone.
-The first helper release after 0.4.0 speaks v3.0; a socket client that sent `titleSuffix` to 0.4.0 or earlier sends the copy's content instead.
+Helper 0.5.0 is the first release that speaks v3.0: `notes.duplicate` takes the copy's content and refuses `titleSuffix`, so a socket client that sent `titleSuffix` to 0.4.0 or earlier sends the content built with `duplicateContent` instead.
 Bump the version at the top of this document in the same pull request as the code change, and name the new version in the pull request description.
