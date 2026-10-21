@@ -643,10 +643,13 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
   const tiledAfterReport = (await state()).frame;
   const tiledSettings = await call("settings.get");
   await check("a frame set through Accessibility (tiling, window managers) is kept, stored, and ends auto-sizing", () => {
-    assert.deepEqual({ x: tiled.x, top: tiled.top, width: tiled.width, height: tiled.height }, tile, "tiled frame");
+    assert.deepEqual({ x: tiled.x, top: tiled.top, width: tiled.width }, { x: tile.x, top: tile.top, width: tile.width }, "tiled frame");
+    // AppKit's Accessibility setter may keep the bottom edge a point off the display's bottom
+    // (seen on a 1024 x 768 CI display); the helper keeps whatever frame it settled at.
+    assert.ok(Math.abs(tiled.height - tile.height) <= 2, `tiled height ${tiled.height}, asked ${tile.height}`);
     assert.deepEqual(tiledAfterReport, tiled, "a content report does not undo the tiled frame");
     assert.equal(tiledSettings.windowAutoSize, false, "windowAutoSize");
-    assert.equal(tiledSettings.panelFrame.height, tile.height, "stored height");
+    assert.equal(tiledSettings.panelFrame.height, tiled.height, "stored height");
     assert.equal(tiledSettings.panelFrame.width, tile.width, "stored width");
   });
   await poll(() => call("settings.get"), (st) => st.panelFrame.displays[s.screenKey]?.x === tile.x);
