@@ -23,6 +23,12 @@ export const TYPING_WINDOW_MS = 1000;
 const SAVE_ATTEMPTS = 3;
 /** How often a merge that waits for an input method composition to end checks again. */
 const COMPOSITION_POLL_MS = 50;
+/**
+ * The longest a merge waits for a composition to end. A lost compositionend would otherwise hold
+ * every save queued behind it (autosave, note switches, hide) forever; after this the merge is
+ * skipped and the edits stay unsaved for the next save.
+ */
+const COMPOSITION_WAIT_MS = 5000;
 
 /** What the session needs from the editor view. */
 export interface EditorPort {
@@ -267,7 +273,8 @@ export class NoteSession {
       // Conflict: someone else saved this note since the editor last synced with it. Their change
       // is merged into the edits (never overwritten), and the merge is what the next attempt saves.
       if (this.state.current?.id !== note.id) return false;
-      await this.whenComposed();
+      // Still composing after the wait: no merge, so the edits stay unsaved for the next save.
+      if (!(await this.whenComposed())) return false;
       if (this.state.current?.id !== note.id) return false;
       if (!this.rebase(synced, result.note)) return true;
     }
@@ -295,15 +302,18 @@ export class NoteSession {
   }
 
   /**
-   * Resolves once no input method composition is in progress. Replacing the document mid
-   * composition would break the text being composed, so every merge waits for this first.
+   * Resolves true once no input method composition is in progress, or false when one is still in
+   * progress after COMPOSITION_WAIT_MS. Replacing the document mid composition would break the text
+   * being composed, so every merge waits for this first, and skips the merge on false.
    */
-  private whenComposed(): Promise<void> {
-    if (!this.editor.isComposing()) return Promise.resolve();
+  private whenComposed(): Promise<boolean> {
+    if (!this.editor.isComposing()) return Promise.resolve(true);
+    let polls = Math.ceil(COMPOSITION_WAIT_MS / COMPOSITION_POLL_MS);
     return new Promise((resolve) => {
       const check = () => {
-        if (this.editor.isComposing()) this.setTimer(check, COMPOSITION_POLL_MS);
-        else resolve();
+        if (!this.editor.isComposing()) resolve(true);
+        else if (--polls <= 0) resolve(false);
+        else this.setTimer(check, COMPOSITION_POLL_MS);
       };
       this.setTimer(check, COMPOSITION_POLL_MS);
     });
@@ -319,7 +329,9 @@ export class NoteSession {
   }
 
   private async rebaseNow(stored: Note): Promise<boolean> {
-    await this.whenComposed();
+    // Still composing after the wait: no merge now. The editor keeps the version it synced with,
+    // so the next save is refused as stale and merges the outside change then.
+    if (!(await this.whenComposed())) return true;
     const current = this.state.current;
     // A save that ran first may already have merged this version, or saved past it.
     if (this.paused || current?.id !== stored.id || current.updatedAt >= stored.updatedAt) return true;

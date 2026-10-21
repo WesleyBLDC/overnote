@@ -241,6 +241,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   When both sides changed the same block differently, the merge keeps both versions and the editor shows "This note also changed elsewhere, so both versions were kept".
   When one side deleted a block the other changed, the change is kept and no notice shows, since only one version exists.
   While an input method composition is in progress, every merge waits until it ends, because replacing the document mid composition would break the text being composed.
+  The wait is capped at 5 s, so a lost `compositionend` cannot hold saves, note switches, and hides forever: after that the merge is skipped and the edits stay unsaved (a save reports the failure), and the next save merges and tries again.
 
 ## 6. Database schema (owned by the helper)
 

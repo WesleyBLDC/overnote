@@ -178,6 +178,17 @@ async function outsideWrite(page: Page, id: string, paragraphs: string[], option
 
 const contentSaves = async (page: Page) => (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params);
 
+const composing = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { __bnEditor: { view: { composing: boolean } } }).__bnEditor.view.composing,
+  );
+
+/** Starts or ends an input method composition the way the browser announces one. */
+const compose = (page: Page, type: "compositionstart" | "compositionend") =>
+  page.evaluate((name) => {
+    document.querySelector(".note-editor")?.dispatchEvent(new CompositionEvent(name, { bubbles: true, data: "" }));
+  }, type);
+
 test("an outside change while typing is merged into the typing at once, and the caret stays", async ({ page }) => {
   await page.clock.install();
   await openHarness(page, ["Draft"]);
@@ -273,24 +284,51 @@ test("an outside change during an input method composition waits until the compo
   await openHarness(page, ["Draft"]);
   await pauseClock(page);
   const [note] = await storedNotes(page);
-  const composing = () =>
-    page.evaluate(
-      () => (window as unknown as { __bnEditor: { view: { composing: boolean } } }).__bnEditor.view.composing,
-    );
-  const compose = (type: "compositionstart" | "compositionend") =>
-    page.evaluate((name) => {
-      document.querySelector(".note-editor")?.dispatchEvent(new CompositionEvent(name, { bubbles: true, data: "" }));
-    }, type);
-  await compose("compositionstart");
-  expect(await composing()).toBe(true);
+  await compose(page, "compositionstart");
+  expect(await composing(page)).toBe(true);
   // Replacing the document now would break the text being composed, so the merge waits.
   await outsideWrite(page, note?.id ?? "", ["Draft", "From outside"], { announce: true });
   await page.clock.runFor(500);
   await expect(editor(page)).toHaveText("Draft");
-  await compose("compositionend");
+  await compose(page, "compositionend");
   await page.clock.runFor(200);
-  expect(await composing()).toBe(false);
+  expect(await composing(page)).toBe(false);
   await expect(editor(page)).toHaveText("DraftFrom outside");
+});
+
+test("a composition whose end never arrives holds a save for at most 5 s, and the edits stay for the next save", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await openHarness(page, ["Other", "Draft"]);
+  await pauseClock(page);
+  const [draft, other] = await storedNotes(page);
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  // The compositionend for this composition is lost, so the editor believes it is still composing.
+  await compose(page, "compositionstart");
+  expect(await composing(page)).toBe(true);
+  await outsideWrite(page, draft?.id ?? "", ["Draft", "From outside"], { announce: false });
+
+  // Switching notes saves first; the save is refused as stale, and its merge waits for the composition.
+  await emit(page, "note.open", { id: other?.id });
+  await page.clock.runFor(1000);
+  await expect(page.getByTestId("title")).toHaveText("Draft mine");
+  // Past the cap the merge is skipped: the switch reports the unsaved edits instead of hanging.
+  await page.clock.runFor(4500);
+  await expect(page.getByRole("alert").getByText("Could not save note. Try again.")).toHaveCount(1);
+  await expect(page.getByTestId("title")).toHaveText("Draft mine");
+  await expect(editor(page)).toHaveText("Draft mine");
+  expect((await storedNotes(page)).find((n) => n.id === draft?.id)?.text).toBe("Draft\n\nFrom outside");
+
+  // Once the composition ends, the next save merges and keeps every keystroke and the outside change.
+  await compose(page, "compositionend");
+  await page.clock.runFor(100);
+  expect(await composing(page)).toBe(false);
+  await emit(page, "note.open", { id: other?.id });
+  await page.clock.runFor(100);
+  await expect(page.getByTestId("title")).toHaveText("Other");
+  expect((await storedNotes(page)).find((n) => n.id === draft?.id)?.text).toBe("Draft mine\n\nFrom outside");
 });
 
 test("a save that keeps meeting newer outside changes gives up after three tries, keeps the edits, and says so once", async ({
