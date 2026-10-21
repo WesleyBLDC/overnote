@@ -250,3 +250,20 @@ test("when the typing and an outside change edit the same paragraph, both versio
   await page.clock.runFor(400);
   await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine\n\nFrom outside");
 });
+
+test("when an outside change deletes the paragraph being typed in, the typing is kept without a notice", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft\n\nSecond"]);
+  await pauseClock(page);
+  const [note] = await storedNotes(page);
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  await outsideWrite(page, note?.id ?? "", ["Draft"], { announce: true });
+  await expect(editor(page)).toHaveText("DraftSecond mine");
+  await page.clock.runFor(400);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft\n\nSecond mine");
+  // Only one version of that paragraph exists, so the editor does not claim it kept two.
+  await expect(page.getByTestId("notices")).not.toContainText("both versions");
+});

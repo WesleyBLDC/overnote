@@ -8,7 +8,10 @@ import { emptyDoc, normalizeDoc } from "./load";
 export interface DocMerge {
   /** The merged document: every block either side added or changed is in it. */
   doc: JSONContent;
-  /** Both sides changed the same blocks differently, so both versions were kept, local first. */
+  /**
+   * Both sides changed the same blocks into different, non-empty versions, so both were kept, local
+   * first. An edit against a delete keeps the edit and is not a conflict: only one version exists.
+   */
   conflicted: boolean;
   /** The merged document is exactly `remote`, so there is nothing left to save. */
   matchesRemote: boolean;
@@ -118,7 +121,8 @@ function applyHunks(base: JSONContent[], start: number, end: number, side: Hunk[
 /**
  * Merges `local` (the editor) and `remote` (the stored note) that both started from `base`.
  * Changes to different blocks all apply; where both sides changed the same blocks differently,
- * the local version comes first and the remote version right after it, so nothing is lost.
+ * the local version comes first and the remote version right after it, so nothing is lost. Where
+ * one side deleted blocks the other changed (or inserted into), the changed version wins.
  */
 export function mergeDocs(base: JSONContent, local: JSONContent, remote: JSONContent): DocMerge {
   const baseBlocks = blocksOf(base);
@@ -160,7 +164,8 @@ export function mergeDocs(base: JSONContent, local: JSONContent, remote: JSONCon
       merged.push(...remoteVersion);
       continue;
     }
-    conflicted = true;
+    // One side deleted what the other changed: the change wins, and there is only one version.
+    if (localVersion.length && remoteVersion.length) conflicted = true;
     merged.push(...localVersion, ...remoteVersion);
   }
   merged.push(...baseBlocks.slice(at));

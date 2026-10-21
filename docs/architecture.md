@@ -238,6 +238,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   Otherwise it merges the stored version into what it shows with `mergeDocs` (base: the version it last synced with), in place, keeping the caret, scroll, and undo history, and saves the merge if it differs from the stored note.
   A save that gets `conflict` (a socket write the editor was not told about, or one that raced the save) merges the same way and retries against the returned note, up to 3 attempts; after that the edits stay unsaved and the next save tries again.
   When both sides changed the same block differently, the merge keeps both versions and the editor shows "This note also changed elsewhere, so both versions were kept".
+  When one side deleted a block the other changed, the change is kept and no notice shows, since only one version exists.
 
 ## 6. Database schema (owned by the helper)
 
@@ -292,8 +293,8 @@ export function buildNoteContent(doc: JSONContent): NoteContent; // rawContent +
 export function noteContentFromMarkdown(markdown: string): NoteContent;
 export function mergeDocs(base: JSONContent, local: JSONContent, remote: JSONContent): { doc: JSONContent; conflicted: boolean; matchesRemote: boolean };
 // three-way merge by top-level block (one list item is one block): changes to different blocks all apply; where both sides
-// changed the same blocks differently, local's version comes first and remote's right after it (conflicted: true), so an edit
-// also beats a delete; matchesRemote: the result is exactly remote
+// changed the same blocks into different non-empty versions, local's version comes first and remote's right after it
+// (conflicted: true); an edit beats a delete (conflicted stays false); matchesRemote: the result is exactly remote
 export function loadDoc(rawContent: string | null, text: string): JSONContent; // stored doc if valid (placeholders preserved), else rebuild from text with a hard break per newline
 export function toStoredDoc(doc: JSONContent): JSONContent;               // inverse of loadDoc's placeholder mapping
 export function docToClipboard(docOrSlice: JSONContent): { text: string; html: string };   // ⌘C/⌘X format: plain text plus semantic HTML
@@ -375,7 +376,7 @@ The extension honors `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`), which t
 
 ## Protocol versioning
 
-The protocol described here is v2.15 (v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on; helper 0.4.0 is the first release with it; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v2.15 (v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; helper 0.4.0 is the first release with it; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.
