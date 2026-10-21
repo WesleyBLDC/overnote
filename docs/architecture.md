@@ -217,8 +217,13 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
 - The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. ⌘W hides the panel (helper menu item, like closing a window in any app).
 - The helper gives the borderless panel generous resize hit zones: 10 pt along edges and 24 pt squares at corners, with the matching resize cursors.
-  The panel has no `.resizable` style; these zones do all user resizing, and the top 10 pt of the drag strip is a resize zone.
+  The top 10 pt of the drag strip is a resize zone.
   Keep interactive controls at least 24 pt from the panel corners.
+- The panel is resizable (`.resizable`) and reports the standard window subrole (`AXStandardWindow`) to Accessibility, not the system dialog subrole a non activating panel gets by default, so system tiling and window managers can place and size it like an app window.
+  Drags in the drag regions and the drag strip hand off to the window server (`performDrag`), the system's own window move.
+  A frame the helper did not set itself (system tiling, a window manager through Accessibility, the system's own sliver of edge resize) is kept as the person's resize: it is stored like a drag in the resize zones, and a new height turns windowAutoSize off.
+  While a dropdown hangs past the note (`window.setOverhang`), only the helper resizes the window.
+  Limits: the helper never activates, so it has no menu bar of its own (no Window > Move & Resize) and is never the frontmost app, and a borderless panel has no green button; window managers that only act on the frontmost app's focused window cannot reach it.
 - Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so ⌘K and browse never resize a roomy window).
 - The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath.
   Minimum user size is 396 pt wide by 128 pt times zoom.

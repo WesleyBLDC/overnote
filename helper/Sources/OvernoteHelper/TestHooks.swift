@@ -41,6 +41,11 @@ final class TestHooks {
                 "canJoinAllSpaces": .bool(behavior.contains(.canJoinAllSpaces)),
                 "fullScreenAuxiliary": .bool(behavior.contains(.fullScreenAuxiliary)),
                 "nonactivating": .bool(panel.styleMask.contains(.nonactivatingPanel)),
+                "resizable": .bool(panel.styleMask.contains(.resizable)),
+                "axSubrole": .string(panel.accessibilitySubrole()?.rawValue ?? ""),
+                "axLegacySubrole": .string(Self.legacyAccessibilityValue(of: panel, .subrole) as? String ?? ""),
+                "axSizeSettable": .bool(Self.legacyAccessibilitySettable(panel, .size)),
+                "axPositionSettable": .bool(Self.legacyAccessibilitySettable(panel, .position)),
                 "resizeZones": .bool(Self.find(ResizeOverlayView.self, in: panel.contentView) != nil),
                 "hidesOnDeactivate": .bool(panel.hidesOnDeactivate),
                 "acceptsFirstMouse": .bool(panel.contentView.flatMap(Self.webView(in:))?.acceptsFirstMouse(for: nil) ?? true),
@@ -154,6 +159,19 @@ final class TestHooks {
             panel.setFrame(end, display: true, animate: false)
             controller.userDidResize(from: start, to: panel.frame)
             return [:]
+        case "test.accessibilityResize":
+            // Places the panel the way a window manager does through Accessibility: AXPosition
+            // (the top left corner), then AXSize through AppKit's Accessibility setter, which
+            // keeps the top left corner and the frame on screen, then AXPosition again. Nothing
+            // in the helper's own resize paths runs, as with system tiling.
+            let topLeft = NSPoint(x: try p.double("x"), y: try p.double("top"))
+            let size = NSValue(size: NSSize(width: try p.double("width"), height: try p.double("height")))
+            panel.setFrameTopLeftPoint(topLeft)
+            _ = panel.perform(
+                NSSelectorFromString("accessibilitySetValue:forAttribute:"), with: size,
+                with: NSAccessibility.Attribute.size.rawValue)
+            panel.setFrameTopLeftPoint(topLeft)
+            return [:]
         case "test.moveTo":
             // Moves the top left corner, as a user drag would.
             let top = CGFloat(try p.double("top"))
@@ -179,6 +197,20 @@ final class TestHooks {
         default:
             throw RPCError.methodNotFound(method)
         }
+    }
+
+    // The legacy attribute API is what an Accessibility client's requests reach (AXSubrole,
+    // whether AXSize is settable, AXSize itself). It is deprecated for implementers, so it is
+    // called by selector here rather than by name.
+    private static func legacyAccessibilityValue(of window: NSWindow, _ attribute: NSAccessibility.Attribute) -> Any? {
+        window.perform(NSSelectorFromString("accessibilityAttributeValue:"), with: attribute.rawValue)?.takeUnretainedValue()
+    }
+
+    private static func legacyAccessibilitySettable(_ window: NSWindow, _ attribute: NSAccessibility.Attribute) -> Bool {
+        typealias Settable = @convention(c) (AnyObject, Selector, NSString) -> Bool
+        let selector = NSSelectorFromString("accessibilityIsAttributeSettable:")
+        let function = unsafeBitCast(window.method(for: selector), to: Settable.self)
+        return function(window, selector, attribute.rawValue as NSString)
     }
 
     private static func webView(in view: NSView) -> NotesWebView? {

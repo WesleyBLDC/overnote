@@ -15,7 +15,7 @@
 # auxiliary, the dark material under a transparent web view, height clamping (128 to 860
 # scaled by zoom, 2 pt tolerance, top edge fixed), temporary growth that only grows, the user
 # height rule, editor drag regions and the drag strip, first mouse, resize hit zones and real
-# resize drags, ⌘W, per display position memory, persistence across a restart, and the first
+# resize drags, a frame set through Accessibility (as tiling and window managers do), ⌘W, per display position memory, persistence across a restart, and the first
 # show with auto-sizing on, which waits hidden for the editor's first height report (up to
 # 3 s) so a cold start never flashes the default height.
 #
@@ -294,6 +294,12 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     assert.equal(s.fullScreenAuxiliary, true, "fullScreenAuxiliary");
     assert.equal(s.nonactivating, true, "nonactivating");
     assert.equal(s.resizeZones, true, "resize zones");
+    // Resizable and a standard window to Accessibility, so tiling and window managers can size it.
+    assert.equal(s.resizable, true, "resizable");
+    assert.equal(s.axSubrole, "AXStandardWindow", "Accessibility subrole");
+    assert.equal(s.axLegacySubrole, "AXStandardWindow", "legacy Accessibility subrole");
+    assert.equal(s.axSizeSettable, true, "Accessibility size settable");
+    assert.equal(s.axPositionSettable, true, "Accessibility position settable");
     assert.equal(s.hidesOnDeactivate, false, "hidesOnDeactivate");
     assert.equal(s.acceptsFirstMouse, false, "acceptsFirstMouse");
     assert.ok(server, "window server does not list the panel");
@@ -623,6 +629,30 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     assert.equal(r5.height, 128, "height");
     assert.equal(r5.x, r4.x, "x");
     assert.equal(r5.top, r4.top, "top");
+  });
+
+  // A frame set from outside (system tiling, Window > Move & Resize, a window manager through
+  // Accessibility) is kept like the person's own resize: flush left at half width and full
+  // height, it stays exactly there, is stored, and turns auto-sizing off.
+  await call("settings.set", { windowAutoSize: true });
+  const vf = (await state()).visibleFrame;
+  const tile = { x: vf.x, top: vf.y + vf.height, width: Math.floor(vf.width / 2), height: vf.height };
+  await call("test.accessibilityResize", tile);
+  const tiled = (await state()).frame;
+  await bridge("window.resize", { contentHeight: 200 });
+  const tiledAfterReport = (await state()).frame;
+  const tiledSettings = await call("settings.get");
+  await check("a frame set through Accessibility (tiling, window managers) is kept, stored, and ends auto-sizing", () => {
+    assert.deepEqual({ x: tiled.x, top: tiled.top, width: tiled.width, height: tiled.height }, tile, "tiled frame");
+    assert.deepEqual(tiledAfterReport, tiled, "a content report does not undo the tiled frame");
+    assert.equal(tiledSettings.windowAutoSize, false, "windowAutoSize");
+    assert.equal(tiledSettings.panelFrame.height, tile.height, "stored height");
+    assert.equal(tiledSettings.panelFrame.width, tile.width, "stored width");
+  });
+  await poll(() => call("settings.get"), (st) => st.panelFrame.displays[s.screenKey]?.x === tile.x);
+  await check("the tiled top left point is remembered for this display", async () => {
+    const point = (await call("settings.get")).panelFrame.displays[s.screenKey];
+    assert.deepEqual(point, { x: tile.x, y: tile.top });
   });
   await call("test.simulateUserResize", { height: 300, width: 700 });
 

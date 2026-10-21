@@ -35,6 +35,13 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     /// The height before a temporary growth, restored when no user height is stored.
     private var heightBeforeTemporary: CGFloat?
     private var saveFrameWork: DispatchWorkItem?
+    /// True while the helper itself sets the frame, so the window delegate can tell its own
+    /// changes from the system's (tiling, a window manager).
+    private var applyingFrame = false
+    /// The frame as of the last move or resize, the start of the next outside resize.
+    private var lastFrame: NSRect = .zero
+    /// The frame when a system live resize (the window edge) began.
+    private var liveResizeStart: NSRect?
     /// Every event sent to the editor, kept only when test hooks are on.
     private(set) var emittedEvents: [(String, JSONValue)] = []
     /// Bridge methods the editor called and heights it reported, kept only with test hooks.
@@ -142,6 +149,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         panel.onClose = { [weak self] in self?.hide() }
 
         placePanel()
+        lastFrame = panel.frame
         if let url = URL(string: "\(EditorSchemeHandler.scheme)://app/index.html") {
             webView.load(URLRequest(url: url))
         }
@@ -299,19 +307,11 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     /// centered with its top just under the menu bar.
     private func placePanel() {
         guard let screen = screenUnderPointer else { return }
-        let visible = screen.visibleFrame
         let width = CGFloat(settings.panelFrame?.width ?? Double(NotesPanel.defaultWidth))
-        let height = targetHeight(on: screen)
-        var topLeft = NSPoint(x: visible.midX - width / 2, y: visible.maxY)
-        if let saved = settings.panelFrame?.displays[screen.positionKey] {
-            topLeft = NSPoint(x: saved.x, y: saved.y)
-        } else if let frame = settings.panelFrame, frame.displays.isEmpty,
-            visible.contains(NSPoint(x: frame.x + 1, y: frame.y - 1))
-        {
-            topLeft = NSPoint(x: frame.x, y: frame.y)
-        }
-        let frame = NSRect(x: topLeft.x, y: topLeft.y - height, width: width, height: height)
-        setFrame(keepOnScreen(frame, visible: visible))
+        setFrame(
+            PanelGeometry.placement(
+                stored: settings.panelFrame, displayKey: screen.positionKey, visible: screen.visibleFrame, width: width,
+                height: targetHeight(on: screen), minimumWidth: NotesPanel.minimumWidth))
     }
 
     /// The note's frame: the window without the room a hanging dropdown borrows below it.
@@ -377,28 +377,25 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     /// Clamps the width to the display and nudges the frame fully onto it, keeping the top
     /// edge where it was whenever the frame fits.
     private func keepOnScreen(_ frame: NSRect, visible: NSRect) -> NSRect {
-        var result = frame
-        result.size.width = min(max(frame.width, NotesPanel.minimumWidth), visible.width)
-        result.size.height = min(frame.height, visible.height)
-        result.origin.y = frame.maxY - result.height
-        if result.maxY > visible.maxY { result.origin.y = visible.maxY - result.height }
-        if result.minY < visible.minY { result.origin.y = visible.minY }
-        if result.maxX > visible.maxX { result.origin.x = visible.maxX - result.width }
-        if result.minX < visible.minX { result.origin.x = visible.minX }
-        return result
+        PanelGeometry.keepOnScreen(frame, visible: visible, minimumWidth: NotesPanel.minimumWidth)
     }
 
+    /// Every frame change the helper makes goes through here, so the window delegate never
+    /// mistakes one for the system or a window manager placing the panel.
     private func setFrame(_ frame: NSRect) {
         guard frame != panel.frame else { return }
+        applyingFrame = true
+        defer { applyingFrame = false }
         // No animation: height steps land at once.
         panel.setFrame(frame, display: panel.isVisible, animate: false)
         panel.invalidateShadow()
+        lastFrame = panel.frame
     }
 
     /// Applies the current target height with the top edge fixed.
     private func applyHeight(force: Bool = false) {
         // While a dropdown hangs below the note, the note keeps its size; heights apply after.
-        guard overhang == 0, !panel.isUserResizing, let screen = panel.screen ?? screenUnderPointer else { return }
+        guard overhang == 0, !panel.isUserResizing, !panel.inLiveResize, let screen = panel.screen ?? screenUnderPointer else { return }
         let height = targetHeight(on: screen)
         guard force || abs(height - panel.frame.height) > Self.heightTolerance else { return }
         var frame = panel.frame
@@ -424,18 +421,9 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         saveFrameWork?.cancel()
         saveFrameWork = nil
         guard let screen = panel.screen else { return }
-        let frame = noteFrame
-        var saved = settings.panelFrame ?? PanelFrame(x: frame.minX, y: frame.maxY, width: frame.width)
-        saved.x = frame.minX
-        saved.y = frame.maxY
-        saved.width = frame.width
-        // A temporary height is never the user's height.
-        if settings.windowAutoSize {
-            saved.height = nil
-        } else if temporaryHeight == nil {
-            saved.height = frame.height
-        }
-        saved.displays[screen.positionKey] = PanelPoint(x: frame.minX, y: frame.maxY)
+        let saved = PanelGeometry.recording(
+            noteFrame, displayKey: screen.positionKey, in: settings.panelFrame, autoSize: settings.windowAutoSize,
+            temporary: temporaryHeight != nil)
         guard saved != settings.panelFrame else { return }
         do {
             settings = try repository.setSettings(["panelFrame": saved.json])
@@ -445,10 +433,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     /// A user made height change turns auto-sizing off and keeps that height; a width only
-    /// change leaves auto-sizing on. Called at the end of a drag in the resize
-    /// zones; programmatic resizes never get here.
+    /// change leaves auto-sizing on. Called at the end of a drag in the resize zones or along
+    /// the window edge, and for any frame the system or a window manager sets (tiling or
+    /// Accessibility); the helper's own resizes never get here.
     func userDidResize(from start: NSRect, to end: NSRect) {
-        let heightChanged = abs(end.height - start.height) > Self.heightTolerance
+        let heightChanged = PanelGeometry.changesHeight(from: start, to: end, tolerance: Self.heightTolerance)
+        lastFrame = end
         if heightChanged {
             // The user's height wins over a temporary growth that was in effect.
             temporaryHeight = nil
@@ -470,7 +460,39 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowDidMove(_ notification: Notification) {
+        if !panel.isUserResizing, !panel.inLiveResize { lastFrame = panel.frame }
         if panel.isVisible { scheduleFrameSave() }
+    }
+
+    /// While a dropdown hangs below the note, the window's bottom edge is not the note's, so
+    /// only the helper resizes it. Everything else may resize the panel as any window.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        applyingFrame || overhang == 0 ? frameSize : sender.frame.size
+    }
+
+    /// A resize the helper did not make and that is not a live resize: system tiling or a
+    /// window manager setting the frame through Accessibility. The panel keeps that frame as
+    /// the person's own resize.
+    func windowDidResize(_ notification: Notification) {
+        guard !applyingFrame, !panel.isUserResizing, !panel.inLiveResize else { return }
+        let start = lastFrame
+        lastFrame = panel.frame
+        guard panel.isVisible, overhang == 0, start != .zero else { return }
+        userDidResize(from: start, to: panel.frame)
+    }
+
+    func windowWillStartLiveResize(_ notification: Notification) {
+        liveResizeStart = panel.frame
+    }
+
+    /// The end of a resize along the window edge (the system's live resize), the same as one
+    /// in the resize zones.
+    func windowDidEndLiveResize(_ notification: Notification) {
+        let start = liveResizeStart ?? lastFrame
+        liveResizeStart = nil
+        lastFrame = panel.frame
+        panel.invalidateShadow()
+        userDidResize(from: start, to: panel.frame)
     }
 
     func windowDidChangeScreen(_ notification: Notification) {

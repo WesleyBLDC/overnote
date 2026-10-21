@@ -7,6 +7,9 @@ import WebKit
 /// editor's top bar, and the editor draws its own Close control. Non activating, so showing
 /// it never activates the helper or changes the menu bar, yet it can become key and take
 /// typing. It sits at the modal panel level, one step above ordinary floating windows.
+///
+/// It is resizable and reports itself to Accessibility as a standard window, so system
+/// tiling and window managers can place and size it like any app window.
 final class NotesPanel: NSPanel {
     /// Smallest size a user can drag to, at 100%, matching the auto-height minimum.
     static let minimumWidth: CGFloat = 396
@@ -27,9 +30,10 @@ final class NotesPanel: NSPanel {
     init(contentRect: NSRect) {
         super.init(
             contentRect: contentRect,
-            // Not `.resizable`: AppKit's own edge resize for borderless windows is a sliver
-            // that tracks the window server pointer. ResizeOverlayView owns all resizing.
-            styleMask: [.borderless, .nonactivatingPanel],
+            // `.resizable` lets system tiling and window managers size the panel (without
+            // it, Accessibility reports the size as not settable). The system's own edge resize on a borderless window is only a sliver,
+            // so ResizeOverlayView's wider zones inside the edges do the resizing by pointer.
+            styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -50,6 +54,17 @@ final class NotesPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    /// A non activating panel reports the system dialog subrole, which window managers and
+    /// tiling skip as a system surface. The notes panel is a document window, so it reports
+    /// the standard window subrole through both the current and the legacy Accessibility API.
+    override func accessibilitySubrole() -> NSAccessibility.Subrole? { .standardWindow }
+
+    @available(macOS, deprecated: 10.10, message: "AppKit still answers legacy attribute requests through it")
+    override func accessibilityAttributeValue(_ attribute: NSAccessibility.Attribute) -> Any? {
+        if attribute == .subrole { return NSAccessibility.Subrole.standardWindow.rawValue }
+        return super.accessibilityAttributeValue(attribute)
+    }
 
     /// True while the user drags one of our resize zones, so content driven height changes
     /// never fight the pointer.

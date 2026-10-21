@@ -4,7 +4,7 @@ import Testing
 
 // Unit tests are limited to logic end to end tests cannot reach cheaply (the testing policy in
 // CONTRIBUTING.md): fold rules, ordering and cursor math, pins, trash purge, the update conflict, RPC
-// framing, and the security checks on file names and asset paths. Everything else is covered
+// framing, the security checks on file names and asset paths, and the panel frame memory. Everything else is covered
 // by scripts/smoke-helper.sh and scripts/e2e-window.sh against the real binary.
 
 @Suite("Fold rule")
@@ -162,6 +162,44 @@ struct PurgeTests {
         f.clock.advance(1)
         #expect(try f.repository.purgeExpiredTrash() == [edge.id])
         #expect(try f.repository.get(live.id).id == live.id)
+    }
+}
+
+@Suite("Panel frame")
+struct PanelFrameTests {
+    /// A 1440 x 900 display whose menu bar takes the top 24 pt.
+    let visible = CGRect(x: 0, y: 0, width: 1440, height: 876)
+    let key = "display@1440x900"
+
+    /// Tiling or a window manager puts the panel flush left at half width and full height: the
+    /// helper keeps that frame, and the next show opens it exactly there again.
+    @Test func aTiledFrameIsStoredAndPlacedBackExactly() {
+        let tiled = CGRect(x: visible.minX, y: visible.minY, width: visible.width / 2, height: visible.height)
+        #expect(PanelGeometry.keepOnScreen(tiled, visible: visible, minimumWidth: 396) == tiled)
+        let stored = PanelGeometry.recording(tiled, displayKey: key, in: nil, autoSize: false, temporary: false)
+        #expect(stored == PanelFrame(x: 0, y: 876, width: 720, height: 876, displays: [key: PanelPoint(x: 0, y: 876)]))
+        let placed = PanelGeometry.placement(
+            stored: stored, displayKey: key, visible: visible, width: CGFloat(stored.width),
+            height: CGFloat(stored.height ?? 0), minimumWidth: 396)
+        #expect(placed == tiled)
+        // A move to another display remembers both, and the legacy point follows the last move.
+        let other = CGRect(x: 1500, y: 100, width: 720, height: 876)
+        let moved = PanelGeometry.recording(other, displayKey: "second", in: stored, autoSize: false, temporary: false)
+        #expect(moved.displays == [key: PanelPoint(x: 0, y: 876), "second": PanelPoint(x: 1500, y: 976)])
+        #expect(moved.x == 1500 && moved.y == 976)
+    }
+
+    @Test func autoSizingAndTemporaryGrowthNeverStoreTheirHeight() {
+        let frame = CGRect(x: 100, y: 200, width: 640, height: 300)
+        let previous = PanelFrame(x: 0, y: 876, width: 640, height: 500)
+        #expect(PanelGeometry.recording(frame, displayKey: key, in: previous, autoSize: true, temporary: false).height == nil)
+        #expect(PanelGeometry.recording(frame, displayKey: key, in: previous, autoSize: false, temporary: true).height == 500)
+        // Within the 2 pt tolerance a resize is width only and leaves auto-sizing on.
+        #expect(!PanelGeometry.changesHeight(from: frame, to: frame.insetBy(dx: 0, dy: 1), tolerance: 2))
+        #expect(PanelGeometry.changesHeight(from: frame, to: frame.insetBy(dx: 0, dy: 2), tolerance: 2))
+        // A frame past the display edge comes back on screen with its top edge kept.
+        let off = CGRect(x: -50, y: 700, width: 640, height: 300)
+        #expect(PanelGeometry.keepOnScreen(off, visible: visible, minimumWidth: 396) == CGRect(x: 0, y: 576, width: 640, height: 300))
     }
 }
 
