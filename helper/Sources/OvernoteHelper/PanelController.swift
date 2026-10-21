@@ -136,6 +136,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         let overlay = ResizeOverlayView(frame: body.bounds)
         overlay.autoresizingMask = [.width, .height]
         webView.resizeOverlay = overlay
+        panel.resizeOverlay = overlay
 
         body.addSubview(background)
         body.addSubview(webView)

@@ -87,6 +87,21 @@ final class NotesPanel: NSPanel {
         }
     }
 
+    /// The resize zones take every mouse down inside them. A resizable window otherwise runs
+    /// AppKit's own edge resize for a press near its edge before any view sees it, and that
+    /// resize would replace (and differ from) the zones' resize.
+    weak var resizeOverlay: ResizeOverlayView?
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown, let resizeOverlay, resizeOverlay.edge(atWindowPoint: event.locationInWindow) != nil {
+            // Like any window edge, a press here also focuses an unfocused panel.
+            if !isKeyWindow { makeKey() }
+            resizeOverlay.mouseDown(with: event)
+            return
+        }
+        super.sendEvent(event)
+    }
+
     override func performClose(_ sender: Any?) {
         onClose?()
     }
