@@ -127,11 +127,15 @@
   --panel-width: 22.8rem;
   --harness-backdrop: linear-gradient(135deg, #e9eef2, #d9e4ea);
   --harness-material: rgba(236, 238, 241, 0.7);
+  --scrollbar-thumb: rgba(12, 12, 14, 0.22);
+  --scrollbar-thumb-hover: rgba(12, 12, 14, 0.38);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --body-tint: rgba(24, 24, 26, 0.94);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.22);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
 
     --accent: rgba(255, 255, 255, 0.88);
     --accent-soft: rgba(255, 255, 255, 0.12);

@@ -6,6 +6,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createApi } from "./bridge/api";
 import { hasNativeBridge, installBridge, type BridgeWindow } from "./bridge/client";
+import { watchScrollbarStyle } from "./lib/scrollbars";
 import { App } from "./ui/App";
 import "./styles/theme.css";
 import "./styles/app.css";
@@ -18,6 +19,7 @@ async function start(): Promise<void> {
     const { installMockBridge } = await import("./dev/mockBridge");
     installMockBridge(window);
   }
+  watchScrollbarStyle(window);
   const root = document.getElementById("root");
   if (!root) throw new Error("Missing #root");
   createRoot(root).render(

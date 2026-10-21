@@ -908,3 +908,37 @@ async function ghostSnapshot(page: Page): Promise<GhostSnapshot> {
     .not.toBeNull();
   return page.evaluate(() => (window as unknown as { __ghost: GhostSnapshot }).__ghost);
 }
+
+test("with legacy scrollbars every scroller draws a thin one of its own", async ({ page }) => {
+  await openHarness(page, [Array.from({ length: 60 }, (_, i) => `Line ${i + 1}`).join("\n\n")]);
+  // The system's own choice, measured on a scroller the stylesheet leaves alone.
+  const systemLegacy = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.className = "scrollbar-probe";
+    probe.style.cssText = "position:absolute;width:100px;height:100px;overflow:scroll";
+    document.body.append(probe);
+    const legacy = probe.offsetWidth - probe.clientWidth > 0;
+    probe.remove();
+    return legacy;
+  });
+  expect(await page.evaluate(() => document.documentElement.dataset.scrollbars ?? null)).toBe(
+    systemLegacy ? "legacy" : null,
+  );
+  // Forced on, as with a mouse and no trackpad: a scroller gets a 0.7rem scrollbar, the probe keeps the system's.
+  const widths = await page.evaluate(() => {
+    document.documentElement.dataset.scrollbars = "legacy";
+    const make = (className: string) => {
+      const element = document.createElement("div");
+      element.className = className;
+      element.style.cssText = "position:absolute;width:100px;height:100px;overflow:scroll";
+      document.body.append(element);
+      const width = element.offsetWidth - element.clientWidth;
+      element.remove();
+      return width;
+    };
+    return { scroller: make("panel-list"), probe: make("scrollbar-probe") };
+  });
+  expect(widths.scroller).toBeGreaterThanOrEqual(9);
+  expect(widths.scroller).toBeLessThanOrEqual(10);
+  expect(widths.probe).toBe(systemLegacy ? 15 : 0);
+});

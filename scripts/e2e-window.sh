@@ -227,7 +227,6 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
  */
 async function screenshots() {
   fs.mkdirSync(SHOTS, { recursive: true });
-  try { console.log(`[e2e] AppleShowScrollBars: ${execFileSync("defaults", ["read", "-g", "AppleShowScrollBars"], { encoding: "utf8" }).trim()}`); } catch { console.log("[e2e] AppleShowScrollBars: unset"); }
   args = argsFor(`${TMP}/support-shots`, EDITOR_DIR);
   helper = await start();
   const rpc = helper.call;
@@ -313,11 +312,6 @@ async function screenshots() {
     execFileSync("screencapture", ["-x", "-o", "-l", String(s.windowNumber), file]);
     assert.ok(fs.statSync(file).size > 0, `${file} is empty`);
     console.log(`[e2e] captured ${name}.png (${s.frame.width} x ${s.frame.height})`);
-    // DEBUG (temporary): every scroller, and a second picture a while later.
-    const scrollers = await js(`Array.from(document.querySelectorAll("*")).filter((e) => { const o = getComputedStyle(e).overflowY; return (o === "auto" || o === "scroll") && e.scrollHeight > e.clientHeight; }).map((e) => { const r = e.getBoundingClientRect(); return { cls: e.className, rect: [r.left, r.top, r.width, r.height].map(Math.round), bar: e.offsetWidth - e.clientWidth, st: e.scrollTop, sh: e.scrollHeight, ch: e.clientHeight }; })`);
-    fs.writeFileSync(`${SHOTS}/${name}.json`, JSON.stringify(scrollers, null, 1));
-    await sleep(1500);
-    execFileSync("screencapture", ["-x", "-o", "-l", String(s.windowNumber), `${SHOTS}/${name}-late.png`]);
   };
 
   const resize = async (width, height) => {
@@ -380,7 +374,14 @@ async function screenshots() {
     for (const [width, height] of [[405, 197], [480, 260]]) {
       await openSeeded();
       await resize(width, height);
-      await check(`screenshots: ${scheme} ${width} x ${height} at rest`, () => capture(`${scheme}-${width}x${height}-rest`));
+      const [scrollbars, barWidth] = await js(
+        "[document.documentElement.dataset.scrollbars ?? null, (() => { const c = document.querySelector('.content'); return c.offsetWidth - c.clientWidth; })()]");
+      await check(`screenshots: ${scheme} ${width} x ${height} at rest`, async () => {
+        // A runner without a trackpad has legacy scrollbars: the editor draws thin ones instead.
+        if (scrollbars === "legacy") assert.ok(barWidth <= 10, `note scrollbar ${barWidth} pt wide`);
+        console.log(`[e2e] scrollbars ${scrollbars ?? "overlay"}, note scrollbar ${barWidth} pt`);
+        await capture(`${scheme}-${width}x${height}-rest`);
+      });
       for (const dropdown of dropdowns) {
         await openSeeded();
         await resize(width, height);
