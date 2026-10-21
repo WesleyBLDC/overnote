@@ -1,5 +1,5 @@
 /** Autosave, note creation, note switching, and outside changes (the editor-owned behavior in docs/architecture.md section 5). */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { calls, clearCalls, editor, emit, lastSave, openHarness, pauseClock, storedNotes } from "./harness";
 
 test("an empty store gets a note, typing saves after about 300 ms with derived fields", async ({ page }) => {
@@ -143,7 +143,79 @@ test("a failed autosave says so once while saving keeps failing, and the next sa
   await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft one two three");
 });
 
-test("an outside change while typing never overwrites the typing: the save conflicts, retries, and keeps it", async ({
+/** Another writer (overnote-axi, a script) saves `paragraphs` into a note through the socket. */
+async function outsideWrite(page: Page, id: string, paragraphs: string[], options: { announce: boolean }) {
+  const content = {
+    rawContent: JSON.stringify({
+      type: "doc",
+      content: paragraphs.map((text) => ({ type: "paragraph", content: [{ type: "text", text }] })),
+    }),
+    text: paragraphs.join("\n\n"),
+    title: paragraphs[0] ?? "",
+    markdown: paragraphs.join("\n\n"),
+  };
+  await page.evaluate(
+    ([noteId, fields, announce]) => {
+      const { store } = (
+        window as unknown as {
+          __overnoteMock: {
+            store: {
+              externalUpdate(id: string, c: object): void;
+              handlers: Record<string, (p: unknown) => unknown>;
+            };
+          };
+        }
+      ).__overnoteMock;
+      // externalUpdate also emits notes.changed; the bare handler is a write the editor hears nothing about.
+      if (announce) store.externalUpdate(noteId, fields);
+      else store.handlers["notes.update"]?.({ id: noteId, ...fields });
+    },
+    [id, content, options.announce] as const,
+  );
+  // The mock delivers events and replies on timers; well inside the 300 ms autosave debounce.
+  await page.clock.runFor(50);
+}
+
+const contentSaves = async (page: Page) => (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params);
+
+test("an outside change while typing is merged into the typing at once, and the caret stays", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  const [note] = await storedNotes(page);
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  // The autosave has not run yet when another writer appends a paragraph.
+  await outsideWrite(page, note?.id ?? "", ["Draft", "From outside"], { announce: true });
+  await expect(editor(page)).toHaveText("Draft mineFrom outside");
+  await page.keyboard.type("!");
+  await page.clock.runFor(400);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine!\n\nFrom outside");
+  // One save, made against the outside version, so nothing was refused or overwritten.
+  const saves = await contentSaves(page);
+  expect(saves).toHaveLength(1);
+  expect(saves[0]?.params.expectedUpdatedAt).not.toBe(note?.updatedAt);
+  await expect(page.getByTestId("notices")).not.toContainText("both versions");
+});
+
+test("an outside change right after a save, while still typing, shows at once and is kept", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  const [note] = await storedNotes(page);
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  await page.clock.runFor(400);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine");
+  // Saved, but still inside the typing window when the outside change lands.
+  await outsideWrite(page, note?.id ?? "", ["Draft mine", "From outside"], { announce: true });
+  await expect(editor(page)).toHaveText("Draft mineFrom outside");
+  await page.keyboard.type("!");
+  await page.clock.runFor(400);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine!\n\nFrom outside");
+});
+
+test("a save that meets an unannounced outside change merges it and retries, never overwriting it", async ({
   page,
 }) => {
   await page.clock.install();
@@ -152,26 +224,29 @@ test("an outside change while typing never overwrites the typing: the save confl
   const [note] = await storedNotes(page);
   await page.keyboard.press("Meta+ArrowDown");
   await page.keyboard.type(" mine");
-  // Another writer (the Create Note command, a script) changes the note before the autosave runs.
-  await page.evaluate((id) => {
-    const mock = (window as unknown as { __overnoteMock: { store: { externalUpdate(id: string, c: object): void } } })
-      .__overnoteMock;
-    mock.store.externalUpdate(id, {
-      rawContent: JSON.stringify({
-        type: "doc",
-        content: [{ type: "paragraph", content: [{ type: "text", text: "From outside" }] }],
-      }),
-      text: "From outside",
-      title: "From outside",
-      markdown: "From outside",
-    });
-  }, note?.id ?? "");
+  await outsideWrite(page, note?.id ?? "", ["Draft", "From outside"], { announce: false });
   await page.clock.runFor(400);
-  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine");
-  await expect(editor(page)).toHaveText("Draft mine");
-  // The first save was refused as stale, and the retry against the stored version wrote the typing.
-  const saves = (await calls(page, "notes.update")).filter((c) => "rawContent" in c.params);
-  expect(saves.length).toBe(2);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine\n\nFrom outside");
+  await expect(editor(page)).toHaveText("Draft mineFrom outside");
+  // The first save was refused as stale; the retry saved the merge against the outside version.
+  const saves = await contentSaves(page);
+  expect(saves).toHaveLength(2);
   expect(saves[0]?.params.expectedUpdatedAt).toBe(note?.updatedAt);
   expect(saves[1]?.params.expectedUpdatedAt).not.toBe(note?.updatedAt);
+});
+
+test("when the typing and an outside change edit the same paragraph, both versions are kept", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["Draft"]);
+  await pauseClock(page);
+  const [note] = await storedNotes(page);
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.type(" mine");
+  await outsideWrite(page, note?.id ?? "", ["From outside"], { announce: true });
+  await expect(editor(page)).toHaveText("Draft mineFrom outside");
+  await expect(page.getByTestId("notices")).toContainText(
+    "This note also changed elsewhere, so both versions were kept",
+  );
+  await page.clock.runFor(400);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("Draft mine\n\nFrom outside");
 });

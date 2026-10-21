@@ -9,7 +9,8 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { pauseClock } from "./harness";
 
 const HELPER = fileURLToPath(new URL("../../assets/bin/OvernoteHelper", import.meta.url));
 
@@ -81,6 +82,41 @@ class RealHelper {
   }
 }
 
+/** Routes every bridge message the page sends to `helper` over its socket (test.asBridge). */
+async function bridgeTo(page: Page, helper: RealHelper): Promise<void> {
+  await page.exposeBinding("__toHelper", async (_source, message: { method: string; params: unknown }) => {
+    try {
+      return { ok: true, result: await helper.call("test.asBridge", message) };
+    } catch (error) {
+      const failure = error as Error & { code?: number };
+      return { ok: false, error: { code: failure.code ?? -1, message: failure.message } };
+    }
+  });
+  await page.addInitScript(() => {
+    type Reply = { ok: boolean; result?: unknown; error?: unknown };
+    const w = window as unknown as {
+      __toHelper(message: unknown): Promise<Reply>;
+      overnoteBridge: { resolve(id: number, result: unknown): void; reject(id: number, error: unknown): void };
+      webkit: unknown;
+    };
+    w.webkit = {
+      messageHandlers: {
+        overnote: {
+          postMessage(message: { id: number; method: string; params: unknown }) {
+            void w
+              .__toHelper({ method: message.method, params: message.params })
+              .then((reply) =>
+                reply.ok
+                  ? w.overnoteBridge.resolve(message.id, reply.result)
+                  : w.overnoteBridge.reject(message.id, reply.error),
+              );
+          },
+        },
+      },
+    };
+  });
+}
+
 test.skip(!fs.existsSync(HELPER), "the helper is not built: run npm run build:helper");
 
 test("typing in the shipped editor lands in the helper's database and survives a helper restart", async ({ page }) => {
@@ -89,37 +125,7 @@ test("typing in the shipped editor lands in the helper's database and survives a
   const helper = new RealHelper(root);
   try {
     await helper.start();
-    await page.exposeBinding("__toHelper", async (_source, message: { method: string; params: unknown }) => {
-      try {
-        return { ok: true, result: await helper.call("test.asBridge", message) };
-      } catch (error) {
-        const failure = error as Error & { code?: number };
-        return { ok: false, error: { code: failure.code ?? -1, message: failure.message } };
-      }
-    });
-    await page.addInitScript(() => {
-      type Reply = { ok: boolean; result?: unknown; error?: unknown };
-      const w = window as unknown as {
-        __toHelper(message: unknown): Promise<Reply>;
-        overnoteBridge: { resolve(id: number, result: unknown): void; reject(id: number, error: unknown): void };
-        webkit: unknown;
-      };
-      w.webkit = {
-        messageHandlers: {
-          overnote: {
-            postMessage(message: { id: number; method: string; params: unknown }) {
-              void w
-                .__toHelper({ method: message.method, params: message.params })
-                .then((reply) =>
-                  reply.ok
-                    ? w.overnoteBridge.resolve(message.id, reply.result)
-                    : w.overnoteBridge.reject(message.id, reply.error),
-                );
-            },
-          },
-        },
-      };
-    });
+    await bridgeTo(page, helper);
 
     // A fresh database: the editor creates the first note through the helper, then takes typing.
     await page.goto("http://127.0.0.1:5198/index.html");
@@ -140,6 +146,56 @@ test("typing in the shipped editor lands in the helper's database and survives a
     await expect(page.getByTestId("title")).toHaveText("Saved for real");
     await expect(page.locator(".note-editor")).toHaveText("Saved for realsecond line");
     expect(await stored()).toHaveLength(1);
+  } finally {
+    await helper.stop();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a socket write that lands while the person types is merged into their edits, never overwritten", async ({
+  page,
+}) => {
+  const root = fs.mkdtempSync("/tmp/overnote-real-");
+  const helper = new RealHelper(root);
+  try {
+    await helper.start();
+    await bridgeTo(page, helper);
+    // A paused page clock holds the autosave until the outside write has landed.
+    await page.clock.install();
+    await page.goto("http://127.0.0.1:5198/index.html");
+    await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
+    await expect(page.locator(".note-editor")).toBeFocused();
+    await pauseClock(page);
+    await page.keyboard.type("Draft");
+    await page.clock.runFor(400);
+    type Stored = { id: string; updatedAt: number; text: string };
+    const note = async () => {
+      const { items } = (await helper.call("notes.list", {})) as { items: { id: string }[] };
+      return (await helper.call("notes.get", { id: items[0]?.id })) as Stored;
+    };
+    await expect.poll(async () => (await note()).text).toBe("Draft");
+
+    await page.keyboard.type(" mine");
+    // overnote-axi appends a paragraph through the socket, guarded by the version it read.
+    const before = await note();
+    const paragraphs = ["Draft", "From outside"];
+    const written = (await helper.call("notes.update", {
+      id: before.id,
+      expectedUpdatedAt: before.updatedAt,
+      rawContent: JSON.stringify({
+        type: "doc",
+        content: paragraphs.map((text) => ({ type: "paragraph", content: [{ type: "text", text }] })),
+      }),
+      markdown: paragraphs.join("\n\n"),
+      text: paragraphs.join("\n\n"),
+      title: "Draft",
+    })) as { status: string };
+    expect(written.status).toBe("ok");
+
+    // The editor's save is refused as stale, merges the outside paragraph in, and saves both.
+    await page.clock.runFor(400);
+    await expect.poll(async () => (await note()).text).toBe("Draft mine\n\nFrom outside");
+    await expect(page.locator(".note-editor")).toHaveText("Draft mineFrom outside");
   } finally {
     await helper.stop();
     fs.rmSync(root, { recursive: true, force: true });

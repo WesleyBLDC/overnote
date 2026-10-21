@@ -8,6 +8,8 @@ export { displayTitle, countCharacters, countWords, fold, highlightMarkdownMatch
 export { docToHTML } from "./serialize/html";
 export { docToClipboard } from "./serialize/clipboard";
 export { buildNoteContent, noteContentFromMarkdown } from "./content";
+export { mergeDocs } from "./merge";
+export type { DocMerge } from "./merge";
 export { parsePastedText, looksLikeMarkdown, plainTextToDoc, MAX_MARKDOWN_PASTE } from "./paste";
 export { normalizeLinkHref, looksLikeUrl } from "./link";
 export { LIST, LIST_KINDS, MAX_LIST_TEXT_DEPTH, markListSplittable } from "./schema/flatList";

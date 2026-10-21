@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v2.13 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v2.14 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -72,7 +72,7 @@ The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups fold
 | `window.didResignKey` | `{}` | The panel lost focus |
 | `note.open` | `{ id: string }` | An external caller asked to show a specific note |
 | `note.new` | `{ note: Note }` | An external caller created a note and asked to show it |
-| `notes.changed` | `{ ids: string[] }` | Data changed through the socket (so the editor reloads) |
+| `notes.changed` | `{ ids: string[] }` | Data changed through the socket (so the editor reloads, or merges into unsaved edits) |
 | `settings.changed` | `Settings` | A setting changed |
 | `editor.willReload` | `{}` | Development only (`--watch-editor`): a new editor build landed; the editor saves, then reloads the page |
 
@@ -231,6 +231,12 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - Deleting the current note opens `nextNoteId`, else `previousNoteId`, else creates a fresh empty note.
   Delete All leaves one fresh empty note and clears history.
 - Content autosave and caret save are debounced 300 ms and flushed on switch, hide, and blur.
+- Every content save sends `expectedUpdatedAt`, the `updatedAt` of the version the editor last loaded or saved.
+- Outside changes are merged, never overwritten.
+  On `notes.changed` the editor reloads the stored note when it has no unsaved edits and the person is not typing (within 1 s of an edit), as before.
+  Otherwise it merges the stored version into what it shows with `mergeDocs` (base: the version it last synced with), in place, keeping the caret, scroll, and undo history, and saves the merge if it differs from the stored note.
+  A save that gets `conflict` (a socket write the editor was not told about, or one that raced the save) merges the same way and retries against the returned note, up to 3 attempts; after that the edits stay unsaved and the next save tries again.
+  When both sides changed the same block differently, the merge keeps both versions and the editor shows "This note also changed elsewhere, so both versions were kept".
 
 ## 6. Database schema (owned by the helper)
 
@@ -283,6 +289,10 @@ export function deriveTitle(doc: JSONContent): string;        // first line of p
 export function displayTitle(n: { title: string; text: string }): string; // title, else first non-empty text line trimmed, else "Untitled"
 export function buildNoteContent(doc: JSONContent): NoteContent; // rawContent + markdown + text + title
 export function noteContentFromMarkdown(markdown: string): NoteContent;
+export function mergeDocs(base: JSONContent, local: JSONContent, remote: JSONContent): { doc: JSONContent; conflicted: boolean; matchesRemote: boolean };
+// three-way merge by top-level block (one list item is one block): changes to different blocks all apply; where both sides
+// changed the same blocks differently, local's version comes first and remote's right after it (conflicted: true), so an edit
+// also beats a delete; matchesRemote: the result is exactly remote
 export function loadDoc(rawContent: string | null, text: string): JSONContent; // stored doc if valid (placeholders preserved), else rebuild from text with a hard break per newline
 export function toStoredDoc(doc: JSONContent): JSONContent;               // inverse of loadDoc's placeholder mapping
 export function docToClipboard(docOrSlice: JSONContent): { text: string; html: string };   // ⌘C/⌘X format: plain text plus semantic HTML
@@ -364,7 +374,7 @@ The extension honors `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`), which t
 
 ## Protocol versioning
 
-The protocol described here is v2.13 (v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v2.14 (v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.

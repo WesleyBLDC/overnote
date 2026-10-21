@@ -7,6 +7,7 @@ import {
   buildNoteContent,
   emptyDoc,
   loadDoc,
+  mergeDocs,
   type JSONContent,
   type Note,
   type NoteId,
@@ -18,6 +19,8 @@ import { NoteHistory } from "./history";
 export const SAVE_DEBOUNCE_MS = 300;
 /** An edit this recent counts as "the user is typing". */
 export const TYPING_WINDOW_MS = 1000;
+/** Saves tried in a row when another writer keeps changing the note; the edits stay unsaved after. */
+const SAVE_ATTEMPTS = 3;
 
 /** What the session needs from the editor view. */
 export interface EditorPort {
@@ -25,6 +28,11 @@ export interface EditorPort {
   getCaret(): number;
   /** Replaces the document without emitting a change, then places the caret. */
   load(doc: JSONContent, caret: number | null): void;
+  /**
+   * Changes the document to `doc` in place, touching only the blocks that differ, so the caret,
+   * scroll position, and undo history stay; emits no change and adds no undo step.
+   */
+  replace(doc: JSONContent): void;
   isComposing(): boolean;
   /** Plain text of the current document, used for the blank check. */
   getText(): string;
@@ -236,14 +244,14 @@ export class NoteSession {
   }
 
   private async saveContent(note: Note): Promise<boolean> {
-    const version = this.editVersion;
-    const caret = this.editor.getCaret();
-    const content = buildNoteContent(this.editor.getDoc());
-    let expected = note.updatedAt;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < SAVE_ATTEMPTS; attempt++) {
+      const synced = this.state.current?.id === note.id ? this.state.current : note;
+      const version = this.editVersion;
+      const caret = this.editor.getCaret();
+      const content = buildNoteContent(this.editor.getDoc());
       const result = await this.api.notes.update({
         id: note.id,
-        expectedUpdatedAt: expected,
+        expectedUpdatedAt: synced.updatedAt,
         ...content,
         caretPosition: caret,
       });
@@ -254,10 +262,49 @@ export class NoteSession {
         if (this.state.current?.id === note.id) this.setState({ current: result.note });
         return true;
       }
-      // Conflict: the user typed in this note since it was loaded, so the local edit wins.
-      expected = result.note.updatedAt;
+      // Conflict: someone else saved this note since the editor last synced with it. Their change
+      // is merged into the edits (never overwritten), and the merge is what the next attempt saves.
+      if (this.state.current?.id !== note.id) return false;
+      if (!this.rebase(synced, result.note)) return true;
     }
     return false;
+  }
+
+  /**
+   * Merges the editor's content, which started from `synced`, onto the newer `stored` version, shows
+   * the result, and makes `stored` the version the next save expects. Returns true when the merge
+   * still has unsaved edits, false when the editor now matches the stored note.
+   */
+  private rebase(synced: Note, stored: Note): boolean {
+    const merge = mergeDocs(docFromNote(synced), this.editor.getDoc(), docFromNote(stored));
+    this.loading = true;
+    try {
+      this.editor.replace(merge.doc);
+    } finally {
+      this.loading = false;
+    }
+    this.setState({ current: stored });
+    if (merge.conflicted) this.notify("This note also changed elsewhere, so both versions were kept", "info");
+    if (!merge.matchesRemote) return true;
+    this.savedVersion = this.editVersion;
+    return false;
+  }
+
+  /** Queues a rebase onto `stored` behind any save in flight, so each merge starts from what was saved. */
+  private queueRebase(stored: Note): Promise<boolean> {
+    this.chain = this.chain.then(
+      () => this.rebaseNow(stored),
+      () => this.rebaseNow(stored),
+    );
+    return this.chain;
+  }
+
+  private async rebaseNow(stored: Note): Promise<boolean> {
+    const current = this.state.current;
+    // A save that ran first may already have merged this version, or saved past it.
+    if (this.paused || current?.id !== stored.id || current.updatedAt >= stored.updatedAt) return true;
+    if (this.rebase(current, stored)) this.schedule();
+    return true;
   }
 
   private async saveCaret(note: Note): Promise<boolean> {
@@ -555,17 +602,18 @@ export class NoteSession {
       this.touch(stored.id);
       return;
     }
-    const contentChanged = stored.rawContent !== current.rawContent && stored.updatedAt !== current.updatedAt;
+    const synced = this.state.current ?? current;
+    const contentChanged = stored.rawContent !== synced.rawContent && stored.updatedAt !== synced.updatedAt;
     if (contentChanged && !this.isDirty && !this.isTyping()) {
       this.loadNote(stored, this.editor.getCaret());
       this.apply(windowData, false);
       return;
     }
-    // Keep the local edit and our updatedAt so the next save detects the conflict.
-    const merged = contentChanged
-      ? { ...stored, rawContent: current.rawContent, updatedAt: current.updatedAt }
-      : stored;
-    this.apply({ ...windowData, current: merged }, false);
+    // Keep the synced content and updatedAt until the rebase below merges the outside change into
+    // what the editor shows, so the person's typing is never interrupted or overwritten.
+    const kept = contentChanged ? { ...stored, rawContent: synced.rawContent, updatedAt: synced.updatedAt } : stored;
+    this.apply({ ...windowData, current: kept }, false);
     this.refreshFlags();
+    if (contentChanged) await this.queueRebase(stored);
   }
 }

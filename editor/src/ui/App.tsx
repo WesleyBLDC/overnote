@@ -63,6 +63,21 @@ function loadIntoEditor(editor: Editor, doc: JSONContent, caret: number | null):
   clampCaret(editor, caret);
 }
 
+/** Changes the document to `doc` with one replace over the range that differs, keeping caret and history. */
+function replaceInEditor(editor: Editor, doc: JSONContent): void {
+  const { state } = editor;
+  const next = state.schema.nodeFromJSON(doc);
+  const start = state.doc.content.findDiffStart(next.content);
+  const end = state.doc.content.findDiffEnd(next.content);
+  if (start === null || !end) return;
+  // When the documents share text on both sides of the change, the ends can cross the start.
+  const overlap = start - Math.min(end.a, end.b);
+  const endA = overlap > 0 ? end.a + overlap : end.a;
+  const endB = overlap > 0 ? end.b + overlap : end.b;
+  const tr = state.tr.replace(start, endA, next.slice(start, endB));
+  editor.view.dispatch(tr.setMeta("addToHistory", false).setMeta("bnLoad", true));
+}
+
 function sliceJSON(editor: Editor): JSONContent | null {
   const { selection } = editor.state;
   if (selection.empty) return null;
@@ -188,6 +203,7 @@ export function App({ api }: { api: Api }) {
       getText: () => docToPlainText(editor.getJSON()),
       isComposing: () => editor.view.composing,
       load: (doc, caret) => loadIntoEditor(editor, doc, caret),
+      replace: (doc) => replaceInEditor(editor, doc),
     };
     return new NoteSession({ api, editor: port, notice: (message, kind) => notify(message, kind) });
   }, [api, notify, editor]);
