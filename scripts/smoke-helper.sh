@@ -265,6 +265,9 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   await expectError(404, "notes.get", { id: b.id });
   ok("permanentlyDelete ignores live notes and removes trashed ones");
 
+  // The copy becomes the newest note, which is also what an unset current note falls back to, so
+  // set the current note first to tell "left alone" from "moved to the copy".
+  await call("notes.setCurrentNote", { noteId: a.id });
   const dup = await call("notes.duplicate", { id: a.id, titleSuffix: " copy" });
   assert.notEqual(dup.id, a.id);
   assert.equal(dup.title, "Café list copy");
@@ -272,8 +275,8 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   assert.equal(dup.caretPosition, 0);
   assert.equal(dup.pinned, null);
   assert.ok(dup.createdAt >= updated.note.updatedAt);
-  assert.equal((await call("notes.windowData")).current.id, dup.id);
-  ok("duplicate: fresh timestamps, no pin, caret 0, title suffix, becomes current");
+  assert.equal((await call("notes.windowData")).current.id, a.id);
+  ok("duplicate: fresh timestamps, no pin, caret 0, title suffix, and the current note stays the original");
 
   // ---- lists and filters
   const german = await call("notes.create", content("Straße ÜBER alles"));
