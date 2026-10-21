@@ -138,6 +138,14 @@ Create Quicklink in Search Notes saves it as a Raycast quicklink.
 - The only network request is Check for Updates, which asks GitHub for the latest release when you run it. <!-- store:remove-line -->
 
 <!-- store:remove -->
+## Using AI coding agents
+
+If you use AI coding agents such as Claude Code, Codex, or OpenCode, install [overnote-axi](https://github.com/WesleyBLDC/overnote-axi), a command line tool and agent skill for your Overnote notes.
+It lets an agent read, search, create, update, organize, and link notes in a few short commands, so note work goes faster and uses fewer tokens than reading files or driving the panel.
+It follows the [AXI](https://github.com/kunchenguid/axi) standard for agent friendly tools: compact output, clear empty states, stable error codes, and next step hints.
+Reads come straight from the notes database and work while Overnote is closed; writes go through Overnote itself, so the open panel updates right away and nothing you type is lost.
+`overnote-axi setup` starts every agent session with your pinned and recent notes, and `overnote-axi setup skill` installs the `/overnote-axi` skill for Claude Code.
+
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the project layout, the test suites, and the clean-room rule.
