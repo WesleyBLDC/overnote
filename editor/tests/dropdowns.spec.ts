@@ -171,3 +171,31 @@ test("a dropdown near the bottom of a short panel opens upward and scrolls to it
   await expect.poll(selectedInView).toBe(true);
   await expect(menu.locator(".is-selected")).toHaveText(/Code Block/);
 });
+
+test("at the minimum size the command panels show at least two settings or notes rows and three actions", async ({
+  page,
+}) => {
+  for (const [shortcut, rows] of [
+    ["Meta+Comma", 2],
+    ["Meta+k", 3],
+    ["Meta+p", 2],
+  ] as const) {
+    await openHarness(page, ["One", "Two", NOTE]);
+    await page.evaluate(() =>
+      (
+        window as unknown as { __overnoteMock: { setPanelSize(w: number, h: number): void } }
+      ).__overnoteMock.setPanelSize(405, 197),
+    );
+    await page.keyboard.press(shortcut);
+    await expect(page.locator(".panel-list")).toBeVisible();
+    await settle(page);
+    const visible = await page.locator(".panel-list").evaluate((list) => {
+      const box = list.getBoundingClientRect();
+      return Array.from(list.querySelectorAll(".panel-row")).filter((row) => {
+        const r = row.getBoundingClientRect();
+        return r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5;
+      }).length;
+    });
+    expect(visible, shortcut).toBeGreaterThanOrEqual(rows);
+  }
+});
