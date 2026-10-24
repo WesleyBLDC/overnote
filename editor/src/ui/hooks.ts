@@ -160,8 +160,13 @@ function contentWidth(element: Element | null): number {
   let total = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
   for (const child of children) {
     const childStyle = getComputedStyle(child);
+    // A sideways scroller (the format bar at high zoom) shrinks to the panel, so count what it holds,
+    // not its box: measuring the box would make the minimum follow the panel one point at a time.
+    const scrolls = childStyle.overflowX === "auto" || childStyle.overflowX === "scroll";
     total +=
-      child.getBoundingClientRect().width + parseFloat(childStyle.marginLeft) + parseFloat(childStyle.marginRight);
+      (scrolls ? contentWidth(child) : child.getBoundingClientRect().width) +
+      parseFloat(childStyle.marginLeft) +
+      parseFloat(childStyle.marginRight);
   }
   return total + (parseFloat(style.columnGap) || 0) * Math.max(0, children.length - 1);
 }

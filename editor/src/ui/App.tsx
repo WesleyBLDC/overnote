@@ -333,6 +333,8 @@ export function App({ api }: { api: Api }) {
 
   useEffect(() => {
     document.documentElement.style.setProperty("--zoom", String(settings.zoom));
+    // High zoom switches the chrome to its scrolling and wrapping layout (app.css).
+    document.documentElement.dataset.highZoom = String(settings.zoom >= 1.75);
   }, [settings.zoom]);
 
   // ---- derived UI state ----

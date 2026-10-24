@@ -32,6 +32,9 @@
   /* One device pixel would vanish at 1x; one CSS pixel stays crisp at 1x and 2x. */
   --hairline: 1px;
   --focus-ring-width: 0.15rem;
+  --focus-gap-width: 0.125rem;
+  /* Interactive hit areas never shrink below 28 points on screen, whatever the zoom. */
+  --hit-floor: 28px;
 
   /* ---- motion: short and ease-out, so things arrive fast and settle softly ---- */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
