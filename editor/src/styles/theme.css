@@ -2,7 +2,7 @@
  * Overnote theme: every color, size, spacing, radius, and motion token lives here.
  * The native panel provides the vibrancy material; the editor paints a deep, nearly solid tint on top
  * (--body-tint) so text keeps strong contrast whatever is behind the window.
- * The accent is monochrome: dark gray in light mode, soft white in dark mode.
+ * The accent is Overnote iris violet, tuned darker in light mode and paler in dark mode so every text, fill, and indicator role keeps its contrast on the body tint.
  */
 :root {
   color-scheme: light dark;
@@ -46,13 +46,14 @@
   /* ---- colors: light ---- */
   --body-tint: rgba(251, 251, 252, 0.94);
 
-  --accent: #3a3a3d;
-  --accent-soft: rgba(20, 20, 24, 0.08);
-  --accent-strong: #1c1c1e;
+  --accent: #5b4bd5;
+  --accent-soft: rgba(91, 75, 213, 0.12);
+  --accent-strong: #4738b0;
   --on-accent: #ffffff;
 
   --text: rgba(12, 12, 14, 0.9);
   --text-secondary: rgba(12, 12, 14, 0.58);
+  --text-essential: rgba(12, 12, 14, 0.62);
   --text-tertiary: rgba(12, 12, 14, 0.42);
   --text-dimmed: rgba(12, 12, 14, 0.42);
   --placeholder: rgba(12, 12, 14, 0.3);
@@ -60,19 +61,21 @@
   --surface: transparent;
   --surface-raised: #ffffff;
   --surface-hover: rgba(12, 12, 14, 0.05);
-  --surface-selected: rgba(12, 12, 14, 0.075);
-  --surface-code: rgba(12, 12, 14, 0.045);
+  --surface-selected: rgba(12, 12, 14, 0.12);
+  --surface-code: rgba(12, 12, 14, 0.07);
   --border: rgba(12, 12, 14, 0.08);
   --border-strong: rgba(12, 12, 14, 0.16);
   --link-underline: rgba(12, 12, 14, 0.36);
-  --focus-ring: rgba(12, 12, 14, 0.12);
+  --focus-ring: #40309f;
+  --focus-gap: #ffffff;
   --shadow:
     0 0.6rem 2rem rgba(10, 12, 16, 0.16), 0 0.1rem 0.35rem rgba(10, 12, 16, 0.06), 0 0 0 0.5px rgba(10, 12, 16, 0.12);
   --shadow-small: 0 0.15rem 0.6rem rgba(10, 12, 16, 0.1), 0 0 0 0.5px rgba(10, 12, 16, 0.1);
   /* Translucent: WebKit uses it as is, so the list gutter fill (editor.css) matches the native highlight. */
-  --selection: rgba(12, 12, 14, 0.12);
+  --selection: rgba(91, 75, 213, 0.16);
   --find-match: rgba(255, 196, 0, 0.35);
   --find-active: rgba(255, 140, 0, 0.6);
+  --find-active-outline: rgba(190, 95, 0, 0.95);
   --danger: #d13b3b;
   --success: #2f7d4f;
   --dialog-scrim: rgba(0, 0, 0, 0.12);
@@ -84,7 +87,7 @@
   --code-keyword: #8b3fbf;
   --code-string: #1f7a3a;
   --code-number: #b35900;
-  --code-comment: rgba(12, 12, 14, 0.45);
+  --code-comment: rgba(12, 12, 14, 0.62);
   --code-title: #1d5fbf;
   --code-attr: #9a5b00;
 
@@ -137,13 +140,14 @@
     --scrollbar-thumb: rgba(255, 255, 255, 0.22);
     --scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
 
-    --accent: rgba(255, 255, 255, 0.88);
-    --accent-soft: rgba(255, 255, 255, 0.12);
-    --accent-strong: #ffffff;
-    --on-accent: #17171a;
+    --accent: #8f80ff;
+    --accent-soft: rgba(143, 128, 255, 0.18);
+    --accent-strong: #b8aeff;
+    --on-accent: #191426;
 
     --text: rgba(255, 255, 255, 0.94);
     --text-secondary: rgba(255, 255, 255, 0.6);
+    --text-essential: rgba(255, 255, 255, 0.68);
     --text-tertiary: rgba(255, 255, 255, 0.4);
     --text-dimmed: rgba(255, 255, 255, 0.4);
     --placeholder: rgba(255, 255, 255, 0.3);
@@ -151,18 +155,20 @@
     --surface-raised: #252528;
     --quote-border: rgba(255, 255, 255, 0.22);
     --surface-hover: rgba(255, 255, 255, 0.06);
-    --surface-selected: rgba(255, 255, 255, 0.09);
-    --surface-code: rgba(255, 255, 255, 0.06);
+    --surface-selected: rgba(255, 255, 255, 0.15);
+    --surface-code: rgba(255, 255, 255, 0.09);
     --border: rgba(255, 255, 255, 0.08);
     --border-strong: rgba(255, 255, 255, 0.16);
     --link-underline: rgba(255, 255, 255, 0.42);
-    --focus-ring: rgba(255, 255, 255, 0.14);
+    --focus-ring: #d4ccff;
+    --focus-gap: #252528;
     --shadow:
       0 0.6rem 2rem rgba(0, 0, 0, 0.45), 0 0.1rem 0.35rem rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
     --shadow-small: 0 0.15rem 0.6rem rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
-    --selection: rgba(255, 255, 255, 0.16);
+    --selection: rgba(143, 128, 255, 0.24);
     --find-match: rgba(255, 200, 0, 0.3);
     --find-active: rgba(255, 150, 0, 0.55);
+    --find-active-outline: rgba(255, 175, 70, 0.95);
     --danger: #ff6b6b;
     --success: #7dd69a;
     --dialog-scrim: rgba(0, 0, 0, 0.3);
@@ -174,7 +180,7 @@
     --code-keyword: #d19bff;
     --code-string: #8fd99c;
     --code-number: #ffb86b;
-    --code-comment: rgba(255, 255, 255, 0.42);
+    --code-comment: rgba(255, 255, 255, 0.68);
     --code-title: #82b6ff;
     --code-attr: #f0c674;
     --harness-backdrop: linear-gradient(135deg, #2a3a46, #10161b);
