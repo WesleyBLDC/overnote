@@ -1174,6 +1174,29 @@ async function screenshots() {
     assert.equal(dragged.panelFrame.displays[screenKey].x, dragTo.x, "point x");
     assert.equal(dragged.panelFrame.displays[screenKey].y, dragTo.top, "point y");
   });
+  // The same relocation while the panel is hidden: no save follows it, so it must not
+  // spend itself on the first drag after the panel opens again.
+  await helper.call("window.place", { placement: "left" });
+  await helper.call("window.hide");
+  markVisible(false);
+  await helper.call("test.noteScreenConfiguration", { connected: screenKey, relocated: true });
+  await helper.call("window.show");
+  s = await quiet();
+  markVisible(s.visible);
+  await check("a show after a hidden screen change opens the panel", () => {
+    assert.equal(s.visible, true, "visible");
+    assert.equal(s.showPending, false, "showPending");
+  });
+  const hiddenDragTo = { x: Math.round(s.frame.x) + 24, top: Math.round(s.frame.top) - 10 };
+  await helper.call("test.moveTo", hiddenDragTo);
+  const hiddenDragged = await poll(
+    () => helper.call("settings.get"),
+    (st) => st.panelFrame.x === hiddenDragTo.x && st.panelFrame.displays[screenKey].placement === undefined,
+  );
+  await check("a drag after a hidden screen change clears the stored placement", () => {
+    assert.equal(hiddenDragged.panelFrame.x, hiddenDragTo.x, "x");
+    assert.equal(hiddenDragged.panelFrame.displays[screenKey].placement, undefined, "placement");
+  });
   await helper.call("window.place", { placement: "right" });
   const again = await helper.call("settings.get");
   again.panelFrame.displays[other] = { x: 12, y: 34, width: 400, height: 300, placement: "fill" };

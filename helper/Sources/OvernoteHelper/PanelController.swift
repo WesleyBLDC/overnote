@@ -266,6 +266,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     /// Orders the panel in and makes it key without moving it. `wasAlready` skips a second
     /// `window.didShow` when the panel was already on screen.
     private func makeVisible(wasAlready: Bool) {
+        if !wasAlready {
+            // A system relocation while hidden produced no save to keep the destination
+            // placement through, and ordering in re-places the panel from what is stored.
+            // The relocation is spent here, so a later drag still clears that placement.
+            screenConfigurationChanged = false
+        }
         panel.orderFrontRegardless()
         panel.makeKey()
         if let webView, panel.firstResponder !== webView {
