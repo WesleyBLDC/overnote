@@ -5,6 +5,7 @@
 import {
   DEFAULT_SETTINGS,
   displayTitle,
+  fold,
   rpc,
   type Note,
   type NoteId,
@@ -140,16 +141,15 @@ export class MockStore {
   }
 
   private filtered(filter: string | undefined, order: (a: Note, b: Note) => number, titleFirst: boolean): Note[] {
-    const term = filter?.trim().toLocaleLowerCase() ?? "";
+    // The helper's fold rule (docs/architecture.md section 5), so the harness finds what the helper finds.
+    const term = fold(filter?.trim() ?? "");
     const pinOrder = (a: Note, b: Note) =>
       (a.pinned ?? Number.POSITIVE_INFINITY) - (b.pinned ?? Number.POSITIVE_INFINITY) || order(a, b);
     let notes = this.live().sort(pinOrder);
     if (term) {
-      notes = notes.filter(
-        (n) => n.title.toLocaleLowerCase().includes(term) || n.text.toLocaleLowerCase().includes(term),
-      );
+      notes = notes.filter((n) => fold(n.title).includes(term) || fold(n.text).includes(term));
       if (titleFirst) {
-        const hit = (n: Note) => (displayTitle(n).toLocaleLowerCase().includes(term) ? 0 : 1);
+        const hit = (n: Note) => (fold(displayTitle(n)).includes(term) ? 0 : 1);
         notes = notes.sort((a, b) => hit(a) - hit(b) || pinOrder(a, b));
       }
     }

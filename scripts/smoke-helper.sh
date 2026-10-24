@@ -101,6 +101,17 @@ rpc() {
     setTimeout(() => process.exit(1), 3000);' "$1"
 }
 
+db_write() {
+  # db_write '<sql>' runs SQL against the database through node:sqlite, never the sqlite3 CLI.
+  # From schema 2, triggers on notes write the FTS5 index, so only a SQLite built with FTS5 can
+  # write that table; the system sqlite3 on some macOS images lacks it ("no such module: fts5"),
+  # while node:sqlite bundles its own FTS5 build, the same one the read-only fallback uses.
+  # Reads stay on sqlite3, which reads a schema 2 database with or without FTS5.
+  DB="$DB" node --no-warnings -e '
+    const db = new (require("node:sqlite").DatabaseSync)(process.env.DB);
+    try { db.exec(process.argv[1]); } finally { db.close(); }' "$1"
+}
+
 # ---------------------------------------------------------------- 1. lifecycle
 [[ "$("$HELPER" --version)" == "$(tr -d '[:space:]' < "$ROOT/helper/VERSION")" ]] || fail "--version does not match helper/VERSION"
 status=0; "$HELPER" --bogus >/dev/null 2>&1 || status=$?
@@ -130,7 +141,7 @@ wait_exit || fail "system.shutdown should exit 0"
 
 # A database from a newer helper is refused rather than touched.
 cp "$DB" "$TMP/backup.sqlite"
-sqlite3 "$DB" "PRAGMA user_version = 99"
+db_write "PRAGMA user_version = 99"
 status=0; "$HELPER" --support-dir "$SUPPORT" --socket "$SOCKET" --pid-file "$PIDFILE" --headless >/dev/null 2>&1 || status=$?
 [[ "$status" == "1" ]] || fail "a newer schema should exit 1, got $status"
 grep -q "newer than this helper supports" "$SUPPORT/helper.log" || fail "newer schema not logged"
@@ -141,7 +152,7 @@ ok "a newer database schema is refused and logged"
 # ---------------------------------------------------------------- 2. purge at startup
 NOW_MS=$(( $(date +%s) * 1000 ))
 DAY_MS=86400000
-sqlite3 "$DB" "
+db_write "
   INSERT INTO notes (id, title, text, raw_content, created_at, updated_at, deleted_at, last_accessed_at)
   VALUES ('01OLDTRASH0000000000000000', 'old', 'old', '{}', 1, 1, $((NOW_MS - 61 * DAY_MS)), 1),
          ('01KEEPTRASH000000000000000', 'keep', 'keep', '{}', 1, 1, $((NOW_MS - 59 * DAY_MS)), 1);"

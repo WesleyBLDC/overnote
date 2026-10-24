@@ -1,4 +1,8 @@
 /** The few rules the fixtures and the end-to-end flows cannot reach cheaply. */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 import {
   buildNoteContent,
@@ -18,8 +22,12 @@ import {
 } from "../src/index";
 
 describe("text rules", () => {
-  it("folds case and diacritics", () => {
-    expect(fold("Crème BRÛLÉE Ǆ")).toBe("creme brulee dz");
+  it("folds every entry of the golden corpus the Swift helper also reads", () => {
+    const corpus = JSON.parse(
+      readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fold-corpus.json"), "utf8"),
+    ) as { input: string; folded: string }[];
+    expect(corpus.length).toBeGreaterThanOrEqual(20);
+    for (const entry of corpus) expect(fold(entry.input), JSON.stringify(entry.input)).toBe(entry.folded);
   });
 
   it("counts graphemes and words", () => {
