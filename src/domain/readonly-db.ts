@@ -113,6 +113,10 @@ export class ReadOnlyNotesDb {
     try {
       db.exec("PRAGMA query_only = ON");
       db.exec("PRAGMA busy_timeout = 1000");
+      // node:sqlite opens lazily: a file that is not a database opens fine and only fails
+      // at the first real query. Reading the schema here surfaces that failure at open,
+      // where callers already expect open to fail, instead of inside a later list call.
+      db.prepare("SELECT count(*) AS count FROM sqlite_master").get();
     } catch (error) {
       db.close();
       throw error;
@@ -168,10 +172,13 @@ export class ReadOnlyNotesDb {
         return this.db
           .prepare(paging ? LIST_FILTERED_FTS_SQL_V2 : LIST_FILTERED_FTS_SQL)
           .all(ftsPhrase(foldForMatch(filter)), pattern, pageSize, offset) as Row[];
-      } catch {
+      } catch (error) {
         // The table exists but cannot answer, for example a non FTS table of that name or an
         // index built without the trigram tokenizer. Never fail a search the LIKE scan can answer.
-        this.ftsAvailable = false;
+        // Only an error that names the FTS index proves it unusable and disables it for this
+        // process; a lock timeout or another transient error disables nothing, so the next
+        // search tries the index again.
+        if (isFtsFailure(error)) this.ftsAvailable = false;
       }
     }
     return this.db.prepare(paging ? LIST_FILTERED_SQL_V2 : LIST_FILTERED_SQL).all(pattern, pageSize, offset) as Row[];
@@ -250,6 +257,12 @@ export class ReadOnlyNotesDb {
  */
 function canUseFts(foldedTerm: string): boolean {
   return [...foldedTerm].length >= 3;
+}
+
+/** Whether an error from a `MATCH` query names the FTS index itself, mirroring the helper rule. */
+function isFtsFailure(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return ["notes_fts", "match", "fts5", "trigram", "no such module"].some((token) => message.includes(token));
 }
 
 /** The FTS5 phrase for a folded term, with embedded quotes doubled, as the helper builds it. */
