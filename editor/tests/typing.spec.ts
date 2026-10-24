@@ -1,6 +1,6 @@
 /** Typing and Markdown input rules, through the real editor. */
 import { expect, test } from "@playwright/test";
-import { blocks, calls, docJSON, editor, openHarness } from "./harness";
+import { blocks, calls, docJSON, editor, lastSave, openHarness } from "./harness";
 
 test.beforeEach(async ({ page }) => {
   await openHarness(page);
@@ -141,4 +141,35 @@ test("emoji picker inserts Unicode emoji", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
   expect(await calls(page, "window.hide")).toHaveLength(0);
+});
+
+test("empty note hints are an overlay: never content, never height, gone once there is text", async ({ page }) => {
+  const hints = page.getByTestId("empty-hints");
+  await expect(hints).toBeVisible();
+  await expect(hints).toContainText("Type / to insert a block");
+  await expect(hints).toContainText("Press ⌘K for actions");
+  await expect(hints).toContainText("Press the panel hotkey again to hide");
+  expect(await hints.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
+  await expect(editor(page)).not.toContainText("Press ⌘K");
+  const height = () => page.locator(".content-inner").evaluate((el) => el.getBoundingClientRect().height);
+  const before = await height();
+
+  await page.keyboard.type("hello");
+  await expect(hints).toHaveCount(0);
+  expect(await height()).toBe(before);
+
+  const save = await lastSave(page);
+  console.log("saved payload", JSON.stringify(save));
+  for (const field of ["rawContent", "markdown", "text"] as const) {
+    expect(String(save[field])).not.toMatch(/Type \/|Press ⌘K|hotkey again/);
+  }
+  expect(save.text).toBe("hello");
+  expect(save.markdown).toBe("hello");
+
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  await expect(hints).toBeVisible();
 });

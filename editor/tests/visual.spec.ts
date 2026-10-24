@@ -286,3 +286,13 @@ test.describe("chrome sizing", () => {
     await expectRing("format button");
   });
 });
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`empty note hints, ${scheme}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await openHarness(page);
+    await page.mouse.move(5, 5);
+    await expect(page.getByTestId("empty-hints")).toBeVisible();
+    await expect(page.locator(".content")).toHaveScreenshot(`empty-hints-${scheme}.png`, { maxDiffPixelRatio: 0.01 });
+  });
+}

@@ -138,8 +138,8 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
             }
           }}
         />
-        <span className="find-count" data-testid="find-count">
-          {matches.length ? `${index + 1}/${matches.length}` : "0/0"}
+        <span className="find-count" data-testid="find-count" role="status">
+          {!term ? "" : matches.length ? `${index + 1} of ${matches.length}` : "No results"}
         </span>
         <button
           type="button"
