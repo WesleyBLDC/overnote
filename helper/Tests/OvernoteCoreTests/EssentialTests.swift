@@ -502,6 +502,81 @@ struct PanelPlacementTests {
         // A half narrower than the minimum grows to it from its own screen edge.
         let narrow = CGRect(x: 0, y: 0, width: 800, height: 600)
         #expect(PanelGeometry.placed(.right, current: current, visible: narrow, minimum: minimum).minX == 395)
+        // A visible frame with a fractional top edge is placed inside the whole point frame
+        // below that top: no placed frame may cross the fractional maxY.
+        let fractional = CGRect(x: -10.4, y: 100.4, width: 1280.5, height: 775.5)
+        #expect(PanelGeometry.placed(.fill, current: current, visible: fractional, minimum: minimum) == CGRect(x: -10, y: 101, width: 1280, height: 774))
+        for placement in PanelPlacement.allCases {
+            #expect(PanelGeometry.placed(placement, current: current, visible: fractional, minimum: minimum).maxY <= fractional.maxY)
+        }
+    }
+
+    /// Unplugging display A clears A's placement and leaves B's, including B at another size.
+    /// A resolution change keeps the uuid connected, so that placement stays.
+    @Test func unpluggingADisplayClearsOnlyThatDisplay() {
+        let keyA = "UUID-A@1440x900"
+        let keyB = "UUID-B@1440x900"
+        let keyBResized = "UUID-B@1680x1050"
+        let stored = PanelFrame(
+            x: 0, y: 876, width: 720, height: 876,
+            displays: [
+                keyA: PanelPoint(x: 0, y: 876, width: 720, height: 876, placement: .left),
+                keyB: PanelPoint(x: 720, y: 876, width: 720, height: 876, placement: .right),
+                keyBResized: PanelPoint(x: 800, y: 1000, width: 840, height: 1000, placement: .fill),
+            ])
+        let cleared = PanelGeometry.clearingDisconnected(in: stored, connectedKeys: [keyB])
+        #expect(cleared?.displays[keyA] == PanelPoint(x: 0, y: 876))
+        #expect(PanelGeometry.storedPlacement(in: cleared, displayKey: keyA) == nil)
+        #expect(cleared?.displays[keyB]?.placement == .right)
+        #expect(cleared?.displays[keyBResized]?.placement == .fill)
+        #expect(PanelGeometry.clearingDisconnected(in: stored, connectedKeys: [keyA, keyBResized]) == stored)
+        // The system then records the landed frame on B and keeps B's placement.
+        let landed = CGRect(x: 40, y: 60, width: 640, height: 500)
+        let afterMove = PanelGeometry.recording(
+            landed, displayKey: keyB, in: cleared, autoSize: false, temporary: false, keepsPlacement: true)
+        #expect(afterMove.displays[keyA] == PanelPoint(x: 0, y: 876))
+        #expect(PanelGeometry.storedPlacement(in: afterMove, displayKey: keyB) == .right)
+    }
+
+    /// Turning auto-sizing on forgets the shared height and every display's placement.
+    /// The remembered points stay.
+    @Test func turningAutoSizingOnClearsEveryDisplay() {
+        let keyA = "UUID-A@1440x900"
+        let keyB = "UUID-B@1440x900"
+        let stored = PanelFrame(
+            x: 0, y: 876, width: 720, height: 876,
+            displays: [
+                keyA: PanelPoint(x: 0, y: 876, width: 720, height: 876, placement: .left),
+                keyB: PanelPoint(x: 720, y: 876, width: 720, height: 876, placement: .right),
+            ])
+        let cleared = PanelGeometry.clearingAllPlacements(in: stored)
+        #expect(cleared?.height == nil)
+        #expect(cleared?.displays[keyA] == PanelPoint(x: 0, y: 876))
+        #expect(cleared?.displays[keyB] == PanelPoint(x: 720, y: 876))
+        #expect(PanelGeometry.storedPlacement(in: cleared, displayKey: keyA) == nil)
+        #expect(PanelGeometry.storedPlacement(in: cleared, displayKey: keyB) == nil)
+        let plain = PanelFrame(x: 1, y: 2, width: 640, displays: [keyA: PanelPoint(x: 1, y: 2)])
+        #expect(PanelGeometry.clearingAllPlacements(in: plain) == plain)
+    }
+
+    /// A clear asked for while the panel has no display stays pending, and a system relocation
+    /// keeps the destination placement once a display is known.
+    @Test func aClearWithNoDisplayStaysPending() {
+        let held = PanelGeometry.placementClearOnSave(clearRequested: true, systemRelocation: false, hasDisplay: false)
+        #expect(held.keepsPlacement)
+        #expect(held.clearRequested)
+        #expect(!held.systemRelocation)
+        let applied = PanelGeometry.placementClearOnSave(clearRequested: true, systemRelocation: false, hasDisplay: true)
+        #expect(!applied.keepsPlacement)
+        #expect(!applied.clearRequested)
+        #expect(!applied.systemRelocation)
+        let relocated = PanelGeometry.placementClearOnSave(clearRequested: true, systemRelocation: true, hasDisplay: true)
+        #expect(relocated.keepsPlacement)
+        #expect(!relocated.clearRequested)
+        #expect(!relocated.systemRelocation)
+        let quiet = PanelGeometry.placementClearOnSave(clearRequested: false, systemRelocation: false, hasDisplay: true)
+        #expect(quiet.keepsPlacement)
+        #expect(!quiet.clearRequested)
     }
 
     /// A placement is stored with the display's point, runs again for that display at another
@@ -820,10 +895,18 @@ struct FramingTests {
     /// A long request in many small reads, with UTF-8 sequences split across them, a bad line, a blank
     /// line, and a second request pipelined behind it, comes through the real socket byte identical.
     @Test func aLargeRequestInSmallPiecesKeepsItsBytesAndThePipelinedRequestBehindIt() throws {
+        final class ReadLog: @unchecked Sendable {
+            private let lock = NSLock()
+            private(set) var sizes: [Int] = []
+            func record(_ size: Int) { lock.withLock { sizes.append(size) } }
+        }
+        let reads = ReadLog()
         let f = try Fixture()
         let note = try f.make("start")
         let handler = RPCLineHandler(dispatcher: RPCDispatcher(repository: f.repository, host: RecordingHost()), source: .socket)
-        let server = SocketServer(path: f.directory.file("s.sock")) { await handler.handle(line: $0) }
+        let server = SocketServer(path: f.directory.file("s.sock"), readChunkSize: 997, onRead: { reads.record($0) }) {
+            await handler.handle(line: $0)
+        }
         try server.start()
         defer { server.stop() }
         let client = try RPCClient(path: server.path)
@@ -840,11 +923,15 @@ struct FramingTests {
         let splitSequences = stride(from: pieceSize, to: stream.count, by: pieceSize).filter { stream[$0] & 0xC0 == 0x80 }
         #expect(splitSequences.count > 10)
         for start in stride(from: 0, to: stream.count, by: pieceSize) {
-            try SocketPaths.writeAll(fd: client.fd, data: Data(stream[start..<min(start + pieceSize, stream.count)]), timeout: 3)
+            try client.send(data: Data(stream[start..<min(start + pieceSize, stream.count)]))
         }
-
         var responses: [JSONValue] = []
         for _ in 0..<3 { responses.append(try JSONValue.parse(try #require(try client.readLine(timeout: 10)))) }
+        // The server really did read in small pieces: every read stayed within its small
+        // chunk, there were many of them, and together they took in the whole stream.
+        #expect(reads.sizes.count > 100)
+        #expect(reads.sizes.allSatisfy { $0 <= 997 })
+        #expect(reads.sizes.reduce(0, +) == stream.count)
         #expect(try client.readLine(timeout: 0.3) == nil)
         let badLine = try #require(responses.first { $0["id"] == .null })
         #expect(badLine["error"]?["message"] == "Request is not valid UTF-8")
@@ -890,7 +977,29 @@ struct FramingTests {
         // One write carries the end of the long line and the whole short line, so one client read gets both.
         try SocketPaths.writeAll(fd: peer, data: Data((tail + "\nshort\n").utf8), timeout: 3)
         #expect(try client.readLine(timeout: 5) == head + tail)
+        // The first line is 8000 bytes and its newline sits at index 8000, so the read buffer
+        // compacts before this next line is returned. The remainder has to survive that shift.
         #expect(try client.readLine(timeout: 1) == "short")
+    }
+
+    /// A batch of short lines shifts the read buffer a handful of times, not once per line.
+    /// The lines are long enough that the consumed prefix passes half the storage.
+    @Test func aBatchOfLinesShiftsOnce() {
+        var buffer = LineBuffer()
+        let lines = (0..<2_000).map { "line-\($0)" }
+        var bytes: [UInt8] = []
+        for line in lines {
+            bytes.append(contentsOf: Array(line.utf8))
+            bytes.append(UInt8(ascii: "\n"))
+        }
+        buffer.append(bytes[...])
+        var read: [String] = []
+        while let line = buffer.nextLine() {
+            read.append(String(decoding: line, as: UTF8.self))
+        }
+        #expect(read == lines)
+        #expect(buffer.shifts > 0)
+        #expect(buffer.shifts < 8)
     }
 }
 

@@ -95,9 +95,15 @@ public enum PanelGeometry {
     public static func placed(
         _ placement: PanelPlacement, current: CGSize, visible: CGRect, minimum: CGSize
     ) -> CGRect {
+        // Each edge rounds inward, so a fractional max edge (display scaling) cannot leave
+        // the placed frame past the visible frame. Rounding the width and height on their
+        // own misses that: a min edge that rounds up steals a fraction the height still counts.
+        let originX = visible.minX.rounded(.up)
+        let originY = visible.minY.rounded(.up)
         let area = CGRect(
-            x: visible.minX.rounded(.up), y: visible.minY.rounded(.up),
-            width: visible.width.rounded(.down), height: visible.height.rounded(.down))
+            x: originX, y: originY,
+            width: max(0, visible.maxX.rounded(.down) - originX),
+            height: max(0, visible.maxY.rounded(.down) - originY))
         let total = Int(area.width)
         let leftWidth = CGFloat((total + 1) / 2)
         func sized(_ size: CGSize) -> CGSize {
@@ -133,9 +139,61 @@ public enum PanelGeometry {
             .first { displayIdentity($0.key) == identity && $0.value.placement != nil }?.value.placement
     }
 
+    /// Whether two display keys name the same display, ignoring the size after `@`.
+    public static func sameDisplay(_ key: String, _ other: String) -> Bool {
+        displayIdentity(key) == displayIdentity(other)
+    }
+
     /// The display identity part of a `"<display uuid>@<w>x<h>"` key.
     static func displayIdentity(_ key: String) -> Substring {
         key.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false).first ?? Substring(key)
+    }
+
+    /// The stored frame after displays whose identity is missing from `connectedKeys` lose
+    /// their placement. Each of those points stays, as its plain top left point. A connected
+    /// display is matched by the uuid before `@`, so a resolution change (a new size on the
+    /// same display) keeps its placement. Every other display is left alone. A frame that
+    /// loses nothing, or no frame at all, comes back unchanged.
+    public static func clearingDisconnected(in stored: PanelFrame?, connectedKeys: [String]) -> PanelFrame? {
+        guard var saved = stored else { return nil }
+        let connected = Set(connectedKeys.map { String(displayIdentity($0)) })
+        let gone = saved.displays.compactMap { key, point -> String? in
+            guard point.placement != nil, !connected.contains(String(displayIdentity(key))) else { return nil }
+            return key
+        }
+        guard !gone.isEmpty else { return stored }
+        for key in gone {
+            let point = saved.displays[key]!
+            saved.displays[key] = PanelPoint(x: point.x, y: point.y)
+        }
+        return saved
+    }
+
+    /// The stored frame with every display's placement cleared and the shared height forgotten.
+    /// Turning auto-sizing on owns the height on every display, so no stored placement still
+    /// describes a frame. Each point stays, as its plain top left point. A frame with nothing
+    /// to clear comes back unchanged.
+    public static func clearingAllPlacements(in stored: PanelFrame?) -> PanelFrame? {
+        guard var saved = stored else { return nil }
+        let placed = saved.displays.compactMap { key, point in point.placement == nil ? nil : key }
+        guard saved.height != nil || !placed.isEmpty else { return stored }
+        saved.height = nil
+        for key in placed {
+            let point = saved.displays[key]!
+            saved.displays[key] = PanelPoint(x: point.x, y: point.y)
+        }
+        return saved
+    }
+
+    /// How a pending placement clear meets one save.
+    /// With no display, both flags stay as they were: a nil screen must not consume the clear.
+    /// A system relocation (the panel was moved because the screens changed) keeps the
+    /// destination display's placement. Either way a save that has a display consumes both flags.
+    public static func placementClearOnSave(
+        clearRequested: Bool, systemRelocation: Bool, hasDisplay: Bool
+    ) -> (keepsPlacement: Bool, clearRequested: Bool, systemRelocation: Bool) {
+        guard hasDisplay else { return (true, clearRequested, systemRelocation) }
+        return (systemRelocation || !clearRequested, false, false)
     }
 
     /// The stored frame after `placement` put the panel at `placed` on display `displayKey`: the

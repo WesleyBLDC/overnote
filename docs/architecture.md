@@ -147,7 +147,7 @@ The helper stores `NoteContent` verbatim.
 | `window.toggle` | `{}` | `{ visible: boolean }` | Show and focus, or hide |
 | `window.show` | `{ noteId?: NoteId }` | `{ visible: true }` | Shows the panel, optionally on a note (emits `note.open`) |
 | `window.hide` | `{}` | `{ visible: false }` | |
-| `window.place` | `{ placement: PanelPlacement }` | `{ placement: PanelPlacement, frame: { x, y, width, height } }` | Places the panel inside the visible frame of its display while it is visible, else of the display under the pointer, without showing it (see below). `frame` is in points in the panelFrame convention: `x` is the left edge and `y` the top edge. Any other placement is `-32602` |
+| `window.place` | `{ placement: PanelPlacement }` | `{ placement: PanelPlacement, frame: { x, y, width, height } }` | Places the panel inside the visible frame of its display while it is visible, else of the display under the pointer. A hidden panel stays hidden, except a show that is waiting for its first height report, which this orders in at the placed frame (see below). `frame` is in points in the panelFrame convention: `x` is the left edge and `y` the top edge. Any other placement is `-32602` |
 | `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped from the minimum size (see `window.setMinimumSize`) to 860 pt times zoom. `temporary: true` (confirmation dialogs; panels and dropdowns stay inside the panel instead) applies even when windowAutoSize is off and is restored by the next non-temporary report |
 | `window.setMinimumSize` (bridge) | `{ width: number, height: number }` | `{}` | The smallest the panel may be, in points: the editor's toolbar (its controls plus 6rem for the title), its bottom bar (the counter or the format bar), and one line of note text, at the current zoom. The helper rounds up and never goes below 405 by 197 pt, applies it to user resizing, auto-sizing, temporary growth, and restored frames, and grows a smaller panel at once, keeping its top edge. `-32602` unless both are positive numbers |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
@@ -251,11 +251,15 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   Such a frame smaller than the minimum size grows to it first, keeping its top left corner; a frame at least the minimum stays exactly where it was put.
   Limits: the helper never activates, so it has no menu bar of its own (no Window > Move & Resize) and is never the frontmost app, and a borderless panel has no green button; window managers that only act on the frontmost app's focused window cannot reach it.
 - `window.place` geometry, in whole points: `fill` is the display's visible frame; `left` and `right` split its width so the halves meet exactly, the left half taking the extra point of an odd width, at the full visible height; `center` keeps the current size, clamped to the minimum size and the visible frame, and centers it.
+  A fractional visible edge rounds inward, so the placed frame never crosses it.
   A half narrower than the minimum size grows to it from its own screen edge.
   `left`, `right`, and `fill` end any temporary growth and turn windowAutoSize off, since they set the height; `center` changes no size and never touches windowAutoSize.
   The helper stores the placement, with the placed frame, in that display's point in `panelFrame.displays`, and runs it again against the display's current visible frame whenever the panel opens there.
   A display whose resolution changed has a new key, so a placement stored under another key with the same display uuid runs there too.
-  A user resize, a drag move, a frame set from outside (tiling, a window manager), turning windowAutoSize on, another placement, or `settings.reset` clears the stored placement for that display and keeps the resulting frame.
+  A user resize, a drag move, a frame set from outside (tiling, a window manager), another placement, or `settings.reset` clears the stored placement for the display the panel is on and keeps the resulting frame.
+  Turning windowAutoSize on clears the stored placement on every display and forgets the stored height, because auto-sizing owns the height on all of them.
+  Unplugging a display clears the placement stored for that display only, and the system move onto the display that remains keeps that display's placement.
+  A placement clear that finds no display stays pending until a save that has one.
   The editor offers Fill Left, Fill Right, Fill Screen, and Centre in the command panel's window section, with ⌃⌥←, ⌃⌥→, ⌃⌥↑, and ⌃⌥↓, and the menu bar's Window section shows the panel first and then places it.
 - Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so a dialog never resizes a roomy window).
 - The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath.
@@ -266,7 +270,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 143 pt, so with auto-sizing on it rests at the 197 pt minimum with the footer at the bottom.
 - With windowAutoSize on and no normal `window.resize` report yet (a cold start, for example `--show`), a show waits with the panel hidden for that first report, up to 3 s (a cold WebKit start on a slow machine takes about 1.5 s), and then orders the panel in at the reported height, so it never flashes the default height.
   A temporary report does not end the wait.
-  While it waits, `window.toggle` cancels the show (result `visible: false`), `window.hide` cancels it too, `window.show { noteId }` still emits `note.open`, and turning windowAutoSize off shows the panel at once.
+  While it waits, `window.toggle` cancels the show (result `visible: false`), `window.hide` cancels it too, `window.show { noteId }` still emits `note.open`, `window.place` orders the panel in at the placed frame and ends the wait, and turning windowAutoSize off shows the panel at once.
 - Helper test-only flags: `--test-hooks` enables `test.*` socket methods.
 - The helper overlays an invisible 12 pt drag strip along the panel's top edge; the editor keeps about 12 pt of non-interactive top padding.
 - Back/forward history is two in-memory stacks in the editor (cap 100).

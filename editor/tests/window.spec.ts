@@ -917,6 +917,25 @@ test("Fill Left, Fill Right, Fill Screen, and Centre place the window from ‚åÉ‚å
       const box = document.getElementById("root")!.getBoundingClientRect();
       return { width: Math.round(box.width), height: Math.round(box.height) };
     });
+  const panelFrame = () =>
+    page.evaluate(() => {
+      const box = document.getElementById("root")!.getBoundingClientRect();
+      return {
+        x: Math.round(box.x),
+        y: Math.round(box.y),
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+      };
+    });
+  // Centre only means something once the panel is smaller than the page. 640 by 400 sits
+  // inside 1280 by 720: left 320, top 160, stored top edge 560.
+  const shrinkForCentre = () =>
+    page.evaluate(() => {
+      (
+        window as unknown as { __overnoteMock: { setPanelSize: (width: number, height: number) => void } }
+      ).__overnoteMock.setPanelSize(640, 400);
+    });
+  const centred = { x: 320, y: 160, width: 640, height: 400 };
   const viewport = page.viewportSize()!;
   const leftWidth = Math.ceil(viewport.width / 2);
 
@@ -927,6 +946,7 @@ test("Fill Left, Fill Right, Fill Screen, and Centre place the window from ‚åÉ‚å
     ["Control+Alt+ArrowUp", "fill"],
     ["Control+Alt+ArrowDown", "center"],
   ] as const) {
+    if (placement === "center") await shrinkForCentre();
     await page.keyboard.press(keys);
     expected.push(placement);
     await expect.poll(placements).toEqual(expected);
@@ -955,9 +975,18 @@ test("Fill Left, Fill Right, Fill Screen, and Centre place the window from ‚åÉ‚å
     if (placement === "right")
       await expect.poll(panelBox).toEqual({ width: viewport.width - leftWidth, height: viewport.height });
     if (placement === "fill") await expect.poll(panelBox).toEqual({ width: viewport.width, height: viewport.height });
+    if (placement === "center") {
+      await expect.poll(panelFrame).toEqual(centred);
+      const { settings } = await store();
+      expect(settings.panelFrame?.displays?.[`mock@${viewport.width}x${viewport.height}`]).toMatchObject({
+        x: centred.x,
+        y: viewport.height - centred.y,
+        width: centred.width,
+        height: centred.height,
+        placement: "center",
+      });
+    }
   }
-  // Centre keeps the size it had (the full page after Fill Screen) and centers it.
-  await expect.poll(panelBox).toEqual({ width: viewport.width, height: viewport.height });
 
   // The action panel lists all four in its window section; running one closes it.
   for (const [id, title, placement] of [
@@ -966,6 +995,7 @@ test("Fill Left, Fill Right, Fill Screen, and Centre place the window from ‚åÉ‚å
     ["fillScreen", "Fill Screen", "fill"],
     ["centre", "Centre", "center"],
   ] as const) {
+    if (placement === "center") await shrinkForCentre();
     await page.keyboard.press("Meta+k");
     const action = page.getByTestId(`action-${id}`);
     await expect(action).toContainText(title);
@@ -973,6 +1003,7 @@ test("Fill Left, Fill Right, Fill Screen, and Centre place the window from ‚åÉ‚å
     expected.push(placement);
     await expect.poll(placements).toEqual(expected);
     await expect(page.getByTestId("command-panel")).toHaveCount(0);
+    if (placement === "center") await expect.poll(panelFrame).toEqual(centred);
   }
 
   // A shortcut works while the action panel is open, and closes it.

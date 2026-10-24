@@ -1136,6 +1136,104 @@ async function screenshots() {
     assert.ok(shownAfter >= 2_900, `shown after only ${shownAfter} ms`);
     assert.ok(quietLog.includes("No height report from the editor"), "no timeout line in helper.log");
   });
+
+  // Placement clearing, through the test hooks. A second display key stands in for a display
+  // that is no longer attached, so this does not unplug a real screen.
+  const placedLeft = await helper.call("window.place", { placement: "left" });
+  s = await quiet();
+  const screenKey = s.screenKey;
+  const other = "disconnected@800x600";
+  const withOther = await helper.call("settings.get");
+  withOther.panelFrame.displays[other] = { x: 12, y: 34, width: 400, height: 300, placement: "right" };
+  await helper.call("settings.set", { panelFrame: withOther.panelFrame });
+  await helper.call("test.noteScreenConfiguration", { connected: screenKey });
+  const unplugged = await helper.call("settings.get");
+  await check("unplugging a display clears only that display's placement", () => {
+    assert.equal(placedLeft.placement, "left", "place result");
+    assert.equal(unplugged.panelFrame.displays[other].placement, undefined, "disconnected placement");
+    assert.equal(unplugged.panelFrame.displays[other].x, 12, "disconnected point");
+    assert.equal(unplugged.panelFrame.displays[screenKey].placement, "left", "destination placement");
+  });
+  await helper.call("test.noteScreenConfiguration", { connected: screenKey, relocated: true });
+  const relocateTo = { x: Math.round(s.frame.x) + 36, top: Math.round(s.frame.top) - 20 };
+  await helper.call("test.moveTo", relocateTo);
+  const kept = await poll(() => helper.call("settings.get"), (st) => st.panelFrame.x === relocateTo.x);
+  await check("a screen change moves the panel without clearing the destination placement", () => {
+    assert.equal(kept.panelFrame.x, relocateTo.x, "x");
+    assert.equal(kept.panelFrame.displays[screenKey].placement, "left", "placement");
+  });
+  const dragTo = { x: relocateTo.x + 28, top: relocateTo.top - 12 };
+  await helper.call("test.moveTo", dragTo);
+  const dragged = await poll(
+    () => helper.call("settings.get"),
+    (st) => st.panelFrame.x === dragTo.x && st.panelFrame.displays[screenKey].placement === undefined,
+  );
+  await check("a drag clears the stored placement and keeps the point", () => {
+    assert.equal(dragged.panelFrame.x, dragTo.x, "x");
+    assert.equal(dragged.panelFrame.displays[screenKey].placement, undefined, "placement");
+    assert.equal(dragged.panelFrame.displays[screenKey].x, dragTo.x, "point x");
+    assert.equal(dragged.panelFrame.displays[screenKey].y, dragTo.top, "point y");
+  });
+  // The same relocation while the panel is hidden: no save follows it, so it must not
+  // spend itself on the first drag after the panel opens again.
+  await helper.call("window.place", { placement: "left" });
+  await helper.call("window.hide");
+  markVisible(false);
+  await helper.call("test.noteScreenConfiguration", { connected: screenKey, relocated: true });
+  await helper.call("window.show");
+  s = await quiet();
+  markVisible(s.visible);
+  await check("a show after a hidden screen change opens the panel", () => {
+    assert.equal(s.visible, true, "visible");
+    assert.equal(s.showPending, false, "showPending");
+  });
+  const hiddenDragTo = { x: Math.round(s.frame.x) + 24, top: Math.round(s.frame.top) - 10 };
+  await helper.call("test.moveTo", hiddenDragTo);
+  const hiddenDragged = await poll(
+    () => helper.call("settings.get"),
+    (st) => st.panelFrame.x === hiddenDragTo.x && st.panelFrame.displays[screenKey].placement === undefined,
+  );
+  await check("a drag after a hidden screen change clears the stored placement", () => {
+    assert.equal(hiddenDragged.panelFrame.x, hiddenDragTo.x, "x");
+    assert.equal(hiddenDragged.panelFrame.displays[screenKey].placement, undefined, "placement");
+  });
+  await helper.call("window.place", { placement: "right" });
+  const again = await helper.call("settings.get");
+  again.panelFrame.displays[other] = { x: 12, y: 34, width: 400, height: 300, placement: "fill" };
+  await helper.call("settings.set", { panelFrame: again.panelFrame });
+  const autosized = await helper.call("settings.set", { windowAutoSize: true });
+  await check("turning auto-sizing on clears every display's placement", () => {
+    assert.equal(autosized.windowAutoSize, true, "windowAutoSize");
+    assert.equal(autosized.panelFrame.height, undefined, "height");
+    assert.equal(autosized.panelFrame.displays[screenKey].placement, undefined, "current placement");
+    assert.equal(autosized.panelFrame.displays[other].placement, undefined, "other placement");
+    assert.equal(autosized.panelFrame.displays[other].x, 12, "other point");
+  });
+  await helper.call("window.hide");
+  markVisible(false);
+  await helper.call("window.show");
+  s = await quiet();
+  await check("with auto-sizing on again and still no height report, window.show waits", () => {
+    assert.equal(s.showPending, true, "showPending");
+    assert.equal(s.visible, false, "visible");
+  });
+  const placedWhileWaiting = await helper.call("window.place", { placement: "center" });
+  s = await poll(quiet, (st) => st.visible && st.showPending === false);
+  markVisible(s.visible);
+  await check("window.place while a show waits orders the panel in and ends the wait", () => {
+    assert.equal(placedWhileWaiting.placement, "center", "placement");
+    assert.equal(s.showPending, false, "showPending");
+    assert.equal(s.visible, true, "visible");
+    assert.equal(s.key, true, "key");
+  });
+  await helper.call("window.hide");
+  markVisible(false);
+  await helper.call("window.place", { placement: "center" });
+  s = await quiet();
+  await check("window.place while hidden, with no show waiting, stays hidden", () => {
+    assert.equal(s.visible, false, "visible");
+    assert.equal(s.showPending, false, "showPending");
+  });
   await stop(helper);
   helper = null;
   const log = fs.readFileSync(`${TMP}/support-editor/helper.log`, "utf8");
