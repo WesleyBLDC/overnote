@@ -124,6 +124,19 @@ public final class RPCDispatcher: Sendable {
         case "window.hide":
             await host.hideWindow()
             return ["visible": false]
+        case "window.place":
+            let name = try p.string("placement")
+            guard let placement = PanelPlacement(rawValue: name) else {
+                let names = PanelPlacement.allCases.map(\.rawValue).joined(separator: ", ")
+                throw RPCError.badParams("placement must be one of \(names)")
+            }
+            let frame = await host.placeWindow(placement)
+            // The persisted panelFrame convention: x is the left edge and y is the top edge.
+            let result: JSONValue = [
+                "x": .double(Double(frame.minX)), "y": .double(Double(frame.maxY)),
+                "width": .double(Double(frame.width)), "height": .double(Double(frame.height)),
+            ]
+            return ["placement": .string(placement.rawValue), "frame": result]
         case "window.resize":
             let height = try p.double("contentHeight")
             guard height >= 0 else { throw RPCError.badParams("contentHeight must not be negative") }

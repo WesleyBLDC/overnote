@@ -14,6 +14,7 @@ import { environment, shown } from "../__mocks__/raycast-api";
 import { getLauncher } from "../api/helper";
 import { listDeletedNotes, listNotes } from "../api/notes";
 import { loadMenuData } from "../api/menu-data";
+import { showAndPlace } from "../api/window";
 import CreateNote from "../create-note";
 import OpenNotes from "../open-notes";
 import ToggleNotes from "../toggle-notes";
@@ -103,5 +104,13 @@ describe("Raycast commands against the real helper", () => {
     expect((await listNotes()).map((n) => n.title)).toEqual(["Pinned plan", "Groceries"]);
     expect((await listDeletedNotes()).map((n) => n.title)).toEqual(["Old"]);
     expect(await getLauncher().ping(300)).toBeNull();
+  });
+
+  it("the menu bar's Window items start a stopped helper, show the panel, then place it", async () => {
+    expect(await getLauncher().ping(300)).toBeNull();
+    const placed = await showAndPlace("left");
+    // Headless, the recording host places against a 1440 x 875 display: x is the left edge, y the top edge.
+    expect(placed).toEqual({ placement: "left", frame: { x: 0, y: 875, width: 720, height: 875 } });
+    expect(await visible()).toBe(true);
   });
 });

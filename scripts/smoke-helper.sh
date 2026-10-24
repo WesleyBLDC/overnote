@@ -393,6 +393,13 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   await call("notes.permanentlyDelete", { id: kept.id });
   ok("settings.reset: defaults stored and announced, the current note kept");
 
+  // ---- window.place (on both transports; headless, the recording host answers for a 1440 x 875 display)
+  const placed = await call("window.place", { placement: "right" });
+  assert.deepEqual(placed, { placement: "right", frame: { x: 720, y: 875, width: 720, height: 875 } });
+  await expectError(-32602, "window.place", { placement: "diagonal" });
+  await expectError(-32602, "window.place", {});
+  ok("window.place answers on the socket, and any other placement is -32602");
+
   // ---- errors and events
   await expectError(-32601, "notes.search", { query: "x" });
   await expectError(-32601, "notes.navigate", { direction: "back" });

@@ -895,3 +895,100 @@ test("with legacy scrollbars every scroller draws a thin one of its own", async 
   expect(widths.scroller).toBeLessThanOrEqual(10);
   expect(widths.probe).toBe(systemLegacy ? 15 : 0);
 });
+
+test("Fill Left, Fill Right, Fill Screen, and Centre place the window from ⌃⌥ arrows and the action panel", async ({
+  page,
+}) => {
+  // A display wide enough that each half is above the 405 pt minimum.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await openHarness(page, ["# Placed\n\nSome text"]);
+  const placements = async () => (await calls(page, "window.place")).map((call) => call.params.placement);
+  const store = () =>
+    page.evaluate(() => {
+      const mock = (
+        window as unknown as {
+          __overnoteMock: { store: { placeCalls: string[]; settings: import("@overnote/core").Settings } };
+        }
+      ).__overnoteMock;
+      return { placeCalls: mock.store.placeCalls, settings: mock.store.settings };
+    });
+  const panelBox = () =>
+    page.evaluate(() => {
+      const box = document.getElementById("root")!.getBoundingClientRect();
+      return { width: Math.round(box.width), height: Math.round(box.height) };
+    });
+  const viewport = page.viewportSize()!;
+  const leftWidth = Math.ceil(viewport.width / 2);
+
+  const expected: string[] = [];
+  for (const [keys, placement] of [
+    ["Control+Alt+ArrowLeft", "left"],
+    ["Control+Alt+ArrowRight", "right"],
+    ["Control+Alt+ArrowUp", "fill"],
+    ["Control+Alt+ArrowDown", "center"],
+  ] as const) {
+    await page.keyboard.press(keys);
+    expected.push(placement);
+    await expect.poll(placements).toEqual(expected);
+    await expect.poll(async () => (await store()).placeCalls).toEqual(expected);
+    if (placement === "left") {
+      // The harness panel takes the placed frame, and the store keeps the helper's panelFrame shape.
+      await expect.poll(panelBox).toEqual({ width: leftWidth, height: viewport.height });
+      const { settings } = await store();
+      expect(settings.windowAutoSize).toBe(false);
+      expect(settings.panelFrame).toEqual({
+        x: 0,
+        y: viewport.height,
+        width: leftWidth,
+        height: viewport.height,
+        displays: {
+          [`mock@${viewport.width}x${viewport.height}`]: {
+            x: 0,
+            y: viewport.height,
+            width: leftWidth,
+            height: viewport.height,
+            placement: "left",
+          },
+        },
+      });
+    }
+    if (placement === "right")
+      await expect.poll(panelBox).toEqual({ width: viewport.width - leftWidth, height: viewport.height });
+    if (placement === "fill") await expect.poll(panelBox).toEqual({ width: viewport.width, height: viewport.height });
+  }
+  // Centre keeps the size it had (the full page after Fill Screen) and centers it.
+  await expect.poll(panelBox).toEqual({ width: viewport.width, height: viewport.height });
+
+  // The action panel lists all four in its window section; running one closes it.
+  for (const [id, title, placement] of [
+    ["fillLeft", "Fill Left", "left"],
+    ["fillRight", "Fill Right", "right"],
+    ["fillScreen", "Fill Screen", "fill"],
+    ["centre", "Centre", "center"],
+  ] as const) {
+    await page.keyboard.press("Meta+k");
+    const action = page.getByTestId(`action-${id}`);
+    await expect(action).toContainText(title);
+    await action.click();
+    expected.push(placement);
+    await expect.poll(placements).toEqual(expected);
+    await expect(page.getByTestId("command-panel")).toHaveCount(0);
+  }
+
+  // A shortcut works while the action panel is open, and closes it.
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-panel")).toBeVisible();
+  await page.keyboard.press("Control+Alt+ArrowLeft");
+  expected.push("left");
+  await expect.poll(placements).toEqual(expected);
+  await expect(page.getByTestId("command-panel")).toHaveCount(0);
+
+  // A failure shows one error notice.
+  await page.evaluate(() => {
+    (window as unknown as { __overnoteMock: { failNext: Record<string, number> } }).__overnoteMock.failNext[
+      "window.place"
+    ] = 500;
+  });
+  await page.keyboard.press("Control+Alt+ArrowUp");
+  await expect(page.getByRole("alert").getByText("Could not place the window. Try again.")).toHaveCount(1);
+});

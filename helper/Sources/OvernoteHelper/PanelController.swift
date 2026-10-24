@@ -40,6 +40,9 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private var lastFrame: NSRect = .zero
     /// The frame when a system live resize (the window edge) began.
     private var liveResizeStart: NSRect?
+    /// Set when the person moved or resized the panel since the last save, so that save drops
+    /// the display's stored `window.place` placement while keeping the frame.
+    private var clearsPlacementOnSave = false
     /// Every event sent to the editor, kept only when test hooks are on.
     private(set) var emittedEvents: [(String, JSONValue)] = []
     /// Bridge methods the editor called and heights it reported, kept only with test hooks.
@@ -296,12 +299,23 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens.first
     }
 
-    /// Places the panel on the display under the pointer: at that display's remembered top
-    /// left point, else at the legacy last used point when it is on this display, else
-    /// centered with its top just under the menu bar.
+    /// Places the panel on the display under the pointer. A placement stored for that display
+    /// (`window.place`, matched by display uuid when its resolution changed) runs again against
+    /// the display's current visible frame; otherwise the panel opens at that display's
+    /// remembered top left point, else at the legacy last used point when it is on this
+    /// display, else centered with its top just under the menu bar.
     private func placePanel() {
         guard let screen = screenUnderPointer else { return }
         let width = CGFloat(settings.panelFrame?.width ?? Double(NotesPanel.defaultWidth))
+        let key = screen.positionKey
+        if let placement = PanelGeometry.storedPlacement(in: settings.panelFrame, displayKey: key) {
+            let frame = PanelGeometry.placed(
+                placement, current: CGSize(width: width, height: targetHeight(on: screen)), visible: screen.visibleFrame,
+                minimum: minimumSize)
+            setFrame(frame)
+            storePlacement(placement, frame: frame, displayKey: key, patch: [:])
+            return
+        }
         setFrame(
             PanelGeometry.placement(
                 stored: settings.panelFrame, displayKey: screen.positionKey, visible: screen.visibleFrame, width: width,
@@ -379,19 +393,47 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     /// Stores the top left point for the current display, the width, and (with auto-sizing
-    /// off) the height.
+    /// off) the height. The display's stored placement stays unless the person moved or resized
+    /// the panel since the last save (`clearsPlacementOnSave`).
     private func saveFrameNow() {
         saveFrameWork?.cancel()
         saveFrameWork = nil
+        let keepsPlacement = !clearsPlacementOnSave
+        clearsPlacementOnSave = false
         guard let screen = panel.screen else { return }
         let saved = PanelGeometry.recording(
             panel.frame, displayKey: screen.positionKey, in: settings.panelFrame, autoSize: settings.windowAutoSize,
-            temporary: temporaryHeight != nil)
+            temporary: temporaryHeight != nil, keepsPlacement: keepsPlacement)
         guard saved != settings.panelFrame else { return }
         do {
             settings = try repository.setSettings(["panelFrame": saved.json])
         } catch {
             logger.log("Could not save the panel frame: \(error)")
+        }
+    }
+
+    /// Keeps the current frame and drops the stored placement for the panel's display.
+    private func clearPlacement() {
+        clearsPlacementOnSave = true
+        saveFrameNow()
+    }
+
+    /// Stores `placement` at `frame` for `displayKey`, plus any other settings in `patch`, so
+    /// the next open on that display runs it again.
+    private func storePlacement(
+        _ placement: PanelPlacement, frame: NSRect, displayKey: String, patch: [String: JSONValue]
+    ) {
+        let autoSize = patch["windowAutoSize"]?.boolValue ?? settings.windowAutoSize
+        let saved = PanelGeometry.placing(
+            placement, frame: frame, displayKey: displayKey, in: settings.panelFrame, autoSize: autoSize,
+            temporary: temporaryHeight != nil)
+        guard saved != settings.panelFrame || !patch.isEmpty else { return }
+        var values = patch
+        values["panelFrame"] = saved.json
+        do {
+            settings = try repository.setSettings(values)
+        } catch {
+            logger.log("Could not save the panel placement: \(error)")
         }
     }
 
@@ -417,12 +459,16 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
                 logger.log("Could not turn auto-sizing off: \(error)")
             }
         }
-        saveFrameNow()
+        clearPlacement()
     }
 
     // MARK: - NSWindowDelegate
 
+    /// A move the helper did not make (a drag, or the system moving the panel) clears the
+    /// display's stored placement at the next save. The helper's own moves go through `setFrame`,
+    /// which updates `lastFrame`, so even a late notification for one is not mistaken for a drag.
     func windowDidMove(_ notification: Notification) {
+        if !applyingFrame, panel.isVisible, panel.frame.origin != lastFrame.origin { clearsPlacementOnSave = true }
         if !panel.isUserResizing, !panel.inLiveResize { lastFrame = panel.frame }
         if panel.isVisible { scheduleFrameSave() }
     }
@@ -504,6 +550,30 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     func hideWindow() async {
         hide()
+    }
+
+    /// `window.place`: on the panel's display while it is visible, else on the display under the
+    /// pointer, without showing it. Left, right, and fill end any temporary growth and turn
+    /// auto-sizing off, since they set the height; center keeps the size and never touches
+    /// auto-sizing. The placement is stored for that display and runs again when the panel opens there.
+    func placeWindow(_ placement: PanelPlacement) async -> CGRect {
+        guard let screen = (panel.isVisible ? panel.screen : nil) ?? screenUnderPointer else { return panel.frame }
+        // A drag just before the placement must not clear it at the next save.
+        saveFrameWork?.cancel()
+        saveFrameWork = nil
+        clearsPlacementOnSave = false
+        if placement.setsSize {
+            temporaryHeight = nil
+            heightBeforeTemporary = nil
+        }
+        let current = panel.isVisible ? panel.frame.size : CGSize(width: panel.frame.width, height: targetHeight(on: screen))
+        let frame = PanelGeometry.placed(placement, current: current, visible: screen.visibleFrame, minimum: minimumSize)
+        setFrame(frame)
+        storePlacement(
+            placement, frame: frame, displayKey: screen.positionKey,
+            patch: placement.setsSize ? ["windowAutoSize": false] : [:])
+        emitEvent("settings.changed", settings.json)
+        return frame
     }
 
     /// Content driven height. Always programmatic: it never turns auto-sizing off.
@@ -607,6 +677,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
             || newSettings.panelFrame?.height != settings.panelFrame?.height
         // settings.reset forgets the frame: the panel goes back to its first open size and place.
         let frameForgotten = newSettings.panelFrame == nil && settings.panelFrame != nil
+        let autoSizeTurnedOn = newSettings.windowAutoSize && !settings.windowAutoSize
         settings = newSettings
         applyWindowSettings()
         if frameForgotten {
@@ -622,6 +693,10 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         }
         if geometryChanged {
             applyHeight(force: true)
+        }
+        if autoSizeTurnedOn {
+            // Auto-sizing owns the height again, so a placement no longer describes the frame.
+            clearPlacement()
         }
     }
 

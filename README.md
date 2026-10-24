@@ -87,6 +87,7 @@ Press ⌘K in the panel to see every action with its shortcut.
 | ⇧⌘, | Format menu |
 | ⌃⌘↑ / ⌃⌘↓ | Move list item up / down |
 | ⇧⌘/ | Toggle window auto-sizing |
+| ⌃⌥← / ⌃⌥→ / ⌃⌥↑ / ⌃⌥↓ | Fill left / fill right / fill screen / centre the panel |
 | ⌘= / ⌘- / ⌘0 | Zoom in / zoom out / actual size (75% to 200%) |
 | ⎋ or ⌘W | Hide the panel |
 
@@ -144,7 +145,7 @@ For a clean, pretty note:
 | Create Note | Creates a note from its argument, the Raycast search text, or the selected text, and opens it. |
 | Search Notes | Lists notes by date with a preview, and opens, pins, copies, duplicates, deletes, backs up, and restores them. |
 | Recently Deleted Notes | Restores deleted notes or removes them for good. |
-| Overnote Menu Bar | Pinned and recent notes in the menu bar, plus the backup actions. Off by default; enable it in Raycast Settings. |
+| Overnote Menu Bar | Pinned and recent notes in the menu bar, plus the window placements and the backup actions. Off by default; enable it in Raycast Settings. |
 | Check for Updates | Compares your version with the latest release and, when a newer one exists, copies the update command. <!-- store:remove-line --> |
 
 Copy Deeplink (⇧⌘D in the panel, or in Search Notes) gives you a `raycast://` link that opens that exact note.
