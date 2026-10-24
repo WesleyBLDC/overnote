@@ -15,7 +15,7 @@ Raycast extension (src/)  ──socket JSON-RPC──▶  OvernoteHelper (helper
 | Thing | Path |
 |---|---|
 | Extension root | repo root (`package.json` is the Raycast manifest) |
-| Helper binary (built) | `assets/bin/OvernoteHelper` (universal, ad-hoc signed) plus `assets/bin/OvernoteHelper.sha256` |
+| Helper binary (built) | `assets/bin/OvernoteHelper` (arm64, ad-hoc signed) plus `assets/bin/OvernoteHelper.sha256` |
 | Editor build | `assets/editor/` (`index.html` plus relative assets; Vite `base: "./"`) |
 | Data dir | `environment.supportPath` of the extension, passed to the helper as `--support-dir` |
 | Database | `<support-dir>/notes.sqlite` (WAL) |
@@ -49,7 +49,7 @@ The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups fold
 - Error codes: `-32700` unparseable JSON (with `id: null`), `-32601` unknown method (also bridge-only methods on the socket and socket-only methods on the bridge), `-32602` bad params, `404` note or backup not found, `409` invalid state (for example pin or move on a trashed or unpinned note, or a backup with a newer schema), `500` internal.
 - `touchAccessed` on a missing id is a silent no-op; `permanentlyDelete` on a missing id is 404; `window.show {noteId}` is 404 for a missing note and persists it as current.
 - `notes.update` sets `updatedAt` to max(now, old + 1) so same-millisecond edits still change it.
-- The helper also accepts `--headless` (no window) for smoke tests and CI.
+- The helper also accepts `--headless` (no window) for smoke tests.
 - Clients must time out after 3 s (10 s for `system.shutdown`, 60 s for `system.backup` and `system.restoreBackup`, and 30 min for `file.saveAs`, which waits for the person in a save panel).
 
 ## 3. Bridge protocol (editor ⇄ helper)
