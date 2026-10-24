@@ -57,6 +57,20 @@ function seedFromUrl(control: MockControl, search: string): void {
   ]);
 }
 
+/**
+ * Slow, hung, and failing methods from the URL, so a state that needs a misbehaving helper can be
+ * opened by hand: `?mockLatency=600`, `?mockHang=notes.browse`, `?mockFail=notes.browse,notes.listDeleted`
+ * (each listed method fails once). Method lists are comma separated.
+ */
+function faultsFromUrl(control: MockControl, search: string): void {
+  const params = new URLSearchParams(search);
+  const methods = (name: string) => (params.get(name) ?? "").split(",").filter(Boolean);
+  const latency = Number(params.get("mockLatency"));
+  if (Number.isFinite(latency) && latency > 0) control.latency = latency;
+  for (const method of methods("mockHang")) control.hang.add(method);
+  for (const method of methods("mockFail")) control.failNext[method] = rpc.ErrorCode.Internal;
+}
+
 export function installMockBridge(target: MockWindow & Window): MockControl {
   // Emulates the helper's panel sizing: heights from the minimum size (the editor's report, at least
   // 405 x 197) to 860 points times zoom. With auto-sizing off the panel opens at the roomy first-open
@@ -164,6 +178,7 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
   target.__overnoteMock = control;
   target.document.documentElement.dataset.harness = "true";
   seedFromUrl(control, target.location.search);
+  faultsFromUrl(control, target.location.search);
   if (!control.store.settings.windowAutoSize) {
     restingHeight = FIRST_OPEN_HEIGHT;
     const root = target.document.getElementById("root");

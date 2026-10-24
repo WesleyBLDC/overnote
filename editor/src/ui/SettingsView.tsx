@@ -128,6 +128,7 @@ export function SettingsList({ rows, settings, selected, grouped, onHover, onCha
               aria-selected={i === selected}
               className={`panel-row setting-row${i === selected ? " is-selected" : ""}`}
               data-testid={`setting-${row.id}`}
+              tabIndex={i === selected ? 0 : -1}
               onMouseEnter={() => onHover(i)}
               onMouseDown={keepFocus}
               onClick={() => {

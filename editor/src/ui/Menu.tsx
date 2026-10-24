@@ -72,7 +72,7 @@ export function Menu({ items, anchor, onSelect, onClose }: MenuProps) {
           onMouseEnter={() => setIndex(i)}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onSelect(item.id)}
-          tabIndex={-1}
+          tabIndex={i === index ? 0 : -1}
         >
           <span className="menu-check">{item.checked ? <Icon name="check" /> : null}</span>
           <span className="menu-title">{item.title}</span>

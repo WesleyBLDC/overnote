@@ -142,7 +142,7 @@ export const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(funct
               aria-selected={i === selected && index !== quickButtonIndex}
               aria-label={cell.label}
               className={`emoji-cell${i === selected && index !== quickButtonIndex ? " is-selected" : ""}`}
-              tabIndex={-1}
+              tabIndex={i === selected && index !== quickButtonIndex ? 0 : -1}
               onMouseEnter={() => setIndex(i)}
               onClick={() => onPick(cell.emoji)}
             >
@@ -154,7 +154,7 @@ export const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(funct
           <button
             type="button"
             className={`emoji-open${index === quickButtonIndex ? " is-selected" : ""}`}
-            tabIndex={-1}
+            tabIndex={index === quickButtonIndex ? 0 : -1}
             onClick={() => setExpanded(true)}
           >
             Open Emoji Picker

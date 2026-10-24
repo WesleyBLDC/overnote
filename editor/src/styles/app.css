@@ -966,6 +966,59 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   margin-top: var(--space-2);
 }
 
+/* ---- Panel states: the leading pin slot and first load skeletons ---- */
+
+/* Every browse row keeps the slot while any row is pinned, so the titles line up. */
+.panel-row-leading {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  color: var(--text-tertiary);
+}
+
+.panel-row-leading .icon {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.panel-row.is-selected .panel-row-leading {
+  color: var(--text-secondary);
+}
+
+/* Room for a focused row's ring inside the scrolling list, without moving the rows. */
+.panel-list {
+  --ring-room: calc(var(--focus-gap-width) + var(--focus-ring-width));
+  margin: calc(-1 * var(--ring-room));
+  padding: var(--ring-room);
+}
+
+.panel-skeleton {
+  pointer-events: none;
+}
+
+/* A bar inside the real title and subtitle line boxes, so a skeleton row is as tall as a note row. */
+.skeleton-line {
+  display: inline-block;
+  height: 0.7em;
+  vertical-align: middle;
+  border-radius: var(--radius-full);
+  background: var(--surface-hover);
+}
+
+.panel-row-title > .skeleton-line {
+  width: 55%;
+}
+
+.panel-row-subtitle > .skeleton-line {
+  width: 35%;
+}
+
+.panel-skeleton-row:nth-child(even) .panel-row-title > .skeleton-line {
+  width: 42%;
+}
+
 /* ---- Settings view (⌘,) ---- */
 
 .panel[data-view="settings"] {
