@@ -277,8 +277,10 @@ public final class RPCDispatcher: Sendable {
         case "settings.set":
             let settings = try repository.setSettings(p.values)
             await host.settingsDidChange(settings)
-            await host.emit("settings.changed", settings.json)
-            return settings.json
+            // The host may write a follow-up (auto-sizing clears every display's placement).
+            let settled = try repository.settings()
+            await host.emit("settings.changed", settled.json)
+            return settled.json
         case "settings.reset":
             let settings = try repository.resetSettings()
             await host.settingsDidChange(settings)

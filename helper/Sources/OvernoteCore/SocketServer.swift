@@ -111,6 +111,10 @@ public final class SocketServer: @unchecked Sendable {
     public let path: String
     private let handler: LineHandler
     private let log: @Sendable (String) -> Void
+    /// How many bytes one read on a connection may take in (tests read in small pieces).
+    private let readChunkSize: Int
+    /// Called with the byte count of every read on a connection, or nil.
+    private let onRead: (@Sendable (Int) -> Void)?
     private let queue = DispatchQueue(label: "overnote.socket.accept")
     private let lock = NSLock()
     private var listenFd: Int32 = -1
@@ -121,6 +125,21 @@ public final class SocketServer: @unchecked Sendable {
         self.path = path
         self.handler = handler
         self.log = log
+        readChunkSize = 64 * 1024
+        onRead = nil
+    }
+
+    /// A server that reads its connections in pieces of `readChunkSize` bytes and reports
+    /// every read, so a test can prove a long line really arrived in small reads.
+    init(
+        path: String, log: @escaping @Sendable (String) -> Void = { _ in }, readChunkSize: Int,
+        onRead: (@Sendable (Int) -> Void)?, handler: @escaping LineHandler
+    ) {
+        self.path = path
+        self.handler = handler
+        self.log = log
+        self.readChunkSize = max(1, readChunkSize)
+        self.onRead = onRead
     }
 
     /// Prepares the directory, removes a stale socket, binds with mode 0600, and starts accepting.
@@ -215,7 +234,7 @@ public final class SocketServer: @unchecked Sendable {
             setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
             _ = fcntl(client, F_SETFD, FD_CLOEXEC)
             _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) | O_NONBLOCK)
-            let connection = Connection(fd: client, handler: handler, log: log) { [weak self] connection in
+            let connection = Connection(fd: client, handler: handler, log: log, readChunkSize: readChunkSize, onRead: onRead) { [weak self] connection in
                 _ = self?.lock.withLock { self?.connections.removeValue(forKey: ObjectIdentifier(connection)) }
             }
             lock.withLock { connections[ObjectIdentifier(connection)] = connection }
@@ -232,6 +251,8 @@ final class Connection: @unchecked Sendable {
     private let fd: Int32
     private let handler: SocketServer.LineHandler
     private let log: @Sendable (String) -> Void
+    private let readChunkSize: Int
+    private let onRead: (@Sendable (Int) -> Void)?
     private let onClose: @Sendable (Connection) -> Void
     private let queue = DispatchQueue(label: "overnote.socket.connection")
     /// Responses are written here, not on Swift's shared cooperative threads: a client that stops
@@ -253,11 +274,14 @@ final class Connection: @unchecked Sendable {
 
     init(
         fd: Int32, handler: @escaping SocketServer.LineHandler, log: @escaping @Sendable (String) -> Void,
+        readChunkSize: Int = 64 * 1024, onRead: (@Sendable (Int) -> Void)? = nil,
         onClose: @escaping @Sendable (Connection) -> Void
     ) {
         self.fd = fd
         self.handler = handler
         self.log = log
+        self.readChunkSize = max(1, readChunkSize)
+        self.onRead = onRead
         self.onClose = onClose
     }
 
@@ -271,10 +295,11 @@ final class Connection: @unchecked Sendable {
 
     /// Runs on `queue`.
     private func readAvailable() {
-        var chunk = [UInt8](repeating: 0, count: 64 * 1024)
+        var chunk = [UInt8](repeating: 0, count: readChunkSize)
         while true {
             let count = chunk.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
             if count > 0 {
+                onRead?(count)
                 buffer.append(contentsOf: chunk[0..<count])
                 if buffer.count > SocketServer.maxLineBytes {
                     // Answer the complete lines first; what is left is one unfinished line.

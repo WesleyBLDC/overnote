@@ -164,6 +164,14 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
               if (message.method === "window.place") {
                 const { frame } = result as rpc.Result<"window.place">;
                 control.setPanelSize(frame.width, frame.height);
+                // AppKit stores y as the top edge from the bottom. The harness page is the display.
+                const root = target.document.getElementById("root");
+                if (root) {
+                  root.style.position = "absolute";
+                  root.style.margin = "0";
+                  root.style.left = `${frame.x}px`;
+                  root.style.top = `${target.innerHeight - frame.y}px`;
+                }
               }
               receiver()?.resolve(message.id, result);
             } catch (error) {

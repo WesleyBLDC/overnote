@@ -4,10 +4,8 @@ import Foundation
 /// A small blocking JSON-RPC client over the helper socket. Used by tests and by a second
 /// helper instance to forward `--show` to the running one.
 public final class RPCClient {
-    let fd: Int32
-    private var buffer: [UInt8] = []
-    /// No byte of `buffer` before this index is a newline (the contract in `NewlineSearch`).
-    private var scanOffset = 0
+    private let fd: Int32
+    private var buffer = LineBuffer()
     private var nextId: Int64 = 1
 
     public init(path: String) throws {
@@ -23,17 +21,19 @@ public final class RPCClient {
         try SocketPaths.writeAll(fd: fd, data: Data((line + "\n").utf8), timeout: 3)
     }
 
+    /// Sends raw bytes, with no newline added. Tests use this to split one request across writes
+    /// without touching the socket descriptor.
+    func send(data: Data) throws {
+        try SocketPaths.writeAll(fd: fd, data: data, timeout: 3)
+    }
+
     /// Reads one line, or returns nil on timeout or end of stream.
     public func readLine(timeout: Double = 3) throws -> String? {
         let deadline = Date().addingTimeInterval(timeout)
         while true {
-            if let newline = NewlineSearch.firstNewline(in: buffer, from: scanOffset) {
-                let line = String(decoding: buffer[..<newline], as: UTF8.self)
-                buffer.removeSubrange(...newline)
-                scanOffset = 0
-                return line
+            if let line = buffer.nextLine() {
+                return String(decoding: line, as: UTF8.self)
             }
-            scanOffset = buffer.count
             let remaining = deadline.timeIntervalSinceNow
             guard remaining > 0 else { return nil }
             var pollFd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
@@ -44,7 +44,7 @@ public final class RPCClient {
             let count = chunk.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
             if count < 0 && errno == EINTR { continue }
             guard count > 0 else { return nil }
-            buffer.append(contentsOf: chunk[0..<count])
+            buffer.append(chunk[0..<count])
         }
     }
 
