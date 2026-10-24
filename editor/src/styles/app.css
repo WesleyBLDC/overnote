@@ -432,7 +432,6 @@ kbd {
   align-items: center;
   gap: 0.1rem;
   flex-wrap: nowrap;
-  max-width: 100%;
   animation: rise-in var(--motion-slow) var(--ease-out);
 }
 
@@ -440,6 +439,11 @@ kbd {
 html[data-high-zoom="true"] .format-bar {
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+/* Nothing in the scrolling bar shrinks, so the minimum size counts the bar at its full width. */
+html[data-high-zoom="true"] .format-bar > * {
+  flex: none;
 }
 
 html[data-high-zoom="true"] .footer-center {

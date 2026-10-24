@@ -1,6 +1,6 @@
 /** Theme and contrast: the iris violet accent, code blocks, and task states, in both color schemes. */
 import { expect, test, type Page } from "@playwright/test";
-import { editor, emit, openHarness, settle } from "./harness";
+import { calls, editor, emit, openHarness, settle } from "./harness";
 
 const NOTE = [
   "Hello\n\n1. one\n\n- [x] done [link](https://example.com) and `code`\n\n- [ ] todo\n\n[link](https://example.com)\n\n```js\n// a comment\nconst a = 1;\n```",
@@ -200,11 +200,29 @@ test.describe("chrome sizing", () => {
     await openHarness(page, ["a note with a deliberately long title that cannot fit one line at high zoom\n\nbody"]);
     await setZoom(page, 2);
     await page.keyboard.press("Alt+Meta+Comma");
-    const bar = await page.getByTestId("format-bar").evaluate((el) => {
-      const tops = new Set([...el.querySelectorAll("button")].map((b) => Math.round(b.getBoundingClientRect().top)));
-      return { lines: tops.size, scrolls: el.scrollWidth > el.clientWidth, overflowX: getComputedStyle(el).overflowX };
-    });
-    expect(bar).toEqual({ lines: 1, scrolls: true, overflowX: "auto" });
+    const formatBar = page.getByTestId("format-bar");
+    await expect(formatBar).toBeVisible();
+    // At its minimum size the whole bar fits; on a display narrower than that minimum it scrolls sideways.
+    const minimumWidth = async () =>
+      ((await calls(page, "window.setMinimumSize")).at(-1)?.params as { width: number }).width;
+    const appWidth = () => page.getByTestId("app").evaluate((el) => el.getBoundingClientRect().width);
+    await expect.poll(async () => (await appWidth()) - (await minimumWidth())).toBe(0);
+    const scroller = () =>
+      formatBar.evaluate((el) => {
+        const tops = new Set([...el.querySelectorAll("button")].map((b) => Math.round(b.getBoundingClientRect().top)));
+        return {
+          lines: tops.size,
+          scrolls: el.scrollWidth > el.clientWidth,
+          overflowX: getComputedStyle(el).overflowX,
+        };
+      });
+    expect(await scroller()).toEqual({ lines: 1, scrolls: false, overflowX: "auto" });
+    const fitted = await minimumWidth();
+    await page.evaluate(() => (document.getElementById("root")!.style.width = "480px"));
+    await expect.poll(scroller).toEqual({ lines: 1, scrolls: true, overflowX: "auto" });
+    // The minimum is the bar's full width, not the narrower box it scrolls in.
+    expect(await minimumWidth()).toBe(fitted);
+    await page.evaluate((width) => (document.getElementById("root")!.style.width = `${width}px`), fitted);
 
     await editor(page).focus();
     await page.keyboard.press("Meta+f");
