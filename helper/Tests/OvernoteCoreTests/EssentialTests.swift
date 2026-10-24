@@ -511,9 +511,36 @@ struct PanelPlacementTests {
         }
     }
 
-    /// Clearing a placement keeps that display's remembered point, leaves every other
-    /// display alone when only one is named, and clears every display when asked for all.
-    @Test func clearingPlacementsOnlyClearsTheNamedDisplayOrEveryDisplayWhenAsked() {
+    /// Unplugging display A clears A's placement and leaves B's, including B at another size.
+    /// A resolution change keeps the uuid connected, so that placement stays.
+    @Test func unpluggingADisplayClearsOnlyThatDisplay() {
+        let keyA = "UUID-A@1440x900"
+        let keyB = "UUID-B@1440x900"
+        let keyBResized = "UUID-B@1680x1050"
+        let stored = PanelFrame(
+            x: 0, y: 876, width: 720, height: 876,
+            displays: [
+                keyA: PanelPoint(x: 0, y: 876, width: 720, height: 876, placement: .left),
+                keyB: PanelPoint(x: 720, y: 876, width: 720, height: 876, placement: .right),
+                keyBResized: PanelPoint(x: 800, y: 1000, width: 840, height: 1000, placement: .fill),
+            ])
+        let cleared = PanelGeometry.clearingDisconnected(in: stored, connectedKeys: [keyB])
+        #expect(cleared?.displays[keyA] == PanelPoint(x: 0, y: 876))
+        #expect(PanelGeometry.storedPlacement(in: cleared, displayKey: keyA) == nil)
+        #expect(cleared?.displays[keyB]?.placement == .right)
+        #expect(cleared?.displays[keyBResized]?.placement == .fill)
+        #expect(PanelGeometry.clearingDisconnected(in: stored, connectedKeys: [keyA, keyBResized]) == stored)
+        // The system then records the landed frame on B and keeps B's placement.
+        let landed = CGRect(x: 40, y: 60, width: 640, height: 500)
+        let afterMove = PanelGeometry.recording(
+            landed, displayKey: keyB, in: cleared, autoSize: false, temporary: false, keepsPlacement: true)
+        #expect(afterMove.displays[keyA] == PanelPoint(x: 0, y: 876))
+        #expect(PanelGeometry.storedPlacement(in: afterMove, displayKey: keyB) == .right)
+    }
+
+    /// Turning auto-sizing on forgets the shared height and every display's placement.
+    /// The remembered points stay.
+    @Test func turningAutoSizingOnClearsEveryDisplay() {
         let keyA = "UUID-A@1440x900"
         let keyB = "UUID-B@1440x900"
         let stored = PanelFrame(
@@ -522,23 +549,34 @@ struct PanelPlacementTests {
                 keyA: PanelPoint(x: 0, y: 876, width: 720, height: 876, placement: .left),
                 keyB: PanelPoint(x: 720, y: 876, width: 720, height: 876, placement: .right),
             ])
-        let one = PanelGeometry.clearingPlacement(in: stored, displayKey: keyA)
-        #expect(one?.displays[keyA] == PanelPoint(x: 0, y: 876))
-        #expect(one?.displays[keyB]?.placement == .right)
-        #expect(PanelGeometry.storedPlacement(in: one, displayKey: keyB) == .right)
-        let all = PanelGeometry.clearingAllPlacements(in: stored)
-        #expect(all?.displays[keyA] == PanelPoint(x: 0, y: 876))
-        #expect(all?.displays[keyB] == PanelPoint(x: 720, y: 876))
-        #expect(PanelGeometry.storedPlacement(in: all, displayKey: keyA) == nil)
-        #expect(PanelGeometry.storedPlacement(in: all, displayKey: keyB) == nil)
-        // A move that leaves display A for display B (a display unplugged, the panel landed
-        // on B) clears only A: B keeps its placement, and the frame is recorded on B.
-        let landed = CGRect(x: 40, y: 60, width: 640, height: 500)
-        let afterMove = PanelGeometry.recording(
-            landed, displayKey: keyB, in: one == nil ? stored : PanelGeometry.clearingPlacement(in: stored, displayKey: keyA),
-            autoSize: false, temporary: false, keepsPlacement: true)
-        #expect(afterMove.displays[keyA] == PanelPoint(x: 0, y: 876))
-        #expect(PanelGeometry.storedPlacement(in: afterMove, displayKey: keyB) == .right)
+        let cleared = PanelGeometry.clearingAllPlacements(in: stored)
+        #expect(cleared?.height == nil)
+        #expect(cleared?.displays[keyA] == PanelPoint(x: 0, y: 876))
+        #expect(cleared?.displays[keyB] == PanelPoint(x: 720, y: 876))
+        #expect(PanelGeometry.storedPlacement(in: cleared, displayKey: keyA) == nil)
+        #expect(PanelGeometry.storedPlacement(in: cleared, displayKey: keyB) == nil)
+        let plain = PanelFrame(x: 1, y: 2, width: 640, displays: [keyA: PanelPoint(x: 1, y: 2)])
+        #expect(PanelGeometry.clearingAllPlacements(in: plain) == plain)
+    }
+
+    /// A clear asked for while the panel has no display stays pending, and a system relocation
+    /// keeps the destination placement once a display is known.
+    @Test func aClearWithNoDisplayStaysPending() {
+        let held = PanelGeometry.placementClearOnSave(clearRequested: true, systemRelocation: false, hasDisplay: false)
+        #expect(held.keepsPlacement)
+        #expect(held.clearRequested)
+        #expect(!held.systemRelocation)
+        let applied = PanelGeometry.placementClearOnSave(clearRequested: true, systemRelocation: false, hasDisplay: true)
+        #expect(!applied.keepsPlacement)
+        #expect(!applied.clearRequested)
+        #expect(!applied.systemRelocation)
+        let relocated = PanelGeometry.placementClearOnSave(clearRequested: true, systemRelocation: true, hasDisplay: true)
+        #expect(relocated.keepsPlacement)
+        #expect(!relocated.clearRequested)
+        #expect(!relocated.systemRelocation)
+        let quiet = PanelGeometry.placementClearOnSave(clearRequested: false, systemRelocation: false, hasDisplay: true)
+        #expect(quiet.keepsPlacement)
+        #expect(!quiet.clearRequested)
     }
 
     /// A placement is stored with the display's point, runs again for that display at another
@@ -939,12 +977,29 @@ struct FramingTests {
         // One write carries the end of the long line and the whole short line, so one client read gets both.
         try SocketPaths.writeAll(fd: peer, data: Data((tail + "\nshort\n").utf8), timeout: 3)
         #expect(try client.readLine(timeout: 5) == head + tail)
+        // The first line is 8000 bytes and its newline sits at index 8000, so the read buffer
+        // compacts before this next line is returned. The remainder has to survive that shift.
         #expect(try client.readLine(timeout: 1) == "short")
-        // Many short lines in one write come back one by one, in order, past the point where
-        // a cursor into the read buffer has consumed more than half of what arrived.
-        let many = (0..<2_000).map { "line-\($0)" }
-        try SocketPaths.writeAll(fd: peer, data: Data((many.joined(separator: "\n") + "\n").utf8), timeout: 3)
-        for line in many { #expect(try client.readLine(timeout: 5) == line) }
+    }
+
+    /// A batch of short lines shifts the read buffer a handful of times, not once per line.
+    /// The lines are long enough that the consumed prefix passes half the storage.
+    @Test func aBatchOfLinesShiftsOnce() {
+        var buffer = LineBuffer()
+        let lines = (0..<2_000).map { "line-\($0)" }
+        var bytes: [UInt8] = []
+        for line in lines {
+            bytes.append(contentsOf: Array(line.utf8))
+            bytes.append(UInt8(ascii: "\n"))
+        }
+        buffer.append(bytes[...])
+        var read: [String] = []
+        while let line = buffer.nextLine() {
+            read.append(String(decoding: line, as: UTF8.self))
+        }
+        #expect(read == lines)
+        #expect(buffer.shifts > 0)
+        #expect(buffer.shifts < 8)
     }
 }
 

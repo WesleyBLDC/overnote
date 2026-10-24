@@ -295,10 +295,11 @@ final class Connection: @unchecked Sendable {
 
     /// Runs on `queue`.
     private func readAvailable() {
-        var chunk = [UInt8](repeating: 0, count: 64 * 1024)
+        var chunk = [UInt8](repeating: 0, count: readChunkSize)
         while true {
             let count = chunk.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
             if count > 0 {
+                onRead?(count)
                 buffer.append(contentsOf: chunk[0..<count])
                 if buffer.count > SocketServer.maxLineBytes {
                     // Answer the complete lines first; what is left is one unfinished line.

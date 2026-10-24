@@ -195,6 +195,13 @@ final class TestHooks {
             let x = CGFloat(try p.double("x"))
             panel.setFrameTopLeftPoint(NSPoint(x: x, y: top))
             return [:]
+        case "test.noteScreenConfiguration":
+            // The displays still attached, comma separated `"<uuid>@<w>x<h>"` keys, the same
+            // shape `NSScreen.positionKey` has. `relocated` marks the next save as the system's
+            // move onto a display that remains, so that save keeps the destination placement.
+            let connected = try p.string("connected").split(separator: ",").map { String($0) }.filter { !$0.isEmpty }
+            controller.noteScreenConfiguration(connectedKeys: connected, relocated: try p.optionalBool("relocated") ?? false)
+            return [:]
         case "test.resignKey":
             // Takes key status away from the visible panel, as a click into another app would,
             // by making a tiny transparent window of ours key for a moment. The app is then

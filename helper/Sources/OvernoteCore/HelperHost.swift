@@ -9,8 +9,9 @@ public protocol HelperHost: Sendable {
     func showWindow() async
     func hideWindow() async
     /// Places the panel inside its display (`window.place`): the panel's display while it is
-    /// visible, the display under the pointer while it is hidden, which stays hidden. Returns the
-    /// resulting frame as an AppKit screen rect.
+    /// visible, the display under the pointer while it is hidden. A hidden panel stays hidden,
+    /// except a show waiting for its first height report, which placing orders in at the placed
+    /// frame. Returns the resulting frame as an AppKit screen rect.
     func placeWindow(_ placement: PanelPlacement) async -> CGRect
     /// Applies a content driven height (in points), clamped by the host. A `temporary` report
     /// (confirmation dialogs) applies even with auto-sizing off; the next non temporary report

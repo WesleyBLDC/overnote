@@ -42,7 +42,15 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private var liveResizeStart: NSRect?
     /// Set when the person moved or resized the panel since the last save, so that save drops
     /// the display's stored `window.place` placement while keeping the frame.
+    /// Stays set when a save finds no display (`placementClearOnSave`), so a nil screen cannot
+    /// consume it.
     private var clearsPlacementOnSave = false
+    /// Set when the screen configuration changed, until the save that follows. That save keeps
+    /// the destination display's placement: the system moved the panel, the person did not.
+    private var screenConfigurationChanged = false
+    /// The display the panel was on before the latest screen change, so an unplug can be told
+    /// from a drag onto a display that is still connected.
+    private var lastScreenKey: String?
     /// Every event sent to the editor, kept only when test hooks are on.
     private(set) var emittedEvents: [(String, JSONValue)] = []
     /// Bridge methods the editor called and heights it reported, kept only with test hooks.
@@ -80,6 +88,9 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         super.init()
         panel.delegate = self
         applyWindowSettings()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
 
     // MARK: - Setup
@@ -244,17 +255,23 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     /// Orders the panel in at its target height and makes it key; ends any pending show.
     private func present() {
-        cancelPendingShow()
         let wasVisible = panel.isVisible
+        cancelPendingShow()
         if !wasVisible {
             placePanel()
         }
+        makeVisible(wasAlready: wasVisible)
+    }
+
+    /// Orders the panel in and makes it key without moving it. `wasAlready` skips a second
+    /// `window.didShow` when the panel was already on screen.
+    private func makeVisible(wasAlready: Bool) {
         panel.orderFrontRegardless()
         panel.makeKey()
         if let webView, panel.firstResponder !== webView {
             panel.makeFirstResponder(webView)
         }
-        if !wasVisible {
+        if !wasAlready {
             if recordEvents { shownHeights.append(Double(panel.frame.height)) }
             emitEvent("window.didShow", [:])
         }
@@ -368,6 +385,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         panel.setFrame(frame, display: panel.isVisible, animate: false)
         panel.invalidateShadow()
         lastFrame = panel.frame
+        if let key = panel.screen?.positionKey { lastScreenKey = key }
     }
 
     /// Applies the current target height with the top edge fixed.
@@ -398,12 +416,15 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private func saveFrameNow() {
         saveFrameWork?.cancel()
         saveFrameWork = nil
-        let keepsPlacement = !clearsPlacementOnSave
-        clearsPlacementOnSave = false
+        let decision = PanelGeometry.placementClearOnSave(
+            clearRequested: clearsPlacementOnSave, systemRelocation: screenConfigurationChanged,
+            hasDisplay: panel.screen != nil)
+        clearsPlacementOnSave = decision.clearRequested
+        screenConfigurationChanged = decision.systemRelocation
         guard let screen = panel.screen else { return }
         let saved = PanelGeometry.recording(
             panel.frame, displayKey: screen.positionKey, in: settings.panelFrame, autoSize: settings.windowAutoSize,
-            temporary: temporaryHeight != nil, keepsPlacement: keepsPlacement)
+            temporary: temporaryHeight != nil, keepsPlacement: decision.keepsPlacement)
         guard saved != settings.panelFrame else { return }
         do {
             settings = try repository.setSettings(["panelFrame": saved.json])
@@ -506,6 +527,15 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     func windowDidChangeScreen(_ notification: Notification) {
+        let connected = NSScreen.screens.map(\.positionKey)
+        let current = panel.screen?.positionKey
+        if let previous = lastScreenKey, let current, !PanelGeometry.sameDisplay(previous, current),
+            !connected.contains(where: { PanelGeometry.sameDisplay($0, previous) })
+        {
+            // The display we left is gone. Clear its placement, and keep the one we landed on.
+            noteScreenConfiguration(connectedKeys: connected, relocated: true)
+        }
+        if let current { lastScreenKey = current }
         applyHeight()
     }
 
@@ -553,9 +583,11 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     /// `window.place`: on the panel's display while it is visible, else on the display under the
-    /// pointer, without showing it. Left, right, and fill end any temporary growth and turn
-    /// auto-sizing off, since they set the height; center keeps the size and never touches
-    /// auto-sizing. The placement is stored for that display and runs again when the panel opens there.
+    /// pointer. A hidden panel stays hidden, except a show that is waiting for its first height
+    /// report: placing completes that show at the placed frame. Left, right, and fill end any
+    /// temporary growth and turn auto-sizing off, since they set the height; center keeps the
+    /// size and never touches auto-sizing. The placement is stored for that display and runs
+    /// again when the panel opens there.
     func placeWindow(_ placement: PanelPlacement) async -> CGRect {
         guard let screen = (panel.isVisible ? panel.screen : nil) ?? screenUnderPointer else { return panel.frame }
         // A drag just before the placement must not clear it at the next save.
@@ -572,6 +604,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         storePlacement(
             placement, frame: frame, displayKey: screen.positionKey,
             patch: placement.setsSize ? ["windowAutoSize": false] : [:])
+        if pendingShow != nil {
+            // show, then place (the menu bar): the waiting show opens at this frame.
+            let wasVisible = panel.isVisible
+            cancelPendingShow()
+            makeVisible(wasAlready: wasVisible)
+        }
         emitEvent("settings.changed", settings.json)
         return frame
     }
@@ -694,9 +732,38 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         if geometryChanged {
             applyHeight(force: true)
         }
-        if autoSizeTurnedOn {
-            // Auto-sizing owns the height again, so a placement no longer describes the frame.
-            clearPlacement()
+        if autoSizeTurnedOn, let cleared = PanelGeometry.clearingAllPlacements(in: settings.panelFrame),
+            cleared != settings.panelFrame
+        {
+            // Auto-sizing owns the height on every display, so every stored placement goes,
+            // not only the display the panel is on now. A nil screen must not skip the others.
+            do {
+                settings = try repository.setSettings(["panelFrame": cleared.json])
+            } catch {
+                logger.log("Could not clear placements after turning auto-sizing on: \(error)")
+            }
+        }
+    }
+
+    /// Screens were plugged, unplugged, or resized. Placements for displays that are gone are
+    /// cleared here. The destination display's placement is kept only when the panel itself
+    /// left a display that is no longer connected (`windowDidChangeScreen`).
+    @objc private func screenParametersChanged() {
+        noteScreenConfiguration(connectedKeys: NSScreen.screens.map(\.positionKey), relocated: false)
+    }
+
+    /// `connectedKeys` are the displays still attached (`"<uuid>@<w>x<h>"`). Test hooks pass the
+    /// same shape the screen notification does, so the clear runs without unplugging a display.
+    /// `relocated` marks the following save as the system's move onto the display that remains.
+    func noteScreenConfiguration(connectedKeys: [String], relocated: Bool) {
+        if relocated { screenConfigurationChanged = true }
+        guard let cleared = PanelGeometry.clearingDisconnected(in: settings.panelFrame, connectedKeys: connectedKeys),
+            cleared != settings.panelFrame
+        else { return }
+        do {
+            settings = try repository.setSettings(["panelFrame": cleared.json])
+        } catch {
+            logger.log("Could not clear a disconnected display's placement: \(error)")
         }
     }
 
