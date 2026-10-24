@@ -137,6 +137,13 @@ test("a failed autosave says so once while saving keeps failing, and the next sa
     .toEqual({});
   await expect(failures).toHaveCount(1);
 
+  // An error notice outlives the polite notice time, and its dismiss button removes it.
+  await page.clock.runFor(10000);
+  await expect(failures).toHaveCount(1);
+  await page.getByTestId("notice-dismiss").click();
+  await page.clock.runFor(400);
+  await expect(failures).toHaveCount(0);
+
   // The edits were kept, so the next save writes all of them.
   await page.keyboard.type(" three");
   await page.clock.runFor(350);

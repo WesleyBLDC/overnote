@@ -52,6 +52,9 @@ import { Toolbar } from "./Toolbar";
 
 type ExportFormat = "md" | "html" | "txt";
 
+/** How long the app may stay unready before it shows the loading status. */
+const BOOT_STATUS_MS = 300;
+
 /** Places the caret and scrolls it into view in the same transaction, so the first painted frame is already right. */
 function clampCaret(editor: Editor, caret: number | null): void {
   const { doc } = editor.state;
@@ -100,7 +103,7 @@ function sliceJSON(editor: Editor): JSONContent | null {
 }
 
 export function App({ api }: { api: Api }) {
-  const { notices, notify, remove: dismissNotice } = useNotices();
+  const { notices, notify, remove: dismissNotice, dismiss } = useNotices();
   /** Runs a panel action; a failure shows an error notice, and the promise always settles. */
   const attempt = useCallback(
     async (what: string, work: () => Promise<void>) => {
@@ -345,6 +348,12 @@ export function App({ api }: { api: Api }) {
   const counts = { characters: countCharacters(text), words: countWords(text) };
   const title = displayTitle({ title: liveTitle, text });
   const blank = text.trim() === "";
+  // Entirely empty: no preview and one empty paragraph. The hints overlay it and are never content.
+  const entirelyEmpty =
+    !preview &&
+    doc.content?.length === 1 &&
+    doc.content[0]?.type === "paragraph" &&
+    !(doc.content[0].content?.length ?? 0);
   const slash = editor.isFocused ? slashQueryAt(editor.state) : null;
   const slashItems = slash && slash.from !== slashDismissed ? filterSlashItems(slash.query) : [];
   const emojiQuery = editor.isFocused ? emojiQueryAt(editor.state) : null;
@@ -842,6 +851,14 @@ export function App({ api }: { api: Api }) {
     runFormat(editor, item.id as FormatId, openLink);
   };
 
+  // A boot that stays unready for 300 ms says so quietly; a fast boot shows nothing.
+  const [bootWaited, setBootWaited] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setBootWaited(true), BOOT_STATUS_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  const slowBoot = bootWaited && !state.ready;
+
   const closePanel = () => {
     setPanel(null);
     // view.focus is synchronous; Tiptap's focus command waits a frame and could steal focus from a panel opened right after.
@@ -867,6 +884,11 @@ export function App({ api }: { api: Api }) {
         onBrowse={() => setPanel("browse")}
         onNew={() => void session.newNote()}
       />
+      {slowBoot ? (
+        <div className="boot-status" data-testid="boot-status" role="status">
+          Loading your notes
+        </div>
+      ) : null}
       {find ? <FindBar ref={findRef} editor={editor} initialTerm={find.term} onClose={() => setFind(null)} /> : null}
       {preview ? (
         <div className="preview-banner" data-testid="preview-banner" role="status">
@@ -897,6 +919,13 @@ export function App({ api }: { api: Api }) {
       >
         <div className="content-inner">
           <EditorContent editor={editor} />
+          {entirelyEmpty && state.ready ? (
+            <div className="empty-hints" data-testid="empty-hints">
+              <p>Type / to insert a block</p>
+              <p>Press ⌘K for actions</p>
+              <p>Press the panel hotkey again to hide</p>
+            </div>
+          ) : null}
         </div>
       </main>
       <Footer
@@ -1011,7 +1040,7 @@ export function App({ api }: { api: Api }) {
         token="--motion-fast"
       />
       {confirm ? <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} /> : null}
-      <Notices notices={notices} onExited={dismissNotice} />
+      <Notices notices={notices} onExited={dismissNotice} onDismiss={dismiss} />
     </div>
   );
 }

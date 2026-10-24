@@ -750,7 +750,7 @@ html[data-high-zoom="true"] .find-bar {
 }
 
 .find-count {
-  min-width: 2.6rem;
+  min-width: 4.2rem;
   white-space: nowrap;
   font-size: 0.8rem;
   color: var(--text-tertiary);
@@ -1392,4 +1392,67 @@ html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrol
   .panel-row-text {
     gap: 0;
   }
+}
+
+/* ---- feedback: empty note hints, boot status, and notice dismiss ---- */
+
+/* Overlay under the placeholder line; absolutely positioned, so it never changes the content height. */
+.content-inner {
+  position: relative;
+}
+
+.empty-hints {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2.4em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  user-select: none;
+}
+
+.empty-hints p {
+  margin: 0;
+}
+
+.boot-status {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.notice.is-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.notice-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--hit-floor);
+  min-height: var(--hit-floor);
+  margin: calc(var(--space-1) * -1) calc(var(--space-2) * -1) calc(var(--space-1) * -1) 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.notice-dismiss:hover {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.15));
 }
