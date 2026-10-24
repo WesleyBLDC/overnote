@@ -658,22 +658,37 @@ struct FramingTests {
         #expect(fetched["result"]?["text"] == .string(text) || fetched["result"]?["text"] == "start")
     }
 
-    /// The client keeps reading after a long line whose last read also carried a short line behind it.
+    /// A line is read in two parts, and the second read also carries the next line. The client must still find that
+    /// next line after returning the first, so its scan offset has to restart at zero for the bytes left over.
+    /// The test drives a raw socket from one thread, so the order of the reads is fixed and nothing waits on time.
     @Test func theClientFindsAShortLineThatArrivesInTheSameReadAsTheEndOfALongOne() throws {
         let directory = TempDirectory()
-        let server = SocketServer(path: directory.file("s.sock")) { line in
-            // The short echo goes second, so it is written right behind the long one.
-            if line.count < 10 { try? await Task.sleep(for: .milliseconds(100)) }
-            return line
+        let path = directory.file("s.sock")
+        try SocketPaths.prepareDirectory(for: path)
+        var address = try SocketPaths.address(for: path)
+        let listener = socket(AF_UNIX, SOCK_STREAM, 0)
+        #expect(listener >= 0)
+        defer { close(listener) }
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(listener, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
         }
-        try server.start()
-        defer { server.stop() }
-        let client = try RPCClient(path: server.path)
-        let long = String(repeating: "é", count: 300_000)
-        try client.send(line: long)
-        try client.send(line: "short")
-        usleep(400_000)
-        #expect(try client.readLine(timeout: 5) == long)
+        #expect(bound == 0 && listen(listener, 1) == 0)
+        let client = try RPCClient(path: path)
+        let peer = accept(listener, nil, nil)
+        #expect(peer >= 0)
+        defer { close(peer) }
+
+        let head = String(repeating: "a", count: 4000)
+        let tail = String(repeating: "b", count: 4000)
+        // The head is already queued on the socket, so this read takes it and then times out: the client now holds
+        // 4000 bytes with no newline.
+        try SocketPaths.writeAll(fd: peer, data: Data(head.utf8), timeout: 3)
+        #expect(try client.readLine(timeout: 0.05) == nil)
+        // One write carries the end of the long line and the whole short line, so one client read gets both.
+        try SocketPaths.writeAll(fd: peer, data: Data((tail + "\nshort\n").utf8), timeout: 3)
+        #expect(try client.readLine(timeout: 5) == head + tail)
         #expect(try client.readLine(timeout: 1) == "short")
     }
 }
