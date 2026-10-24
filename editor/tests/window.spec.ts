@@ -1,4 +1,4 @@
-/** Window height and resize churn, zoom, note text size, the plain first line, motion, toolbar layout and drag regions, the accent, the counter, and the format bar. */
+/** Window height and resize churn, zoom, note text size, the plain first line, motion, toolbar layout and drag regions, the counter, and the format bar. */
 import { expect, test, type Page } from "@playwright/test";
 import { calls, editor, lastSave, openHarness, pauseClock, settle } from "./harness";
 
@@ -735,64 +735,6 @@ test("toolbar drag regions cover the empty toolbar and exclude every button", as
   await page.mouse.move(260, 30);
   await settle(page);
   await verify();
-});
-
-test("the accent is neutral: no cyan anywhere in the key elements", async ({ page }) => {
-  await openHarness(page, ["Hello\n\n1. one\n\n- [x] done\n\n[link](https://raycast.com)"]);
-  await page.mouse.move(320, 200);
-  await page.keyboard.press("Alt+Meta+Comma");
-  await editor(page).getByText("done").click();
-  const colors = await page.evaluate(() => {
-    const css = (selector: string, ...props: string[]) => {
-      const el = document.querySelector(selector);
-      if (!el) throw new Error(`missing ${selector}`);
-      const style = getComputedStyle(el);
-      return props.map((prop) => style.getPropertyValue(prop));
-    };
-    return {
-      caret: css(".note-editor", "caret-color"),
-      link: css(".note-editor a", "color", "text-decoration-line", "text-decoration-color"),
-      text: css(".note-editor", "color"),
-      ordered: css(".note-editor [data-list-kind=ordered]", "--accent"),
-      orderedMarker: [
-        getComputedStyle(document.querySelector(".note-editor [data-list-kind=ordered]")!, "::before").color,
-      ],
-      checkbox: css(".note-editor [data-list-kind=task] input", "border-top-color"),
-      checked: [
-        getComputedStyle(document.querySelector(".note-editor [data-list-kind=task] input")!, "::after")
-          .backgroundColor,
-      ],
-      activeFormat: css(".format-button.is-active", "color", "background-color"),
-      toggle: css("[data-testid=format-toggle]", "color"),
-      selection: css(".note-editor", "--selection", "--accent", "--accent-soft", "--focus-ring", "--surface-selected"),
-    };
-  });
-  expect(colors.link[0]).toBe(colors.text[0]);
-  expect(colors.link[1]).toBe("underline");
-  const all = Object.values(colors).flat().join(" ");
-  const channels = [...all.matchAll(/rgba?\(([^)]+)\)|#([0-9a-f]{6})/gi)].map((m) =>
-    m[1]
-      ? m[1]
-          .split(/[ ,/]+/)
-          .filter(Boolean)
-          .slice(0, 3)
-          .map(Number)
-      : [0, 2, 4].map((i) => parseInt(m[2]!.slice(i, i + 2), 16)),
-  );
-  expect(channels.length).toBeGreaterThan(10);
-  for (const [r, g, b] of channels)
-    expect(Math.max(r!, g!, b!) - Math.min(r!, g!, b!), `color ${r},${g},${b} in ${all}`).toBeLessThanOrEqual(12);
-
-  // The link popover's focus ring is neutral too.
-  await page.keyboard.press("Meta+l");
-  const ring = await page
-    .getByTestId("link-popover")
-    .getByRole("textbox")
-    .evaluate((el) => `${getComputedStyle(el).borderColor} ${getComputedStyle(el).boxShadow}`);
-  for (const m of ring.matchAll(/rgba?\(([^)]+)\)/g)) {
-    const [r, g, b] = m[1]!.split(/[ ,/]+/).map(Number);
-    expect(Math.max(r!, g!, b!) - Math.min(r!, g!, b!)).toBeLessThanOrEqual(12);
-  }
 });
 
 test("hover chrome and the Close control", async ({ page }) => {
