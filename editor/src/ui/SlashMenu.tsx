@@ -65,7 +65,7 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
               onMouseEnter={() => setIndex(i)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onRun(item)}
-              tabIndex={-1}
+              tabIndex={i === selected ? 0 : -1}
             >
               <span className="menu-title">{item.title}</span>
               <Keys shortcut={item.shortcut} />

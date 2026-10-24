@@ -24,6 +24,7 @@ export function ConfirmDialog({ request, onClose }: { request: ConfirmRequest; o
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="dialog-title"
+        aria-describedby="dialog-message"
         data-testid="confirm-dialog"
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
@@ -35,7 +36,7 @@ export function ConfirmDialog({ request, onClose }: { request: ConfirmRequest; o
         }}
       >
         <h2 id="dialog-title">{request.title}</h2>
-        <p>{request.message}</p>
+        <p id="dialog-message">{request.message}</p>
         <div className="dialog-buttons">
           <button type="button" ref={cancelRef} onClick={cancel}>
             Cancel
