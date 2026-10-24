@@ -238,7 +238,10 @@ final class Connection: @unchecked Sendable {
     /// reading may block a write, and only its own responses should wait for it.
     private let writeQueue = DispatchQueue(label: "overnote.socket.write")
     private var source: DispatchSourceRead?
-    private var buffer = Data()
+    /// Bytes read but not yet split into lines. Only touched on `queue`.
+    private var buffer: [UInt8] = []
+    /// No byte of `buffer` before this index is a newline (the contract in `NewlineSearch`).
+    private var scanOffset = 0
     /// Guards the fields below and every write, so a late response never hits a reused descriptor.
     private let stateLock = NSLock()
     private var closed = false
@@ -296,10 +299,11 @@ final class Connection: @unchecked Sendable {
     }
 
     private func drainLines() {
-        while let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
-            let lineData = buffer[buffer.startIndex..<newline]
-            buffer.removeSubrange(buffer.startIndex...newline)
-            guard let line = String(data: lineData, encoding: .utf8) else {
+        var start = 0
+        while let newline = NewlineSearch.firstNewline(in: buffer, from: max(start, scanOffset)) {
+            let lineBytes = buffer[start..<newline]
+            start = newline + 1
+            guard let line = String(bytes: lineBytes, encoding: .utf8) else {
                 send(RPCLineHandler.response(id: .null, error: .badParams("Request is not valid UTF-8")))
                 continue
             }
@@ -315,6 +319,9 @@ final class Connection: @unchecked Sendable {
                 }
             }
         }
+        // Shift once past every returned line; what is left holds no newline.
+        if start > 0 { buffer.removeFirst(start) }
+        scanOffset = buffer.count
     }
 
     func send(_ line: String) {

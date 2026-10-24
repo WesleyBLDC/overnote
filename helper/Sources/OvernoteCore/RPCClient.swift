@@ -4,8 +4,10 @@ import Foundation
 /// A small blocking JSON-RPC client over the helper socket. Used by tests and by a second
 /// helper instance to forward `--show` to the running one.
 public final class RPCClient {
-    private let fd: Int32
-    private var buffer = Data()
+    let fd: Int32
+    private var buffer: [UInt8] = []
+    /// No byte of `buffer` before this index is a newline (the contract in `NewlineSearch`).
+    private var scanOffset = 0
     private var nextId: Int64 = 1
 
     public init(path: String) throws {
@@ -25,11 +27,13 @@ public final class RPCClient {
     public func readLine(timeout: Double = 3) throws -> String? {
         let deadline = Date().addingTimeInterval(timeout)
         while true {
-            if let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
-                let line = buffer[buffer.startIndex..<newline]
-                buffer.removeSubrange(buffer.startIndex...newline)
-                return String(decoding: line, as: UTF8.self)
+            if let newline = NewlineSearch.firstNewline(in: buffer, from: scanOffset) {
+                let line = String(decoding: buffer[..<newline], as: UTF8.self)
+                buffer.removeSubrange(...newline)
+                scanOffset = 0
+                return line
             }
+            scanOffset = buffer.count
             let remaining = deadline.timeIntervalSinceNow
             guard remaining > 0 else { return nil }
             var pollFd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
