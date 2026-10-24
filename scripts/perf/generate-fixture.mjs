@@ -14,9 +14,9 @@
 // Output layout:
 //   <dir>/support/notes.sqlite
 //   <dir>/manifest.json
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -242,7 +242,13 @@ fs.writeFileSync(
   sqlPath,
   `PRAGMA journal_mode = WAL;\nBEGIN;\n${schema}\n${insertSql}COMMIT;\nPRAGMA wal_checkpoint(TRUNCATE);\nPRAGMA journal_mode = DELETE;\n`,
 );
-execFileSync("sqlite3", [dbPath], { input: fs.readFileSync(sqlPath) });
+// node:sqlite bundles its own FTS5 build; the system sqlite3 CLI on some macOS images has none.
+const db = new DatabaseSync(dbPath);
+try {
+  db.exec(fs.readFileSync(sqlPath, "utf8"));
+} finally {
+  db.close();
+}
 fs.rmSync(sqlPath);
 
 const manifest = {

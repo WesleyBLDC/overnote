@@ -37,7 +37,7 @@ done
 
 [[ -x "$HELPER" ]] || { echo "perf: helper not executable: $HELPER (build it first, or pass --helper)" >&2; exit 1; }
 command -v node >/dev/null || { echo "perf: node is required" >&2; exit 1; }
-command -v sqlite3 >/dev/null || { echo "perf: sqlite3 is required for fixture generation" >&2; exit 1; }
+
 
 mkdir -p "$OUT"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
