@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+import { HARNESS_PORT, PREVIEW_PORT } from "./tests/ports";
 
 /**
  * The bundle goes to assets/editor, which a running helper started with --watch-editor reloads.
@@ -49,6 +50,6 @@ export default defineConfig({
     // The bundle loads from local disk inside the panel; grammars and emoji data are split out lazily.
     chunkSizeWarningLimit: 1000,
   },
-  server: { port: 5199, strictPort: true },
-  preview: { port: 5198, strictPort: true },
+  server: { port: HARNESS_PORT, strictPort: true },
+  preview: { port: PREVIEW_PORT, strictPort: true },
 });

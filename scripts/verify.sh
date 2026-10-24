@@ -18,12 +18,14 @@
 # Tools, Node 22+, and the Playwright browsers (npx playwright install webkit).
 #
 # The panel window check (scripts/e2e-window.sh) shows the panel on screen and needs a logged
-# in GUI session, so it is skipped for now and opt in by hand.
+# in GUI session, so it is skipped unless OVERNOTE_WINDOW_E2E=1.
 #
 # Environment:
 #   VERIFY_MODE=fast       run the fast subset described above (default is full)
-#   OVERNOTE_WINDOW_E2E=1  run scripts/e2e-window.sh (the default when CI=true)
-#   OVERNOTE_WINDOW_E2E=0  skip it, even in CI
+#   OVERNOTE_WINDOW_E2E=1  run scripts/e2e-window.sh (off by default)
+#   OVERNOTE_HARNESS_PORT  dev server port for the editor Playwright step; the preview port is
+#                          OVERNOTE_PREVIEW_PORT, default one lower. When unset, each run picks
+#                          a free pair, so worktrees can run verify at the same time.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -52,6 +54,22 @@ case "$VERIFY_MODE" in
     exit 2
     ;;
 esac
+
+# A free port pair for the browser harness, unless the caller chose one. Playwright starts its
+# servers with --strictPort and never reuses one, so a pair taken after this probe fails loudly.
+if [[ -z "${OVERNOTE_HARNESS_PORT:-}" ]]; then
+  ports="$(node -e '
+    const net = require("node:net");
+    const take = () => new Promise((resolve, reject) => {
+      const s = net.createServer();
+      s.once("error", reject);
+      s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => resolve(p)); });
+    });
+    (async () => { const a = await take(); let b = await take(); while (b === a) b = await take(); console.log(a + " " + b); })();
+  ')"
+  export OVERNOTE_HARNESS_PORT="${ports% *}"
+  export OVERNOTE_PREVIEW_PORT="${ports#* }"
+fi
 
 RAY_OUT="$(mktemp -d /tmp/overnote-raybuild.XXXXXX)"
 PARALLEL_TMP="$(mktemp -d /tmp/overnote-verify-parallel.XXXXXX)"
@@ -207,10 +225,7 @@ step_parallel() {
 }
 
 run_full() {
-  local window_e2e="${OVERNOTE_WINDOW_E2E:-}"
-  if [[ -z "$window_e2e" ]]; then
-    [[ "${CI:-}" == "true" ]] && window_e2e=1 || window_e2e=0
-  fi
+  local window_e2e="${OVERNOTE_WINDOW_E2E:-0}"
   local name
   for name in "${ALL_STEPS[@]}"; do
     if [[ "$name" == "End to end: panel window" ]]; then

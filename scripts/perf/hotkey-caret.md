@@ -1,8 +1,7 @@
 # Hotkey to caret ready: data collection design
 
 This design is not implemented here.
-It needs edits to `scripts/e2e-window.sh`, which this change does not own, and the window suite runs in CI only.
-Do not run it on a workstation.
+It needs edits to `scripts/e2e-window.sh`, which this change does not own, and the window suite shows the panel, so it runs only when the maintainer asks.
 
 ## The question
 
@@ -52,6 +51,6 @@ Stop the helper with `system.shutdown` between runs.
 
 ## Budgets and reporting
 
-Add a `hotkeyCaret` section to `budgets.json` only after the first CI runs show a stable baseline.
+Add a `hotkeyCaret` section to `budgets.json` only after the first window suite runs show a stable baseline.
 Report warm and cold separately, and always name the fixture scale and the helper binary hash beside the numbers.
 A single number without its scale would hide exactly the cost this collection exists to find.

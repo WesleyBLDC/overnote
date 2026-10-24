@@ -1,5 +1,5 @@
 {
-  "comment": "Perf budgets in milliseconds. A result over budget warns. A result over budget times failMultiplier fails the comparison, which only changes the exit code under --strict. These numbers are deliberately looser than a fast developer machine so a loaded CI runner warns instead of flapping.",
+  "comment": "Perf budgets in milliseconds. A result over budget warns. A result over budget times failMultiplier fails the comparison, which only changes the exit code under --strict. These numbers are deliberately looser than a fast developer machine so a loaded machine warns instead of flapping.",
   "failMultiplier": 2,
   "scales": {
     "default": {

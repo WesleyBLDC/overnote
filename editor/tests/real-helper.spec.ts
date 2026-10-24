@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { duplicateContent } from "@overnote/core";
 import { expect, test, type Page } from "@playwright/test";
 import { pauseClock } from "./harness";
+import { PREVIEW_ORIGIN } from "./ports";
 
 const HELPER =
   process.env.OVERNOTE_HELPER_BIN || fileURLToPath(new URL("../../assets/bin/OvernoteHelper", import.meta.url));
@@ -131,7 +132,7 @@ test("typing in the shipped editor lands in the helper's database and survives a
     await bridgeTo(page, helper);
 
     // A fresh database: the editor creates the first note through the helper, then takes typing.
-    await page.goto("http://127.0.0.1:5198/index.html");
+    await page.goto(`${PREVIEW_ORIGIN}/index.html`);
     await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
     await expect(page.locator(".note-editor")).toBeFocused();
     await page.keyboard.type("Saved for real");
@@ -165,7 +166,7 @@ test("a socket write that lands while the person types is merged into their edit
     await bridgeTo(page, helper);
     // A paused page clock holds the autosave until the outside write has landed.
     await page.clock.install();
-    await page.goto("http://127.0.0.1:5198/index.html");
+    await page.goto(`${PREVIEW_ORIGIN}/index.html`);
     await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
     await expect(page.locator(".note-editor")).toBeFocused();
     await pauseClock(page);
@@ -215,7 +216,7 @@ test("a duplicate keeps its suffixed title in the first line through edits, and 
   try {
     await helper.start();
     await bridgeTo(page, helper);
-    await page.goto("http://127.0.0.1:5198/index.html");
+    await page.goto(`${PREVIEW_ORIGIN}/index.html`);
     await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
     await expect(page.locator(".note-editor")).toBeFocused();
     await page.keyboard.type("# Groceries");

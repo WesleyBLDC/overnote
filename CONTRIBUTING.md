@@ -38,6 +38,11 @@ For editor work you often do not need Raycast at all:
 npm run dev -w editor
 ```
 
+The dev server listens on port 5199.
+Set `OVERNOTE_HARNESS_PORT` to use another port, for example when two worktrees run the browser harness at once.
+The Playwright suite starts its own servers on that port and on `OVERNOTE_PREVIEW_PORT` (default one lower, 5198) and never reuses a running one.
+`npm run verify` picks a free pair on its own when `OVERNOTE_HARNESS_PORT` is unset.
+
 This serves the editor in your browser with an in-memory mock of the helper (`editor/src/dev/mockBridge.ts`).
 Add `?seed=empty` to the URL to start with no notes.
 

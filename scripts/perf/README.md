@@ -1,7 +1,7 @@
 # Perf harness
 
 This folder holds a measurement harness for the real helper binary.
-It is not wired into `npm run verify` or CI.
+It is not wired into `npm run verify`.
 Budgets warn by default on a local run.
 
 ## What it measures
@@ -58,6 +58,6 @@ Read the JSON results for the full distribution, because the console lines only 
 ## What this does not measure
 
 This harness never shows the panel.
-Hotkey to caret timing needs the window suite, which runs in CI only and is never measured locally.
+Hotkey to caret timing needs the window suite, which shows the panel and is never run by this harness.
 The design for that collection lives in `hotkey-caret.md` in this folder.
 The concurrent probe has no budget: it reports, and the reader judges.
