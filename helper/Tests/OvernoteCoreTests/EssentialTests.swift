@@ -384,6 +384,112 @@ struct PanelFrameTests {
     }
 }
 
+@Suite("Panel placement")
+struct PanelPlacementTests {
+    let minimum = PanelSizing.floorSize
+
+    /// Fill is the visible frame; left and right meet exactly, the left half taking the odd
+    /// point; center keeps the size, clamped to the minimum and the display.
+    @Test func placementsPartitionTheVisibleFrameByWholePoints() {
+        let visible = CGRect(x: 0, y: 0, width: 1441, height: 876)
+        let current = CGSize(width: 640, height: 560)
+        #expect(PanelGeometry.placed(.fill, current: current, visible: visible, minimum: minimum) == visible)
+        let left = PanelGeometry.placed(.left, current: current, visible: visible, minimum: minimum)
+        let right = PanelGeometry.placed(.right, current: current, visible: visible, minimum: minimum)
+        #expect(left == CGRect(x: 0, y: 0, width: 721, height: 876))
+        #expect(right == CGRect(x: 721, y: 0, width: 720, height: 876))
+        #expect(left.maxX == right.minX && right.maxX == visible.maxX)
+        // A second display left of the primary, with a fractional edge from scaling.
+        let second = CGRect(x: -1280, y: 100, width: 1280.5, height: 775.5)
+        let half = PanelGeometry.placed(.left, current: current, visible: second, minimum: minimum)
+        #expect(half == CGRect(x: -1280, y: 100, width: 640, height: 775))
+        #expect(PanelGeometry.placed(.right, current: current, visible: second, minimum: minimum).minX == half.maxX)
+        #expect(
+            PanelGeometry.placed(.center, current: current, visible: visible, minimum: minimum)
+                == CGRect(x: 400, y: 158, width: 640, height: 560))
+        // The zoomed minimum wins over a smaller panel, the display over a larger one.
+        let zoomed = CGSize(width: 747, height: 278)
+        #expect(
+            PanelGeometry.placed(.center, current: CGSize(width: 300, height: 100), visible: visible, minimum: zoomed).size
+                == zoomed)
+        #expect(
+            PanelGeometry.placed(.center, current: CGSize(width: 3000, height: 2000), visible: visible, minimum: minimum)
+                == visible)
+        // A half narrower than the minimum grows to it from its own screen edge.
+        let narrow = CGRect(x: 0, y: 0, width: 800, height: 600)
+        #expect(PanelGeometry.placed(.right, current: current, visible: narrow, minimum: minimum).minX == 395)
+    }
+
+    /// A placement is stored with the display's point, runs again for that display at another
+    /// resolution (matched by uuid), and any later recording that is not the helper's own clears it.
+    @Test func aStoredPlacementFollowsTheDisplayUntilThePersonMovesThePanel() {
+        let key = "UUID-A@1440x900"
+        let placed = CGRect(x: 0, y: 0, width: 720, height: 876)
+        let stored = PanelGeometry.placing(
+            .left, frame: placed, displayKey: key, in: PanelFrame(x: 5, y: 6, width: 640, displays: ["UUID-B@800x600": PanelPoint(x: 1, y: 2)]),
+            autoSize: false, temporary: false)
+        #expect(stored.displays[key] == PanelPoint(x: 0, y: 876, width: 720, height: 876, placement: .left))
+        #expect(stored.displays["UUID-B@800x600"] == PanelPoint(x: 1, y: 2))
+        #expect(stored.width == 720 && stored.height == 876)
+        #expect(PanelGeometry.storedPlacement(in: stored, displayKey: key) == .left)
+        #expect(PanelGeometry.storedPlacement(in: stored, displayKey: "UUID-A@1920x1080") == .left)
+        #expect(PanelGeometry.storedPlacement(in: stored, displayKey: "UUID-B@1024x768") == nil)
+        // The helper's own move or resize (auto height, a hide) keeps the placement.
+        let kept = PanelGeometry.recording(placed, displayKey: key, in: stored, autoSize: false, temporary: false, keepsPlacement: true)
+        #expect(kept.displays[key]?.placement == .left)
+        // The person's drag or resize keeps the frame and clears the placement.
+        let moved = placed.offsetBy(dx: 30, dy: -40)
+        let cleared = PanelGeometry.recording(moved, displayKey: key, in: stored, autoSize: false, temporary: false)
+        #expect(cleared.displays[key] == PanelPoint(x: 30, y: 836))
+        #expect(PanelGeometry.storedPlacement(in: cleared, displayKey: key) == nil)
+        // The exact key wins: once cleared at this resolution, the old one never runs again.
+        var mixed = cleared
+        mixed.displays["UUID-A@1920x1080"] = PanelPoint(x: 0, y: 1050, width: 960, height: 1050, placement: .fill)
+        #expect(PanelGeometry.storedPlacement(in: mixed, displayKey: key) == nil)
+    }
+
+    /// Points stored before placements existed read back and write back unchanged; placed ones
+    /// round trip with their size and placement, and a bad placement is refused.
+    @Test func settingsRoundTripOldAndPlacedDisplayPoints() throws {
+        let old: JSONValue = ["x": 10.0, "y": 900.0, "width": 640.0, "displays": ["UUID-A@1440x900": ["x": 10.0, "y": 900.0]]]
+        let oldSettings = try Settings.defaults.applying(["panelFrame": old])
+        #expect(oldSettings.panelFrame?.json == old)
+        let placed: JSONValue = [
+            "x": 0.0, "y": 876.0, "width": 720.0, "height": 876.0,
+            "displays": ["UUID-A@1440x900": ["x": 0.0, "y": 876.0, "width": 720.0, "height": 876.0, "placement": "left"]],
+        ]
+        let placedSettings = try Settings.defaults.applying(["panelFrame": placed])
+        #expect(placedSettings.panelFrame?.displays["UUID-A@1440x900"]?.placement == .left)
+        #expect(placedSettings.panelFrame?.json == placed)
+        let f = try Fixture()
+        _ = try f.repository.setSettings(["panelFrame": placed])
+        #expect(try f.repository.settings().panelFrame?.json == placed)
+        let bad: JSONValue = ["x": 0.0, "y": 0.0, "width": 640.0, "displays": ["k": ["x": 0.0, "y": 0.0, "placement": "top"]]]
+        #expect(throws: RPCError.self) { _ = try Settings.defaults.applying(["panelFrame": bad]) }
+    }
+
+    @Test func windowPlaceAnswersOnBothChannelsAndRefusesOtherPlacements() async throws {
+        let f = try Fixture()
+        let host = RecordingHost()
+        let dispatcher = RPCDispatcher(repository: f.repository, host: host)
+        func code(_ params: JSONValue, source: RPCSource) async -> Int? {
+            do {
+                _ = try await dispatcher.handle(method: "window.place", params: params, source: source)
+                return nil
+            } catch {
+                return (error as? RPCError)?.code
+            }
+        }
+        let result = try await dispatcher.handle(method: "window.place", params: ["placement": "right"], source: .socket)
+        #expect(result == ["placement": "right", "frame": ["x": 720.0, "y": 875.0, "width": 720.0, "height": 875.0]])
+        #expect(await code(["placement": "center"], source: .bridge) == nil)
+        #expect(await code(["placement": "top"], source: .socket) == RPCError.badParamsCode)
+        #expect(await code(["placement": 1], source: .bridge) == RPCError.badParamsCode)
+        #expect(await code([:], source: .socket) == RPCError.badParamsCode)
+        #expect(host.calls == [.place(.right), .place(.center)])
+    }
+}
+
 @Suite("Update conflict")
 struct UpdateConflictTests {
     @Test func staleExpectedUpdatedAtWritesNothingAndTimestampsAlwaysMove() throws {
