@@ -11,6 +11,7 @@ import {
   loadDoc,
   type JSONContent,
   type NoteId,
+  type PanelPlacement,
   type rpc,
 } from "@overnote/core";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -413,6 +414,14 @@ export function App({ api }: { api: Api }) {
     else void api.window.hide().catch(() => undefined);
   }, [api, session, settings.escapeLosesFocus]);
 
+  /** `window.place`: a failure shows one error notice. */
+  const placeWindow = useCallback(
+    (placement: PanelPlacement) => {
+      void api.window.place(placement).catch(() => notify("Could not place the window. Try again.", "error"));
+    },
+    [api, notify],
+  );
+
   /*
    * Raycast documents no deeplink that opens Create Quicklink prefilled (manual.raycast.com/quicklinks,
    * developers.raycast.com deeplinks), so the note's deeplink goes to the clipboard, where the
@@ -539,6 +548,38 @@ export function App({ api }: { api: Api }) {
           run: () => updateSettings({ windowAutoSize: !settings.windowAutoSize }),
         },
         {
+          id: "fillLeft",
+          title: "Fill Left",
+          shortcut: "⌃⌥←",
+          section: "window",
+          keywords: ["snap", "tile", "half", "left", "move"],
+          run: () => placeWindow("left"),
+        },
+        {
+          id: "fillRight",
+          title: "Fill Right",
+          shortcut: "⌃⌥→",
+          section: "window",
+          keywords: ["snap", "tile", "half", "right", "move"],
+          run: () => placeWindow("right"),
+        },
+        {
+          id: "fillScreen",
+          title: "Fill Screen",
+          shortcut: "⌃⌥↑",
+          section: "window",
+          keywords: ["snap", "tile", "full", "maximize", "move"],
+          run: () => placeWindow("fill"),
+        },
+        {
+          id: "centre",
+          title: "Centre",
+          shortcut: "⌃⌥↓",
+          section: "window",
+          keywords: ["snap", "center", "middle", "move"],
+          run: () => placeWindow("center"),
+        },
+        {
           id: "formatBar",
           title: "Toggle Format Bar",
           shortcut: "⌥⌘,",
@@ -657,6 +698,7 @@ export function App({ api }: { api: Api }) {
     exportAs,
     moveItem,
     createQuicklink,
+    placeWindow,
     preview,
   ]);
 
@@ -678,6 +720,7 @@ export function App({ api }: { api: Api }) {
     deleteAll,
     setZoom,
     openLink,
+    placeWindow,
     preview,
     exitPreview,
   });
@@ -698,6 +741,19 @@ export function App({ api }: { api: Api }) {
       if (matches(event, { code: "KeyE", meta: true, shift: true })) return run(() => setPanel("export"));
       if (matches(event, { code: "Comma", meta: true }))
         return run(() => setPanel(h.panel === "settings" ? null : "settings"));
+      const placements: [string, PanelPlacement][] = [
+        ["ArrowLeft", "left"],
+        ["ArrowRight", "right"],
+        ["ArrowUp", "fill"],
+        ["ArrowDown", "center"],
+      ];
+      for (const [code, placement] of placements) {
+        if (matches(event, { code, ctrl: true, alt: true }))
+          return run(() => {
+            setPanel(null);
+            h.placeWindow(placement);
+          });
+      }
       if (h.panel) return; // the panel handles the rest of its keys
       const slot = pinSlot(event);
       if (slot !== null) {

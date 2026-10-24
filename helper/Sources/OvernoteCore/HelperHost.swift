@@ -8,6 +8,10 @@ public protocol HelperHost: Sendable {
     func toggleWindow() async -> Bool
     func showWindow() async
     func hideWindow() async
+    /// Places the panel inside its display (`window.place`): the panel's display while it is
+    /// visible, the display under the pointer while it is hidden, which stays hidden. Returns the
+    /// resulting frame as an AppKit screen rect.
+    func placeWindow(_ placement: PanelPlacement) async -> CGRect
     /// Applies a content driven height (in points), clamped by the host. A `temporary` report
     /// (confirmation dialogs) applies even with auto-sizing off; the next non temporary report
     /// restores normal behavior.
@@ -54,7 +58,7 @@ public struct DragRect: Equatable, Sendable {
 /// implementation behind `--headless`.
 public final class RecordingHost: HelperHost, @unchecked Sendable {
     public enum Call: Equatable, Sendable {
-        case toggle, show, hide, resize(Double, temporary: Bool), minimumSize(Double, Double), dragRegions([DragRect]), openURL(String), resignFocus, copy(String, String?), save(String, String)
+        case toggle, show, hide, place(PanelPlacement), resize(Double, temporary: Bool), minimumSize(Double, Double), dragRegions([DragRect]), openURL(String), resignFocus, copy(String, String?), save(String, String)
         case settingsChanged(Settings), emit(String, JSONValue), shutdown
     }
 
@@ -101,6 +105,16 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
             recorded.append(.hide)
             visible = false
         }
+    }
+
+    /// The display a headless host pretends to have, and the panel size on it.
+    public static let visibleFrame = CGRect(x: 0, y: 0, width: 1440, height: 875)
+    public static let panelSize = CGSize(width: 640, height: 560)
+
+    public func placeWindow(_ placement: PanelPlacement) async -> CGRect {
+        record(.place(placement))
+        return PanelGeometry.placed(
+            placement, current: Self.panelSize, visible: Self.visibleFrame, minimum: PanelSizing.floorSize)
     }
 
     public func resizeWindow(contentHeight: Double, temporary: Bool) async {

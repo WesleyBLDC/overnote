@@ -1,5 +1,5 @@
 /** Typed wrappers for the protocol methods the editor uses (docs/architecture.md), on top of BridgeClient.call. */
-import { rpc } from "@overnote/core";
+import { rpc, type PanelPlacement } from "@overnote/core";
 import type { BridgeClient } from "./client";
 
 const M = rpc.Method;
@@ -13,6 +13,7 @@ export function createApi(client: BridgeClient) {
     },
     window: {
       hide: () => call(M.WindowHide, {}),
+      place: (placement: PanelPlacement) => call(M.WindowPlace, { placement }),
       resize: (contentHeight: number, temporary = false) =>
         call(M.WindowResize, temporary ? { contentHeight, temporary } : { contentHeight }),
       setMinimumSize: (width: number, height: number) => call(M.WindowSetMinimumSize, { width, height }),

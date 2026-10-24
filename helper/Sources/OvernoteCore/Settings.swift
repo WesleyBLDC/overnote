@@ -1,16 +1,52 @@
 import Foundation
 
 /// A remembered top left point on one display. `y` is the **top** edge.
+/// After `window.place` it also carries the placed `width` and `height` and the `placement`,
+/// which the next open on that display runs again. A point without them (every point stored
+/// before `window.place` existed) reads and writes back exactly as it was.
 public struct PanelPoint: Equatable, Sendable {
     public var x: Double
     public var y: Double
+    public var width: Double?
+    public var height: Double?
+    public var placement: PanelPlacement?
 
-    public init(x: Double, y: Double) {
+    public init(x: Double, y: Double, width: Double? = nil, height: Double? = nil, placement: PanelPlacement? = nil) {
         self.x = x
         self.y = y
+        self.width = width
+        self.height = height
+        self.placement = placement
     }
 
-    public var json: JSONValue { ["x": .double(x), "y": .double(y)] }
+    public var json: JSONValue {
+        var object: [String: JSONValue] = ["x": .double(x), "y": .double(y)]
+        if let width { object["width"] = .double(width) }
+        if let height { object["height"] = .double(height) }
+        if let placement { object["placement"] = .string(placement.rawValue) }
+        return .object(object)
+    }
+
+    init(json value: JSONValue) throws {
+        guard let x = value["x"]?.doubleValue, let y = value["y"]?.doubleValue, x.isFinite, y.isFinite else {
+            throw RPCError.badParams("panelFrame.displays values must be { x, y }")
+        }
+        func size(_ key: String) throws -> Double? {
+            guard let raw = value[key], !raw.isNull else { return nil }
+            guard let number = raw.doubleValue, number.isFinite, number > 0 else {
+                throw RPCError.badParams("panelFrame.displays \(key) must be a positive number when present")
+            }
+            return number
+        }
+        var placement: PanelPlacement?
+        if let raw = value["placement"], !raw.isNull {
+            guard let name = raw.stringValue, let parsed = PanelPlacement(rawValue: name) else {
+                throw RPCError.badParams("panelFrame.displays placement must be left, right, fill, or center")
+            }
+            placement = parsed
+        }
+        self.init(x: x, y: y, width: try size("width"), height: try size("height"), placement: placement)
+    }
 }
 
 /// The panel geometry the helper remembers, in AppKit global coordinates (origin at the
@@ -21,7 +57,8 @@ public struct PanelPoint: Equatable, Sendable {
 /// - `width`: the panel width, shared by all displays.
 /// - `height`: the user's height, stored only when `windowAutoSize` is off.
 /// - `displays`: one remembered top left point per display, keyed by
-///   `"<display uuid>@<width>x<height>"` (the display identity plus its size in points).
+///   `"<display uuid>@<width>x<height>"` (the display identity plus its size in points), with
+///   the placed size and placement after `window.place`.
 ///   Optional, so an older `{ x, y, width, height? }` value without it still reads and writes fine.
 public struct PanelFrame: Equatable, Sendable {
     public var x: Double
@@ -66,10 +103,7 @@ public struct PanelFrame: Equatable, Sendable {
         if let raw = object["displays"], !raw.isNull {
             guard let map = raw.objectValue else { throw RPCError.badParams("panelFrame.displays must be an object") }
             for (key, value) in map {
-                guard let px = value["x"]?.doubleValue, let py = value["y"]?.doubleValue, px.isFinite, py.isFinite else {
-                    throw RPCError.badParams("panelFrame.displays values must be { x, y }")
-                }
-                displays[key] = PanelPoint(x: px, y: py)
+                displays[key] = try PanelPoint(json: value)
             }
         }
         self.init(x: x, y: y, width: width, height: height, displays: displays)

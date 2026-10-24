@@ -119,6 +119,16 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
             try {
               if (message.method === "window.resize")
                 applyPanelHeight(params as { contentHeight: number; temporary?: boolean });
+              const panelRoot = target.document.getElementById("root");
+              if (message.method === "window.place" && panelRoot) {
+                // The page stands in for the display and the root element for the panel.
+                const box = panelRoot.getBoundingClientRect();
+                control.store.harness = {
+                  visible: { width: target.innerWidth, height: target.innerHeight },
+                  current: { width: box.width, height: box.height },
+                  minimum: { ...minimum },
+                };
+              }
               if (message.method === "window.setMinimumSize") {
                 const size = params as { width: number; height: number };
                 minimum = {
@@ -136,7 +146,12 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
                   root.style.width = `${minimum.width}px`;
                 }
               }
-              receiver()?.resolve(message.id, control.store.dispatch(message.method, params));
+              const result = control.store.dispatch(message.method, params);
+              if (message.method === "window.place") {
+                const { frame } = result as rpc.Result<"window.place">;
+                control.setPanelSize(frame.width, frame.height);
+              }
+              receiver()?.resolve(message.id, result);
             } catch (error) {
               const code = error instanceof MockRpcError ? error.code : rpc.ErrorCode.Internal;
               receiver()?.reject(message.id, { code, message: String((error as Error).message) });

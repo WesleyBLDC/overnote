@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v3.2 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v3.3 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -115,9 +115,19 @@ interface Settings {
   showFormatBar: boolean;          // default false
   countMode: "characters" | "words"; // default "characters"
   panelFrame: { x: number; y: number; width: number; height?: number;
-                displays?: { [key: string]: { x: number; y: number } } } | null; // y is the TOP edge; displays keyed "<display uuid>@<w>x<h>"
+                displays?: { [key: string]: PanelPoint } } | null; // y is the TOP edge; displays keyed "<display uuid>@<w>x<h>"
+}
+
+type PanelPlacement = "left" | "right" | "fill" | "center";
+
+interface PanelPoint {             // one display's remembered top left point; y is the TOP edge
+  x: number; y: number;
+  width?: number; height?: number; // the placed size, stored with placement by window.place
+  placement?: PanelPlacement;      // run again when the panel opens on that display
 }
 ```
+
+A display point stored before v3.3 has only `x` and `y`, and reads and writes back unchanged until a placement is stored for that display.
 
 The helper stores `NoteContent` verbatim.
 **It never parses markdown or ProseMirror JSON**; all derivation happens in core (editor or extension).
@@ -137,6 +147,7 @@ The helper stores `NoteContent` verbatim.
 | `window.toggle` | `{}` | `{ visible: boolean }` | Show and focus, or hide |
 | `window.show` | `{ noteId?: NoteId }` | `{ visible: true }` | Shows the panel, optionally on a note (emits `note.open`) |
 | `window.hide` | `{}` | `{ visible: false }` | |
+| `window.place` | `{ placement: PanelPlacement }` | `{ placement: PanelPlacement, frame: { x, y, width, height } }` | Places the panel inside the visible frame of its display while it is visible, else of the display under the pointer, without showing it (see below). `frame` is in points in the panelFrame convention: `x` is the left edge and `y` the top edge. Any other placement is `-32602` |
 | `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped from the minimum size (see `window.setMinimumSize`) to 860 pt times zoom. `temporary: true` (confirmation dialogs; panels and dropdowns stay inside the panel instead) applies even when windowAutoSize is off and is restored by the next non-temporary report |
 | `window.setMinimumSize` (bridge) | `{ width: number, height: number }` | `{}` | The smallest the panel may be, in points: the editor's toolbar (its controls plus 6rem for the title), its bottom bar (the counter or the format bar), and one line of note text, at the current zoom. The helper rounds up and never goes below 405 by 197 pt, applies it to user resizing, auto-sizing, temporary growth, and restored frames, and grows a smaller panel at once, keeping its top edge. `-32602` unless both are positive numbers |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
@@ -239,6 +250,13 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   A frame the helper did not set itself (system tiling, a window manager through Accessibility, the system's own sliver of edge resize) is kept as the person's resize: it is stored like a drag in the resize zones, and a new height turns windowAutoSize off.
   Such a frame smaller than the minimum size grows to it first, keeping its top left corner; a frame at least the minimum stays exactly where it was put.
   Limits: the helper never activates, so it has no menu bar of its own (no Window > Move & Resize) and is never the frontmost app, and a borderless panel has no green button; window managers that only act on the frontmost app's focused window cannot reach it.
+- `window.place` geometry, in whole points: `fill` is the display's visible frame; `left` and `right` split its width so the halves meet exactly, the left half taking the extra point of an odd width, at the full visible height; `center` keeps the current size, clamped to the minimum size and the visible frame, and centers it.
+  A half narrower than the minimum size grows to it from its own screen edge.
+  `left`, `right`, and `fill` end any temporary growth and turn windowAutoSize off, since they set the height; `center` changes no size and never touches windowAutoSize.
+  The helper stores the placement, with the placed frame, in that display's point in `panelFrame.displays`, and runs it again against the display's current visible frame whenever the panel opens there.
+  A display whose resolution changed has a new key, so a placement stored under another key with the same display uuid runs there too.
+  A user resize, a drag move, a frame set from outside (tiling, a window manager), turning windowAutoSize on, another placement, or `settings.reset` clears the stored placement for that display and keeps the resulting frame.
+  The editor offers Fill Left, Fill Right, Fill Screen, and Centre in the command panel's window section, with ⌃⌥←, ⌃⌥→, ⌃⌥↑, and ⌃⌥↓, and the menu bar's Window section shows the panel first and then places it.
 - Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so a dialog never resizes a roomy window).
 - The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath.
 - One minimum size covers every way the panel's size is set: user resizing, auto-sizing, temporary growth, restored frames (a smaller saved frame grows to it), frames set from outside (tiling, window managers), and zoom.
@@ -381,7 +399,7 @@ export * as rpc from "./rpc";
 | `create-note` | Create Note | no-view | Optional `text` argument, then `fallbackText`, then selected text, then empty. `notes.create` with `show: true` |
 | `search-notes` | Search Notes | view | List with markdown detail using `notes.list` with `filter` (or the read-only DB with the same order and matching); title matches are moved first within each page; writes through the helper |
 | `recently-deleted` | Recently Deleted Notes | view | Recover, delete permanently, empty trash |
-| `menu-bar` | Overnote Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note, the backup actions, and the restore offer; restarts a dead helper |
+| `menu-bar` | Overnote Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note, the Window placements (`window.show`, then `window.place`), the backup actions, and the restore offer; restarts a dead helper |
 | `check-for-updates` | Check for Updates | no-view | Reads the version from `assets/prebuilt.json` (the helper's version in a source checkout), asks `https://api.github.com/repos/WesleyBLDC/overnote/releases/latest` with a 5 s timeout, compares semver, and shows a HUD. When newer, copies `cd '<installDir>' && npm run update-extension` to the clipboard; it never runs it. Not part of the Store copy |
 
 Search Notes and the menu bar both offer **Back Up Notes Now**, **Restore Notes from Backup** (a list of backups, restored after a `confirmAlert`), and **Reveal Backups Folder**.
@@ -440,7 +458,7 @@ The extension honors `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`), which t
 
 ## Protocol versioning
 
-The protocol described here is v3.2 (v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v3.3 (v3.3 added `window.place` on the socket and the bridge with the `PanelPlacement` type, and optional `width`, `height`, and `placement` on each `panelFrame.displays` point, which older points simply lack; v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.

@@ -31,6 +31,9 @@ export type {
   Millis,
   CountMode,
   PanelFrame,
+  PanelPlacement,
+  PanelPoint,
+  PanelRect,
   RpcErrorPayload,
 } from "./types";
 export type { JSONContent } from "@tiptap/core";

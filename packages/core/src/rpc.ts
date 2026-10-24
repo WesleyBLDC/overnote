@@ -2,7 +2,17 @@
  * Method names, params, results, and events from docs/architecture.md sections 3 and 5.
  * Both the socket client (extension) and the bridge client (editor) use these.
  */
-import type { Millis, Note, NoteContent, NoteId, NoteSummary, Settings, WindowData } from "./types";
+import type {
+  Millis,
+  Note,
+  NoteContent,
+  NoteId,
+  NoteSummary,
+  PanelPlacement,
+  PanelRect,
+  Settings,
+  WindowData,
+} from "./types";
 
 export const ErrorCode = {
   UnknownMethod: -32601,
@@ -31,6 +41,7 @@ export const Method = {
   WindowToggle: "window.toggle",
   WindowShow: "window.show",
   WindowHide: "window.hide",
+  WindowPlace: "window.place",
   WindowResize: "window.resize",
   WindowSetMinimumSize: "window.setMinimumSize",
   WindowResignFocus: "window.resignFocus",
@@ -171,6 +182,8 @@ export interface Methods {
   "window.toggle": { params: Empty; result: { visible: boolean } };
   "window.show": { params: { noteId?: NoteId }; result: { visible: true } };
   "window.hide": { params: Empty; result: { visible: false } };
+  /** Places the panel inside its display; the frame's `x` is the left edge and `y` the top edge, as in panelFrame. */
+  "window.place": { params: { placement: PanelPlacement }; result: { placement: PanelPlacement; frame: PanelRect } };
   "window.resize": { params: { contentHeight: number; temporary?: boolean }; result: Empty };
   /** The smallest the panel may be, in points: the editor's bars plus one line at the current zoom (the helper keeps at least 405 x 197). */
   "window.setMinimumSize": { params: { width: number; height: number }; result: Empty };
