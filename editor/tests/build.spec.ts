@@ -1,10 +1,11 @@
 /** The shipped bundle in assets/editor boots against a stub native side and stays offline. */
 import { expect, test } from "@playwright/test";
+import { PREVIEW_ORIGIN } from "./ports";
 
 test("production build boots, renders, and makes no external requests", async ({ page }) => {
   const external: string[] = [];
   page.on("request", (request) => {
-    if (!request.url().startsWith("http://127.0.0.1:5198/")) external.push(request.url());
+    if (!request.url().startsWith(`${PREVIEW_ORIGIN}/`)) external.push(request.url());
   });
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -54,7 +55,7 @@ test("production build boots, renders, and makes no external requests", async ({
       },
     };
   });
-  await page.goto("http://127.0.0.1:5198/index.html");
+  await page.goto(`${PREVIEW_ORIGIN}/index.html`);
   await expect(page.getByTestId("title")).toHaveText("Shipped");
   await expect(page.locator(".note-editor h1")).toHaveText("Shipped");
   const sent = () => page.evaluate(() => (window as unknown as { __sent: string[] }).__sent);
