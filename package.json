@@ -151,6 +151,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "verify": "bash scripts/verify.sh",
+    "verify:fast": "VERIFY_MODE=fast bash scripts/verify.sh",
+    "check": "npm run verify:fast",
     "install-extension": "bash scripts/install-extension.sh",
     "update-extension": "bash scripts/update-extension.sh",
     "prepare-store": "bash scripts/prepare-store.sh",

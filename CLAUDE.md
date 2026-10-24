@@ -19,3 +19,7 @@ Follow the Testing policy in `CONTRIBUTING.md`.
 
 - Protocol changes go through `docs/architecture.md` in the same change as the code, with a protocol version bump.
 - No dashes as punctuation in prose, and one sentence per line in Markdown docs.
+
+## Lead sessions
+
+A lead session reads `lead.toml` and the rules it names; workers can ignore it.

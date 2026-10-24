@@ -198,7 +198,10 @@ Next:
 ## Source and builds
 
 Overnote ships a small native macOS app that draws the floating panel and keeps the notes database.
-Its Swift sources are in [`helper/`](https://github.com/WesleyBLDC/overnote/tree/main/helper), and `scripts/build-helper.sh` builds the universal binary with only the Xcode Command Line Tools.
+Its Swift sources are in [`helper/`](https://github.com/WesleyBLDC/overnote/tree/main/helper), and `scripts/build-helper.sh` builds the helper for arm64 by default with only the Xcode Command Line Tools.
+A universal binary remains available only by setting `OVERNOTE_HELPER_ARCHES`, for example `OVERNOTE_HELPER_ARCHES="arm64 x86_64"`.
+`helper/VERSION` is the single source of truth for the helper version.
+The Swift `HelperVersion.current` constant is generated from it into `helper/Sources/OvernoteCore/GeneratedVersion.swift` and is never edited by hand.
 The extension checks that binary against its `assets/bin/OvernoteHelper.sha256` before every start.
 
 ## License

@@ -88,6 +88,8 @@ npm run verify
 
 `npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, and builds the extension, stopping at the first failing step.
 CI runs the same command.
+For the editing loop, `npm run verify:fast` (alias `npm run check`) runs the three typechecks, ESLint, Prettier, the core fixtures, the editor unit tests, and the helper unit tests, with the independent checks running concurrently.
+The fast mode reads the same step list as the full gate in `scripts/verify.sh`, so it is a strict subset by construction and never replaces the full gate before landing.
 Playwright needs only WebKit, the engine of the native panel.
 The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so `npm run verify` skips it on a workstation and runs it in CI.
 Set `OVERNOTE_WINDOW_E2E=1` to run it locally, or `OVERNOTE_WINDOW_E2E=0` to skip it even in CI.
@@ -107,7 +109,6 @@ bash scripts/smoke-helper.sh     # helper end-to-end over its socket
 bash scripts/e2e-window.sh       # panel window behavior end-to-end
 bash scripts/e2e-update.sh       # install, update, backups, and restore end-to-end (headless)
 ```
-
 Every suite that starts the helper points `OVERNOTE_BACKUP_DIR` at a temporary folder, so tests never write into your real backups.
 Keep it that way when you add one.
 

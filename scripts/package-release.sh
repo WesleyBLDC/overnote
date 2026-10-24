@@ -31,7 +31,7 @@ BIN="assets/bin/OvernoteHelper"
 [[ -x "$BIN" && -f "$BIN.sha256" ]] || die "Helper not built: run scripts/build-helper.sh first"
 [[ -f assets/editor/index.html ]] || die "Editor not built: run npm run build:editor first"
 [[ "$(shasum -a 256 "$BIN" | cut -d' ' -f1)" == "$(cut -d' ' -f1 "$BIN.sha256")" ]] || die "$BIN does not match its .sha256"
-[[ "$(lipo -archs "$BIN")" == *arm64* && "$(lipo -archs "$BIN")" == *x86_64* ]] || die "$BIN is not universal: $(lipo -archs "$BIN")"
+[[ "$(lipo -archs "$BIN")" == "arm64" ]] || die "$BIN is not arm64 only: $(lipo -archs "$BIN") (releases ship the arm64 slice that scripts/build-helper.sh builds by default; rebuild it without OVERNOTE_HELPER_ARCHES set to a universal list)"
 codesign --verify --strict "$BIN" || die "$BIN signature does not verify"
 
 HELPER_VERSION="$("$BIN" --version)"

@@ -9,7 +9,7 @@
 #
 # Writes <out-dir>/overnote with:
 #   - the manifest, lockfile, configs, src/, packages/core, and the editor workspace sources
-#   - helper/ (the Swift sources) and scripts/build-helper.sh, so the binary can be rebuilt
+#   - helper/ (the Swift sources) plus scripts/build-helper.sh and scripts/generate-helper-version.sh, so the binary can be rebuilt
 #   - assets/bin/OvernoteHelper with its .sha256, and the built editor in assets/editor/
 #   - assets/prebuilt.json, so the build never tries to rebuild those assets
 #   - README.md without its GitHub only parts, CHANGELOG.md, LICENSE, media/, and metadata/
@@ -53,7 +53,7 @@ BIN="assets/bin/OvernoteHelper"
 [[ -x "$BIN" && -f "$BIN.sha256" ]] || die "Helper not built: run scripts/build-helper.sh first"
 [[ -f assets/editor/index.html ]] || die "Editor not built: run npm run build:editor first"
 [[ "$(shasum -a 256 "$BIN" | cut -d' ' -f1)" == "$(cut -d' ' -f1 "$BIN.sha256")" ]] || die "$BIN does not match its .sha256"
-[[ "$(lipo -archs "$BIN")" == *arm64* && "$(lipo -archs "$BIN")" == *x86_64* ]] || die "$BIN is not universal: $(lipo -archs "$BIN")"
+[[ "$(lipo -archs "$BIN")" == "arm64" ]] || die "$BIN is not arm64 only: $(lipo -archs "$BIN") (the Store copy ships the arm64 slice that scripts/build-helper.sh builds by default; rebuild it without OVERNOTE_HELPER_ARCHES set to a universal list)"
 codesign --verify --strict "$BIN" || die "$BIN signature does not verify"
 HELPER_VERSION="$("$BIN" --version)"
 [[ "$HELPER_VERSION" == "$(tr -d '[:space:]' <helper/VERSION)" ]] || die "$BIN is $HELPER_VERSION, helper/VERSION says otherwise: rebuild it"
@@ -93,7 +93,7 @@ copy src packages/core/package.json packages/core/tsconfig.json packages/core/sr
 copy editor/package.json editor/tsconfig.json editor/index.html editor/vite.config.ts editor/src
 copy helper/Package.swift helper/VERSION helper/Sources
 [[ -f helper/Package.resolved ]] && copy helper/Package.resolved
-copy scripts/prepare-assets.sh scripts/build-helper.sh
+copy scripts/prepare-assets.sh scripts/build-helper.sh scripts/generate-helper-version.sh
 copy assets/extension-icon.png assets/bin/OvernoteHelper assets/bin/OvernoteHelper.sha256 assets/editor
 [[ -f assets/extension-icon@dark.png ]] && copy assets/extension-icon@dark.png
 copy media metadata
