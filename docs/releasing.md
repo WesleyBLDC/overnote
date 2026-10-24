@@ -21,7 +21,7 @@ It also records the release `version`, which Check for Updates and `npm run upda
 
 ## Steps
 
-1. Make sure `main` is green in CI and `npm run verify` passes locally.
+1. Make sure `npm run verify` passes locally on `main`, on macOS with Apple silicon.
 2. Set only `helper/VERSION` to the release version.
    `helper/VERSION` is the single source of truth for the helper version.
    `scripts/generate-helper-version.sh` generates the Swift `HelperVersion.current` constant from `helper/VERSION` into the gitignored `helper/Sources/OvernoteCore/GeneratedVersion.swift`, and nobody edits that constant by hand.
@@ -54,7 +54,7 @@ It also records the release `version`, which Check for Updates and `npm run upda
 7. Open the release page and check the files and the notes.
 8. On your own install, run Check for Updates, then `npm run update-extension` in the install folder, and check that your notes and the new version are there.
 
-`scripts/e2e-update.sh`, part of `npm run verify` and CI, covers the update path end to end with fake releases: install, update, rollback guard, backups, and restore after removal.
+`scripts/e2e-update.sh`, part of `npm run verify`, covers the update path end to end with fake releases: install, update, rollback guard, backups, and restore after removal.
 
 A tag with a suffix, such as `v0.3.0-beta.1`, is published as a prerelease.
 Rerunning the workflow for the same tag replaces the files and the notes of the existing release.
@@ -83,5 +83,3 @@ Notarization would need an Apple Developer ID and repository secrets, which this
 
 - The workflow publishes with the built-in `GITHUB_TOKEN` and needs no secrets.
   If the repository restricts the default token to read only, the workflow's own `permissions: contents: write` still grants what it needs, unless an organization policy forbids it.
-- The CI workflow honors one optional repository variable, `OVERNOTE_WINDOW_E2E`.
-  Set it to `0` only if a runner image ever loses its GUI session, which `scripts/e2e-window.sh` needs.
