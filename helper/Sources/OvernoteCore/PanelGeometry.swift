@@ -50,9 +50,10 @@ public enum PanelGeometry {
     /// there (a drag, the resize zones, system tiling, or a window manager): its top left point,
     /// for that display and as the last used point, its width, and its height. Auto-sizing owns
     /// the height while `autoSize` is on, so none is stored, and a temporary growth (`temporary`)
-    /// is never the person's height, so the stored one stays. With `keepsPlacement` a placed
-    /// display point stays as it is (the helper moved or resized the panel itself); otherwise
-    /// the point becomes the plain top left point, which clears its placement.
+    /// is never the person's height, so the stored one stays. With `keepsPlacement` the display's
+    /// stored placement stays (the helper moved or resized the panel itself), carried over from
+    /// the same display uuid at another resolution when this key has none; otherwise the point
+    /// becomes the plain top left point, which clears its placement.
     public static func recording(
         _ note: CGRect, displayKey: String, in stored: PanelFrame?, autoSize: Bool, temporary: Bool,
         keepsPlacement: Bool = false
@@ -66,7 +67,14 @@ public enum PanelGeometry {
         } else if !temporary {
             saved.height = note.height
         }
-        if !(keepsPlacement && saved.displays[displayKey]?.placement != nil) {
+        if keepsPlacement, let placement = storedPlacement(in: saved, displayKey: displayKey) {
+            if saved.displays[displayKey]?.placement == nil {
+                // The display changed resolution while the panel was open: carry the placement
+                // stored under its other key over to this one.
+                saved.displays[displayKey] = PanelPoint(
+                    x: note.minX, y: note.maxY, width: note.width, height: note.height, placement: placement)
+            }
+        } else {
             saved.displays[displayKey] = PanelPoint(x: note.minX, y: note.maxY)
         }
         return saved

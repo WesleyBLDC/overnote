@@ -448,6 +448,17 @@ struct PanelPlacementTests {
         #expect(PanelGeometry.storedPlacement(in: mixed, displayKey: key) == nil)
     }
 
+    /// A hide after the display changed resolution while the panel stayed open records under a
+    /// new key for the same display uuid, and the placement carries over to it.
+    @Test func aHideAfterAResolutionChangeKeepsThePlacement() {
+        let filled = CGRect(x: 0, y: 0, width: 1440, height: 876)
+        let stored = PanelGeometry.placing(
+            .fill, frame: filled, displayKey: "UUID-A@1440x900", in: nil, autoSize: false, temporary: false)
+        let hidden = PanelGeometry.recording(
+            filled, displayKey: "UUID-A@1680x1050", in: stored, autoSize: false, temporary: false, keepsPlacement: true)
+        #expect(PanelGeometry.storedPlacement(in: hidden, displayKey: "UUID-A@1680x1050") == .fill)
+    }
+
     /// Points stored before placements existed read back and write back unchanged; placed ones
     /// round trip with their size and placement, and a bad placement is refused.
     @Test func settingsRoundTripOldAndPlacedDisplayPoints() throws {
