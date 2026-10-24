@@ -95,9 +95,12 @@ public enum PanelGeometry {
     public static func placed(
         _ placement: PanelPlacement, current: CGSize, visible: CGRect, minimum: CGSize
     ) -> CGRect {
+        // The whole point frame inside the visible frame: each edge moves inward, so a
+        // fractional max edge (from display scaling) never leaves a placed frame past it.
         let area = CGRect(
             x: visible.minX.rounded(.up), y: visible.minY.rounded(.up),
-            width: visible.width.rounded(.down), height: visible.height.rounded(.down))
+            width: visible.maxX.rounded(.down) - visible.minX.rounded(.up),
+            height: visible.maxY.rounded(.down) - visible.minY.rounded(.up))
         let total = Int(area.width)
         let leftWidth = CGFloat((total + 1) / 2)
         func sized(_ size: CGSize) -> CGSize {
@@ -136,6 +139,26 @@ public enum PanelGeometry {
     /// The display identity part of a `"<display uuid>@<w>x<h>"` key.
     static func displayIdentity(_ key: String) -> Substring {
         key.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false).first ?? Substring(key)
+    }
+
+    /// The stored frame with the placement for `displayKey` cleared and every other display
+    /// left alone: the display's point stays, as its plain top left point. A frame with no
+    /// placement there (or no frame at all) comes back unchanged.
+    public static func clearingPlacement(in stored: PanelFrame?, displayKey: String) -> PanelFrame? {
+        guard var saved = stored, let point = saved.displays[displayKey], point.placement != nil else { return stored }
+        saved.displays[displayKey] = PanelPoint(x: point.x, y: point.y)
+        return saved
+    }
+
+    /// The stored frame with every display's placement cleared, each point kept as its plain
+    /// top left point: turning auto-sizing on, which owns the height on every display, so no
+    /// stored placement describes a frame any longer.
+    public static func clearingAllPlacements(in stored: PanelFrame?) -> PanelFrame? {
+        guard var saved = stored else { return nil }
+        for (key, point) in saved.displays where point.placement != nil {
+            saved.displays[key] = PanelPoint(x: point.x, y: point.y)
+        }
+        return saved
     }
 
     /// The stored frame after `placement` put the panel at `placed` on display `displayKey`: the
