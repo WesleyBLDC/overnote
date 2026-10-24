@@ -615,6 +615,67 @@ struct FramingTests {
         #expect(try file("overnote://app/link.txt") == nil)
         #expect(try file("overnote://other/index.html") == nil)
     }
+
+    /// A long request in many small reads, with UTF-8 sequences split across them, a bad line, a blank
+    /// line, and a second request pipelined behind it, comes through the real socket byte identical.
+    @Test func aLargeRequestInSmallPiecesKeepsItsBytesAndThePipelinedRequestBehindIt() throws {
+        let f = try Fixture()
+        let note = try f.make("start")
+        let handler = RPCLineHandler(dispatcher: RPCDispatcher(repository: f.repository, host: RecordingHost()), source: .socket)
+        let server = SocketServer(path: f.directory.file("s.sock")) { await handler.handle(line: $0) }
+        try server.start()
+        defer { server.stop() }
+        let client = try RPCClient(path: server.path)
+
+        let text = String(repeating: "héllo 世界 🎉 line\n", count: 12_000)
+        let update = JSONValue.object([
+            "id": 1, "method": "notes.update",
+            "params": ["id": .string(note.id), "markdown": .string(text), "text": .string(text)],
+        ]).serialized()
+        let get = JSONValue.object(["id": 2, "method": "notes.get", "params": ["id": .string(note.id)]]).serialized()
+        var stream: [UInt8] = [0xFF, 0xFE, 0x0A] + Array(" \t\n".utf8)
+        stream += Array((update + "\n" + get + "\n").utf8)
+        let pieceSize = 1021
+        let splitSequences = stride(from: pieceSize, to: stream.count, by: pieceSize).filter { stream[$0] & 0xC0 == 0x80 }
+        #expect(splitSequences.count > 10)
+        for start in stride(from: 0, to: stream.count, by: pieceSize) {
+            try SocketPaths.writeAll(fd: client.fd, data: Data(stream[start..<min(start + pieceSize, stream.count)]), timeout: 3)
+        }
+
+        var responses: [JSONValue] = []
+        for _ in 0..<3 { responses.append(try JSONValue.parse(try #require(try client.readLine(timeout: 10)))) }
+        #expect(try client.readLine(timeout: 0.3) == nil)
+        let badLine = try #require(responses.first { $0["id"] == .null })
+        #expect(badLine["error"]?["message"] == "Request is not valid UTF-8")
+        let updated = try #require(responses.first { $0["id"] == 1 })
+        #expect(updated["result"]?["status"] == "ok")
+        let fetched = try #require(responses.first { $0["id"] == 2 })
+        let stored = try f.repository.get(note.id).content
+        #expect(Array(stored.markdown.utf8) == Array(text.utf8))
+        #expect(Array(stored.text.utf8) == Array(text.utf8))
+        // Requests on one connection run concurrently, so the read may land before or after the save.
+        #expect(fetched["result"]?["id"] == .string(note.id))
+        #expect(fetched["result"]?["text"] == .string(text) || fetched["result"]?["text"] == "start")
+    }
+
+    /// The client keeps reading after a long line whose last read also carried a short line behind it.
+    @Test func theClientFindsAShortLineThatArrivesInTheSameReadAsTheEndOfALongOne() throws {
+        let directory = TempDirectory()
+        let server = SocketServer(path: directory.file("s.sock")) { line in
+            // The short echo goes second, so it is written right behind the long one.
+            if line.count < 10 { try? await Task.sleep(for: .milliseconds(100)) }
+            return line
+        }
+        try server.start()
+        defer { server.stop() }
+        let client = try RPCClient(path: server.path)
+        let long = String(repeating: "é", count: 300_000)
+        try client.send(line: long)
+        try client.send(line: "short")
+        usleep(400_000)
+        #expect(try client.readLine(timeout: 5) == long)
+        #expect(try client.readLine(timeout: 1) == "short")
+    }
 }
 
 @Suite("Backups")
