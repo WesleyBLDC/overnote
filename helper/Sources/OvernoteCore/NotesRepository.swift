@@ -523,12 +523,28 @@ public final class NotesRepository: @unchecked Sendable {
         let useFTS = ftsAvailable && TextFolding.ftsPhrase(for: filter) != nil
         do {
             return try run(on: connection, useFTS: useFTS)
-        } catch is SQLiteError where useFTS {
-            // The index exists but cannot answer (for example a backup built where the
-            // trigram tokenizer was missing): drop it for this process and keep LIKE results.
-            ftsAvailable = false
+        } catch let error as SQLiteError where useFTS {
+            // The index exists but cannot answer (for example a foreign plain table owns
+            // the notes_fts name, so every MATCH fails): drop it for this process and keep
+            // LIKE results. A database built where the trigram tokenizer was missing has
+            // no notes_fts table at all, so detectFTS already kept this path on LIKE.
+            // Any other error, a lock timeout above all, proves nothing about the index:
+            // this query falls back to LIKE, but the index stays in use for the next one.
+            if Self.ftsErrorProvesIndexUnusable(error) { ftsAvailable = false }
             return try run(on: connection, useFTS: false)
         }
+    }
+
+    /// Whether a failed `MATCH` proves the FTS index itself unusable, as opposed to a
+    /// transient or unrelated failure that the next query may not repeat.
+    ///
+    /// Only a plain SQLite error (extended codes mask to 1) whose message names the FTS
+    /// table, a `MATCH`, or the FTS machinery qualifies. Lock errors (5 and 6), corruption
+    /// reported without naming the index, and errors about other columns do not.
+    static func ftsErrorProvesIndexUnusable(_ error: SQLiteError) -> Bool {
+        guard error.code & 0xFF == 1 else { return false }
+        let message = error.message.lowercased()
+        return ["notes_fts", "match", "fts5", "trigram", "no such module"].contains { message.contains($0) }
     }
 
     static func clampLimit(_ limit: Int) -> Int {
@@ -659,19 +675,51 @@ public final class NotesRepository: @unchecked Sendable {
             guard version <= Migrations.latestVersion else {
                 throw RPCError.conflict(Migrations.NewerSchemaError(found: version, supported: Migrations.latestVersion).description)
             }
+            // Rehearse the upgrade on a scratch copy first. Replacing the live database
+            // and only then discovering that its migration fails would leave every list
+            // serving an unmigrated schema until the helper restarted and tried again.
+            // A backup that cannot be upgraded is refused here, with the live database
+            // untouched, in the same spirit as the damaged and newer schema refusals.
+            let scratchPath = (NSTemporaryDirectory() as NSString)
+                .appendingPathComponent("overnote-restore-check-\(UUID().uuidString).sqlite")
+            func removeScratch() {
+                for suffix in ["", "-wal", "-shm", "-journal"] {
+                    try? FileManager.default.removeItem(atPath: scratchPath + suffix)
+                }
+            }
+            defer { removeScratch() }
+            let scratch = try SQLiteDatabase(path: scratchPath)
+            do {
+                try source.copy(into: scratch)
+                try Migrations.migrate(scratch)
+                scratch.close()
+            } catch let error as RPCError {
+                scratch.close()
+                throw error
+            } catch {
+                scratch.close()
+                throw RPCError.badParams("The backup cannot be upgraded to the current schema: \(error)")
+            }
             // The reader holds its own snapshot of the file being replaced, so close it under
-            // its lock and reopen it once the restore is done or has failed, before any read
-            // can use it. A failed reopen leaves reads on the writer.
+            // its lock and reopen it only once the restore has succeeded, before any read
+            // can use it. A failed restore leaves the reader closed, so reads fall back to
+            // the writer instead of reopening on a database whose migration did not finish.
             return try withLock(readerLock) {
                 reader?.close()
                 reader = nil
-                defer { reader = try? SQLiteDatabase(path: self.path, readOnly: true) }
-                try source.copy(into: db)
-                try db.execute("PRAGMA journal_mode = WAL")
-                try Migrations.migrate(db)
-                ftsAvailable = try Self.detectFTS(db)
-                try db.run("DELETE FROM settings WHERE key = ?", [.text(Self.restoreOfferKey)])
-                return try db.query("SELECT id FROM notes ORDER BY id") { $0.text(0) }
+                do {
+                    try source.copy(into: db)
+                    try db.execute("PRAGMA journal_mode = WAL")
+                    try Migrations.migrate(db)
+                    ftsAvailable = try Self.detectFTS(db)
+                    try db.run("DELETE FROM settings WHERE key = ?", [.text(Self.restoreOfferKey)])
+                    let ids = try db.query("SELECT id FROM notes ORDER BY id") { $0.text(0) }
+                    reader = try? SQLiteDatabase(path: self.path, readOnly: true)
+                    return ids
+                } catch {
+                    reader = nil
+                    throw error
+                }
             }
         }
     }

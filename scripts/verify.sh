@@ -78,6 +78,7 @@ PARALLEL_TMP="$(mktemp -d /tmp/overnote-verify-parallel.XXXXXX)"
 # both modes draw from, so fast mode cannot drift away from the full gate.
 ALL_STEPS=(
   "Check: version"
+  "Check: schema copies"
   "Typecheck: extension"
   "Typecheck: editor"
   "Typecheck: core"
@@ -100,6 +101,7 @@ ALL_STEPS=(
 # Names only, never commands. Each entry must appear in ALL_STEPS (checked below), which
 # is what makes fast mode a strict subset of the full gate by construction.
 FAST_STEPS=(
+  "Check: schema copies"
   "Typecheck: extension"
   "Typecheck: editor"
   "Typecheck: core"
@@ -114,6 +116,7 @@ FAST_STEPS=(
 step_body() {
   case "$1" in
     "Check: version") bash scripts/check-version.sh "$(tr -d '[:space:]' <helper/VERSION)" ;;
+    "Check: schema copies") node scripts/check-schema-copies.mjs ;;
     "Typecheck: extension") npx tsc --noEmit ;;
     "Typecheck: editor") npx tsc --noEmit -p editor ;;
     "Typecheck: core") npx tsc --noEmit -p packages/core ;;

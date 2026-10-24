@@ -215,6 +215,16 @@ const QUERIES = [
   "nothing matches this",
 ];
 
+describe("read-only fallback open", () => {
+  it("surfaces a file that is not a database at open, not at the first query", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "overnote-readonly-corrupt-"));
+    roots.push(root);
+    const file = path.join(root, "notes.sqlite");
+    fs.writeFileSync(file, "not a database, only padding text........................");
+    expect(() => ReadOnlyNotesDb.open(file)).toThrow();
+  });
+});
+
 describe("read-only fallback filtered lists", () => {
   const files = new Map<Variant, string>();
 

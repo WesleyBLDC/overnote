@@ -195,7 +195,7 @@ The helper stores folded copies (`title_fold`, `text_fold`) and matches with an 
 Schema version 2 adds an FTS5 trigram index over the folded copies, kept in sync by triggers, plus virtual generated sort columns and paging indexes over them that match the list and browse paging order, so a keyset cursor seeks straight to its page.
 A filtered query whose folded term has at least three Unicode scalars uses the index only to narrow the candidate set, then applies the same escaped `LIKE` predicate to those candidates, so the results are exactly the folded substring results.
 Shorter terms keep the folded `LIKE` scan by design, since the trigram tokenizer cannot index them.
-Where FTS5 or the trigram tokenizer is unavailable, version 2 applies without the index, and when a `MATCH` fails at query time the helper stops using the index until it restarts; both keep the folded `LIKE` scan.
+Where FTS5 or the trigram tokenizer is unavailable, version 2 applies without the index, and when a `MATCH` fails at query time the folded `LIKE` scan answers that query; only a failure that names the FTS index itself stops the helper using the index until it restarts, so a lock timeout or another transient error disables nothing.
 Ordering does not change: the index never ranks results, and list and browse keep the order stated for each method above, including title matches before text only matches in a filtered browse.
 The read-only fallback mirrors that query shape: on a database with `notes_fts` it narrows with the index and applies the same `LIKE` recheck, on a database with the paging indexes it spells the order over the generated sort columns, and on a schema version 1 or indexless database it keeps the pure folded `LIKE` scan.
 A SQLite built without FTS5, such as the system `sqlite3` on some macOS versions, still reads and backs up a schema version 2 database, because only a statement that touches `notes_fts` needs the module; the fallback treats that failed `MATCH` like any other and keeps the `LIKE` scan.
@@ -347,7 +347,9 @@ CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
 ```
 
 The helper keeps a second SQLite connection open read-only for `notes.list`, `notes.browse`, `notes.listDeleted`, and `notes.count`, under its own lock, so those reads run while a write is in flight on the single writer connection and a long read never delays a save.
-A restore closes that connection under its lock and reopens it on the restored database before any read can use it, and when the read-only connection cannot be opened, reads fall back to the writer connection.
+A restore closes that connection under its lock and reopens it on the restored database only after the restore has succeeded and before any read can use it, and when the read-only connection cannot be opened, reads fall back to the writer connection.
+A read-only connection probes the schema at open, so a file that is not a database fails at open and takes that fallback instead of failing its first query.
+Before replacing the live database, a restore rehearses the backup's migration on a scratch copy and refuses the backup when that upgrade fails, so the live notes keep listing without a restart.
 No write ever goes through the second connection, and there is still exactly one writer.
 
 The extension may open the database **read-only** (`node:sqlite`, `readOnly: true`) for instant lists and search when the helper is not running.

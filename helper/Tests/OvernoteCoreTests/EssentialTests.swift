@@ -12,10 +12,20 @@ import Testing
 struct FoldTests {
     @Test func foldMatchesTheSharedGoldenCorpus() throws {
         // The same file the TypeScript core tests read, so a note is findable identically
-        // from every client: packages/core/tests/fold-corpus.json, relative to this file.
-        let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        let url = here.appendingPathComponent("../../../packages/core/tests/fold-corpus.json")
-        let corpus = try JSONDecoder().decode([FoldCase].self, from: Data(contentsOf: url))
+        // from every client: packages/core/tests/fold-corpus.json. Walk up from this file
+        // until the corpus is found, so moving this file within the repository (or adding a
+        // folder level above it) cannot silently point the test at the wrong place.
+        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        var url: URL?
+        while url == nil {
+            let candidate = directory.appendingPathComponent("packages/core/tests/fold-corpus.json")
+            if FileManager.default.fileExists(atPath: candidate.path) { url = candidate }
+            let parent = directory.deletingLastPathComponent()
+            if parent.path == directory.path { break }
+            directory = parent
+        }
+        let corpusURL = try #require(url)
+        let corpus = try JSONDecoder().decode([FoldCase].self, from: Data(contentsOf: corpusURL))
         #expect(corpus.count >= 20)
         for entry in corpus {
             #expect(TextFolding.fold(entry.input) == entry.folded, "fold(\(entry.input))")
@@ -191,6 +201,80 @@ struct SearchIndexTests {
         let fallback = try NotesRepository(path: other, clock: TestClock().function)
         #expect(try fallback.browse(filter: "quixotic").items.map(\.id) == ["01HF7YAT000000000000000003"])
         #expect(try fallback.list(filter: "café odd").items.map(\.id) == ["01HF7YAT000000000000000003"])
+    }
+
+    /// The trigger delete by `id` cannot seek: `id` is UNINDEXED and `notes` is WITHOUT
+    /// ROWID, so there is no FTS rowid for the trigger to delete by. This pins the query
+    /// plan evidence; making the delete indexed needs a schema version that stores an
+    /// integer rowid per note, which needs a protocol version the lead allocates.
+    @Test func ftsDeleteByIdScansAndOnlyARowidDeleteSeeks() throws {
+        let f = try Fixture()
+        _ = try f.make("cafe body")
+        let check = try SQLiteDatabase(path: f.directory.file("notes.sqlite"), readOnly: true)
+        defer { check.close() }
+        func plan(_ sql: String) throws -> String {
+            try check.query(sql) { $0.text(3) }.joined(separator: " | ")
+        }
+        let byId = try plan("EXPLAIN QUERY PLAN DELETE FROM notes_fts WHERE id = 'x'")
+        #expect(byId.contains("SCAN notes_fts"))
+        #expect(!byId.contains(":="))
+        let byRowid = try plan("EXPLAIN QUERY PLAN DELETE FROM notes_fts WHERE rowid = 1")
+        #expect(byRowid.contains(":="))
+        let notesSQL = try check.queryFirst("SELECT sql FROM sqlite_master WHERE name = 'notes'") { $0.text(0) }
+        #expect(notesSQL?.contains("WITHOUT ROWID") == true)
+        let ftsSQL = try check.queryFirst("SELECT sql FROM sqlite_master WHERE name = 'notes_fts'") { $0.text(0) }
+        #expect(ftsSQL?.contains("id UNINDEXED") == true)
+    }
+
+    /// A read only open must fail at open, not at the first query, so the repository can
+    /// fall back to the writer connection when the reader cannot be opened.
+    @Test func readOnlyOpenSurfacesACorruptFileAtOpen() throws {
+        let directory = TempDirectory()
+        let path = directory.file("corrupt.sqlite")
+        try "not a database, only padding text........................".write(toFile: path, atomically: true, encoding: .utf8)
+        #expect(throws: SQLiteError.self) { try SQLiteDatabase(path: path, readOnly: true) }
+    }
+
+    /// The tokenizer probe answers directly, leaves no probe table behind, and reports
+    /// false when the database cannot be probed at all.
+    @Test func tokenizerProbeReportsAndLeavesNothingBehind() throws {
+        let directory = TempDirectory()
+        let db = try SQLiteDatabase(path: directory.file("probe.sqlite"))
+        #expect(Migrations.ftsAvailable(db))
+        #expect(Migrations.ftsAvailable(db))
+        #expect(try db.queryFirst("SELECT count(*) FROM sqlite_temp_master WHERE name = 'overnote_fts_probe'") { $0.int(0) } == 0)
+        db.close()
+        #expect(!Migrations.ftsAvailable(db))
+    }
+
+    /// Only an error that names the FTS index may disable it for the process; a transient
+    /// lock error or an unrelated SQLite error must not.
+    @Test func onlyFTSErrorsProveTheIndexUnusable() {
+        #expect(!NotesRepository.ftsErrorProvesIndexUnusable(SQLiteError(code: 5, message: "database is locked")))
+        #expect(!NotesRepository.ftsErrorProvesIndexUnusable(SQLiteError(code: 6, message: "database table is locked")))
+        #expect(!NotesRepository.ftsErrorProvesIndexUnusable(SQLiteError(code: 11, message: "database disk image is malformed")))
+        #expect(!NotesRepository.ftsErrorProvesIndexUnusable(SQLiteError(code: 1, message: "no such column: notes.title_fold")))
+        #expect(NotesRepository.ftsErrorProvesIndexUnusable(SQLiteError(code: 1, message: "no such table: notes_fts")))
+        #expect(NotesRepository.ftsErrorProvesIndexUnusable(SQLiteError(code: 1, message: "no such column: notes_fts")))
+        #expect(NotesRepository.ftsErrorProvesIndexUnusable(SQLiteError(code: 1, message: "malformed MATCH expression")))
+    }
+
+    /// A schema 1 backup whose upgrade fails (here a foreign plain table already owns the
+    /// `notes_fts` name) is refused before the live database is replaced, so listing the
+    /// notes that were already there keeps working without a restart.
+    @Test func restoringAnUnmigratableSchemaOneBackupLeavesTheLiveDatabaseWorking() throws {
+        let f = try Fixture()
+        let kept = try f.make("kept original")
+        let backup = f.directory.file("schema1.sqlite")
+        let source = try SQLiteDatabase(path: backup)
+        try Migrations.migrate(source, upTo: 1)
+        try Self.insertRaw(source, id: "01HF7YAT000000000000000009", text: "restored note")
+        try source.execute("CREATE TABLE notes_fts (id TEXT, title_fold TEXT, text_fold TEXT)")
+        source.close()
+        #expect(throws: (any Error).self) { try f.repository.restore(from: backup) }
+        #expect(try f.repository.schemaVersion() == 2)
+        #expect(try f.listIds() == [kept.id])
+        #expect(try f.browseIds(filter: "kept") == [kept.id])
     }
 
     private static func insertRaw(_ db: SQLiteDatabase, id: String, text: String) throws {
