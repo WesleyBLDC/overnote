@@ -94,6 +94,10 @@ Playwright needs only WebKit, the engine of the native panel.
 The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so `npm run verify` skips it on a workstation and runs it in CI.
 Set `OVERNOTE_WINDOW_E2E=1` to run it locally, or `OVERNOTE_WINDOW_E2E=0` to skip it even in CI.
 
+For performance work, `bash scripts/perf.sh` seeds deterministic fixtures of 100, 1,000, and 10,000 notes plus single notes of about 1 KB, 50 KB, and 500 KB, times the real helper headless over its socket, and compares each run with the budgets in `scripts/perf/budgets.json`.
+Budgets warn by default and fail the run only with `--strict`, and results land as JSON under `scripts/perf/results/`.
+The harness is not part of `npm run verify` or CI; [`scripts/perf/README.md`](scripts/perf/README.md) lists what it measures and what it does not.
+
 To run one suite at a time:
 
 ```sh
