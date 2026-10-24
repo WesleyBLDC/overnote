@@ -10,6 +10,8 @@ import {
   type Note,
   type NoteId,
   type NoteSummary,
+  type PanelPlacement,
+  type PanelRect,
   type Settings,
   type WindowData,
 } from "@overnote/core";
@@ -43,6 +45,46 @@ export function makeUlid(now: number, random: () => number = Math.random): strin
 
 type Handler = (params: never) => unknown;
 
+const PANEL_PLACEMENTS: readonly string[] = ["left", "right", "fill", "center"] satisfies PanelPlacement[];
+
+interface Size {
+  width: number;
+  height: number;
+}
+
+/** What a `window.place` in the harness places against: the page as the display, the harness panel, and the minimum size. */
+export interface MockHarness {
+  visible: Size;
+  current: Size;
+  minimum: Size;
+}
+
+/**
+ * The helper's placement geometry (PanelGeometry.placed) for a display at the origin, as a frame
+ * whose `x` is the left edge and `y` the top edge (y up, as AppKit and the stored panelFrame have it).
+ */
+export function placedFrame(placement: PanelPlacement, { visible, current, minimum }: MockHarness): PanelRect {
+  const width = Math.floor(visible.width);
+  const height = Math.floor(visible.height);
+  const leftWidth = Math.ceil(width / 2);
+  const clamp = (size: Size): Size => ({
+    width: Math.min(Math.max(size.width, minimum.width), width),
+    height: Math.min(Math.max(size.height, minimum.height), height),
+  });
+  if (placement === "fill") return { x: 0, y: height, width, height };
+  if (placement === "left") {
+    const size = clamp({ width: leftWidth, height });
+    return { x: 0, y: height, ...size };
+  }
+  if (placement === "right") {
+    const size = clamp({ width: width - leftWidth, height });
+    return { x: width - size.width, y: height, ...size };
+  }
+  const size = clamp({ width: Math.round(current.width), height: Math.round(current.height) });
+  const bottom = Math.ceil((height - size.height) / 2);
+  return { x: Math.floor((width - size.width) / 2), y: bottom + size.height, ...size };
+}
+
 export interface MockStoreOptions {
   now?: () => number;
   emit?: (event: rpc.EventName, payload: unknown) => void;
@@ -53,6 +95,14 @@ export class MockStore {
   settings: Settings = { ...DEFAULT_SETTINGS };
   currentNoteId: NoteId | null = null;
   visible = true;
+  /** Every `window.place` placement, in order. */
+  placeCalls: PanelPlacement[] = [];
+  /** Set by the bridge before each `window.place` from the page and the harness panel. */
+  harness: MockHarness = {
+    visible: { width: 1440, height: 875 },
+    current: { width: 640, height: 560 },
+    minimum: { width: 405, height: 197 },
+  };
   private lastNow = 0;
   private readonly clock: () => number;
   private readonly emit: (event: rpc.EventName, payload: unknown) => void;
@@ -190,6 +240,7 @@ export class MockStore {
       this.emit(rpc.Event.WindowDidHide, {});
       return { visible: false };
     },
+    "window.place": (params) => this.place(params.placement),
     "window.resize": () => ({}),
     "window.setMinimumSize": () => ({}),
     "window.resignFocus": () => ({}),
@@ -376,6 +427,32 @@ export class MockStore {
       return { ...this.settings };
     },
   };
+
+  /** `window.place` as the helper stores it: the frame, the display's placed point, and auto-sizing off unless centered. */
+  private place(placement: PanelPlacement): { placement: PanelPlacement; frame: PanelRect } {
+    if (!PANEL_PLACEMENTS.includes(placement)) {
+      throw new MockRpcError(rpc.ErrorCode.BadParams, "placement must be one of left, right, fill, center");
+    }
+    this.placeCalls.push(placement);
+    const frame = placedFrame(placement, this.harness);
+    const key = `mock@${this.harness.visible.width}x${this.harness.visible.height}`;
+    const setsSize = placement !== "center";
+    const autoSize = setsSize ? false : this.settings.windowAutoSize;
+    const previous = this.settings.panelFrame;
+    this.settings = {
+      ...this.settings,
+      windowAutoSize: autoSize,
+      panelFrame: {
+        x: frame.x,
+        y: frame.y,
+        width: frame.width,
+        ...(autoSize ? {} : { height: frame.height }),
+        displays: { ...previous?.displays, [key]: { ...frame, placement } },
+      },
+    };
+    this.emit(rpc.Event.SettingsChanged, { ...this.settings });
+    return { placement, frame };
+  }
 
   private swapPin(id: NoteId, direction: -1 | 1): void {
     const pins = this.pinnedSorted();

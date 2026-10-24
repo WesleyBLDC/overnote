@@ -4,6 +4,7 @@ import { showFailureToast, useCachedPromise } from "@raycast/utils";
 import { backUpNow, revealBackupsFolder } from "./api/backups";
 import { loadMenuData } from "./api/menu-data";
 import { createNote, openInOvernote } from "./api/notes";
+import { showAndPlace, type PanelPlacement } from "./api/window";
 import { summaryTitle } from "./domain/format";
 import type { NoteSummary } from "./domain/types";
 
@@ -30,6 +31,14 @@ async function newNote() {
   const { contentFromMarkdown } = await import("./api/content");
   await createNote(contentFromMarkdown(""), { show: true });
 }
+
+/** The menu bar's Window section: the same four placements as the editor's action panel. */
+const PLACEMENTS: { title: string; icon: Icon; placement: PanelPlacement }[] = [
+  { title: "Fill Left", icon: Icon.AppWindowSidebarLeft, placement: "left" },
+  { title: "Fill Right", icon: Icon.AppWindowSidebarRight, placement: "right" },
+  { title: "Fill Screen", icon: Icon.Maximize, placement: "fill" },
+  { title: "Centre", icon: Icon.Center, placement: "center" },
+];
 
 const openRestoreList = () =>
   run("Could not open the backups", () =>
@@ -58,6 +67,20 @@ export default function MenuBar() {
           onAction={() => run("Could not open Overnote", () => openInOvernote())}
         />
         <MenuBarExtra.Item title="New Note" icon={Icon.Plus} onAction={() => run("Could not create a note", newNote)} />
+      </MenuBarExtra.Section>
+      <MenuBarExtra.Section title="Window">
+        {PLACEMENTS.map(({ title, icon, placement }) => (
+          <MenuBarExtra.Item
+            key={placement}
+            title={title}
+            icon={icon}
+            onAction={() =>
+              run("Could not place the window", async () => {
+                await showAndPlace(placement);
+              })
+            }
+          />
+        ))}
       </MenuBarExtra.Section>
       {error ? (
         <MenuBarExtra.Section>
