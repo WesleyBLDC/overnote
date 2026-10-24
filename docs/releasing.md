@@ -22,10 +22,14 @@ It also records the release `version`, which Check for Updates and `npm run upda
 ## Steps
 
 1. Make sure `main` is green in CI and `npm run verify` passes locally.
-2. Set `helper/VERSION` and `HelperVersion.current` to the release version.
+2. Set only `helper/VERSION` to the release version.
+   `helper/VERSION` is the single source of truth for the helper version.
+   `scripts/generate-helper-version.sh` generates the Swift `HelperVersion.current` constant from `helper/VERSION` into the gitignored `helper/Sources/OvernoteCore/GeneratedVersion.swift`, and nobody edits that constant by hand.
    `scripts/build-helper.sh` refuses a mismatch, and the launcher restarts a running helper whose version differs, so every release that changes the helper needs a new version.
+   The helper ships arm64 by default.
+   A universal binary remains available only by setting `OVERNOTE_HELPER_ARCHES`, for example `OVERNOTE_HELPER_ARCHES="arm64 x86_64"`, when running `scripts/build-helper.sh`, and release packaging refuses a universal binary.
 3. Run `bash scripts/check-version.sh 0.3.0`.
-   The Release workflow runs the same check on the tag, and again on the packaged zip, and stops before publishing if the tag, `helper/VERSION`, `HelperVersion.current`, or the zip's `prebuilt.json` disagree.
+   The Release workflow runs the same check on the tag, and again on the packaged zip, and stops before publishing if the tag, `helper/VERSION`, the generated `HelperVersion.current`, or the zip's `prebuilt.json` disagree.
    `CHANGELOG.md` is not checked: it follows the Raycast Store format, `## [Title] - {PR_MERGE_DATE}`, and the maintainer keeps it.
 4. Optionally, check the packaging locally:
 
@@ -35,6 +39,7 @@ It also records the release `version`, which Check for Updates and `npm run upda
    bash scripts/check-release.sh /tmp/overnote-release/overnote-0.3.0.zip
    ```
 
+   `scripts/package-release.sh` ships the arm64 slice only and refuses any other architecture set.
    `scripts/check-release.sh` installs the zip the way a browser download arrives, quarantined and with the Xcode tools stubbed out, and runs the helper headless; it never shows the panel or talks to Raycast, so it is safe on a workstation (`--help` lists the steps).
 
 5. Tag and push:
@@ -59,8 +64,8 @@ Rerunning the workflow for the same tag replaces the files and the notes of the 
 The Store builds an extension from the files committed to its repository, so a Store submission needs the built helper and editor committed, while `main` stays code only.
 `scripts/prepare-store.sh <out-dir>` writes that copy to `<out-dir>/overnote`:
 
-- the sources, plus `helper/` and `scripts/build-helper.sh`, so reviewers can rebuild the helper and compare it with `assets/bin/OvernoteHelper.sha256`;
-- the prebuilt helper and editor, with `assets/prebuilt.json`;
+- the sources, plus `helper/` and `scripts/build-helper.sh` and `scripts/generate-helper-version.sh`, so reviewers can rebuild the helper and compare it with `assets/bin/OvernoteHelper.sha256`;
+- the prebuilt arm64 helper and editor, with `assets/prebuilt.json`;
 - `metadata/` with the Store screenshots, and the README without its GitHub install and development sections;
 - no Check for Updates command and no install or update scripts, because the Store updates the extension itself.
 

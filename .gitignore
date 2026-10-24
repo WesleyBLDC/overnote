@@ -7,6 +7,7 @@ assets/prebuilt.json
 assets/install-location.json
 assets/dev.json
 helper/.build/
+helper/Sources/OvernoteCore/GeneratedVersion.swift
 .build/
 .swiftpm/
 raycast-env.d.ts

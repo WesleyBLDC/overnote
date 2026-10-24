@@ -126,6 +126,8 @@ while IFS= read -r -d '' file; do quarantine "$file"; done < <(find "$PKG" -prin
 BIN="$PKG/assets/bin/OvernoteHelper"
 is_quarantined "$BIN" || die "could not quarantine $BIN"
 HELPER_VERSION="$(node -p 'require(process.argv[1]).helperVersion' "$PKG/assets/prebuilt.json")"
+[[ "$(lipo -archs "$BIN")" == "arm64" ]] || die "the helper in the zip is not arm64 only: $(lipo -archs "$BIN")"
+log "Architecture: the helper in the zip is arm64 only"
 log "Quarantined the zip and $(find "$PKG" | wc -l | tr -d ' ') extracted paths"
 
 gatekeeper() {

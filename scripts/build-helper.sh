@@ -1,9 +1,11 @@
 #!/bin/bash
-# Builds the universal (arm64 + x86_64) OvernoteHelper with only the Xcode Command Line
-# Tools, ad-hoc signs it, and installs it to assets/bin with a .sha256 file.
+# Builds OvernoteHelper for arm64 by default with only the Xcode Command Line Tools,
+# ad-hoc signs it, and installs it to assets/bin with a .sha256 file.
 #
 # `swift build --arch arm64 --arch x86_64` needs XCBuild, which ships only with full Xcode,
-# so each architecture is built separately and merged with lipo.
+# so each architecture is built separately and merged with lipo when there is more than
+# one. Set OVERNOTE_HELPER_ARCHES to a space separated list to build other architectures,
+# for example OVERNOTE_HELPER_ARCHES="arm64 x86_64" for a universal binary.
 #
 # Rerunning is cheap: SwiftPM builds incrementally, and the copy, signature, and checksum
 # are skipped when the installed binary already matches the fresh build.
@@ -15,11 +17,20 @@ OUT_DIR="$ROOT/assets/bin"
 OUT="$OUT_DIR/OvernoteHelper"
 PRODUCT=OvernoteHelper
 MIN_MACOS=14.0
-ARCHES=(arm64 x86_64)
+ARCHES_ENV="${OVERNOTE_HELPER_ARCHES:-arm64}"
+# Word splitting is intentional here: the override is a space separated list.
+read -ra ARCHES <<<"$ARCHES_ENV"
+if [[ ${#ARCHES[@]} -eq 0 ]]; then
+  echo "OVERNOTE_HELPER_ARCHES is empty: give at least one architecture, for example arm64" >&2
+  exit 1
+fi
 
 log() { printf '[build-helper] %s\n' "$*"; }
 
 command -v swift >/dev/null || { echo "swift not found: install the Xcode Command Line Tools (xcode-select --install)" >&2; exit 1; }
+
+# Generate HelperVersion.current from helper/VERSION before SwiftPM compiles anything.
+bash "$ROOT/scripts/generate-helper-version.sh"
 
 slices=()
 for arch in "${ARCHES[@]}"; do
@@ -32,10 +43,15 @@ done
 
 STAGING="$PACKAGE/.build/universal"
 mkdir -p "$STAGING" "$OUT_DIR"
-log "Merging slices with lipo"
-lipo -create "${slices[@]}" -output "$STAGING/$PRODUCT.unsigned"
+if [[ ${#slices[@]} -eq 1 ]]; then
+  log "Single architecture (${ARCHES[0]}): skipping lipo"
+  cp "${slices[0]}" "$STAGING/$PRODUCT.unsigned"
+else
+  log "Merging slices with lipo"
+  lipo -create "${slices[@]}" -output "$STAGING/$PRODUCT.unsigned"
+fi
 
-# Compare the unsigned universal binary with the one we signed last time. If nothing
+# Compare the unsigned binary with the one we signed last time. If nothing
 # changed, keep the installed, already signed binary as it is.
 if [[ -f "$OUT" && -f "$STAGING/$PRODUCT.unsigned.last" ]] && cmp -s "$STAGING/$PRODUCT.unsigned" "$STAGING/$PRODUCT.unsigned.last" \
    && codesign --verify --strict "$OUT" 2>/dev/null; then

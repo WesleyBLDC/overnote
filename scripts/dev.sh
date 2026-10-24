@@ -19,6 +19,8 @@ HELPER_POLL_SECONDS=2
 
 log() { printf '[dev] %s\n' "$*"; }
 
+# Generate HelperVersion.current from helper/VERSION before anything builds the helper.
+bash scripts/generate-helper-version.sh
 bash scripts/prepare-assets.sh
 node -e 'require("fs").writeFileSync("assets/dev.json", JSON.stringify({ assetsDir: process.argv[1] }, null, 2) + "\n")' "$ROOT/assets"
 
@@ -37,7 +39,9 @@ pids+=($!)
 
 # The helper: rebuilt when anything under helper/ that goes into the binary changes.
 helper_fingerprint() {
-  find helper/Sources helper/Package.swift helper/VERSION -type f -exec stat -f '%m %N' {} + 2>/dev/null | sort | shasum | cut -d' ' -f1
+  # GeneratedVersion.swift is derived from helper/VERSION, which is already listed, so
+  # it is left out to avoid a second rebuild when the generator rewrites it.
+  find helper/Sources helper/Package.swift helper/VERSION -type f -not -name 'GeneratedVersion.swift' -exec stat -f '%m %N' {} + 2>/dev/null | sort | shasum | cut -d' ' -f1
 }
 (
   last="$(helper_fingerprint)"
