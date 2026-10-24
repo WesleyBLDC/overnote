@@ -1,6 +1,5 @@
 #!/bin/bash
-# The full suite. CI runs exactly this (.github/workflows/ci.yml), so a green run here is a
-# green run there, apart from the panel window step below.
+# The full suite, and the only gate: checks run locally on macOS with Apple silicon.
 #
 #   npm run verify
 #   VERIFY_MODE=fast npm run verify
@@ -19,7 +18,7 @@
 # Tools, Node 22+, and the Playwright browsers (npx playwright install webkit).
 #
 # The panel window check (scripts/e2e-window.sh) shows the panel on screen and needs a logged
-# in GUI session, so it is opt in on a workstation and on by default in CI.
+# in GUI session, so it is skipped for now and opt in by hand.
 #
 # Environment:
 #   VERIFY_MODE=fast       run the fast subset described above (default is full)

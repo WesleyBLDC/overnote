@@ -79,7 +79,9 @@ Overnote has few unit tests and many end-to-end tests.
   - full flows inside real Raycast in development mode (hotkey toggle, panel, typing, persistence across restarts).
 - A feature is done when its end-to-end test passes, not when its unit tests pass.
 
-Run the whole suite, in the same order as CI, with one command:
+Testing targets macOS on Apple silicon only; Intel Macs and other platforms are not tested.
+Checks run locally and there is no CI gate for now, so `npm run verify` is the only gate.
+Run the whole suite with one command:
 
 ```sh
 npx playwright install webkit   # once
@@ -87,16 +89,15 @@ npm run verify
 ```
 
 `npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, and builds the extension, stopping at the first failing step.
-CI runs the same command.
 For the editing loop, `npm run verify:fast` (alias `npm run check`) runs the three typechecks, ESLint, Prettier, the core fixtures, the editor unit tests, and the helper unit tests, with the independent checks running concurrently.
 The fast mode reads the same step list as the full gate in `scripts/verify.sh`, so it is a strict subset by construction and never replaces the full gate before landing.
 Playwright needs only WebKit, the engine of the native panel.
-The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so `npm run verify` skips it on a workstation and runs it in CI.
-Set `OVERNOTE_WINDOW_E2E=1` to run it locally, or `OVERNOTE_WINDOW_E2E=0` to skip it even in CI.
+The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so it is skipped for now and `npm run verify` does not run it.
+Only the maintainer sets `OVERNOTE_WINDOW_E2E=1` to run it by hand.
 
 For performance work, `bash scripts/perf.sh` seeds deterministic fixtures of 100, 1,000, and 10,000 notes plus single notes of about 1 KB, 50 KB, and 500 KB, times the real helper headless over its socket, and compares each run with the budgets in `scripts/perf/budgets.json`.
 Budgets warn by default and fail the run only with `--strict`, and results land as JSON under `scripts/perf/results/`.
-The harness is not part of `npm run verify` or CI; [`scripts/perf/README.md`](scripts/perf/README.md) lists what it measures and what it does not.
+The harness is not part of `npm run verify`; [`scripts/perf/README.md`](scripts/perf/README.md) lists what it measures and what it does not.
 
 To run one suite at a time:
 

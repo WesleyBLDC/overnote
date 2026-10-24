@@ -1,6 +1,6 @@
 #!/bin/bash
-# Checks that every place that names the release version agrees with it. CI and npm run verify
-# run it on every push, and the Release workflow on tag builds before publishing.
+# Checks that every place that names the release version agrees with it. npm run verify
+# runs it locally, and the Release workflow on tag builds before publishing.
 #
 #   scripts/check-version.sh <version> [overnote-<version>.zip]
 #
