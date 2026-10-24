@@ -187,6 +187,8 @@ Shorter terms keep the folded `LIKE` scan by design, since the trigram tokenizer
 Where FTS5 or the trigram tokenizer is unavailable, version 2 applies without the index, and when a `MATCH` fails at query time the helper stops using the index until it restarts; both keep the folded `LIKE` scan.
 Ordering does not change: the index never ranks results, and list and browse keep the order stated for each method above, including title matches before text only matches in a filtered browse.
 The read-only fallback mirrors that query shape: on a database with `notes_fts` it narrows with the index and applies the same `LIKE` recheck, on a database with the paging indexes it spells the order over the generated sort columns, and on a schema version 1 or indexless database it keeps the pure folded `LIKE` scan.
+A SQLite built without FTS5, such as the system `sqlite3` on some macOS versions, still reads and backs up a schema version 2 database, because only a statement that touches `notes_fts` needs the module; the fallback treats that failed `MATCH` like any other and keeps the `LIKE` scan.
+Writing `notes` fires the index triggers, so only a SQLite with FTS5 can write it: the helper, which created the index, and in tests `node:sqlite`, never the system `sqlite3`.
 Cursors are opaque strings, and a cursor is only valid for the source that issued it (helper or read-only fallback).
 Helper cursors encode the keyset (match group, pin key, order timestamp, id), and read-only fallback cursors encode an offset into the same order, in the format that fallback has always issued.
 Deep offset paging is the fallback's structural gap: a page deep in the list still walks every row before it, where a helper keyset cursor seeks straight to its page.

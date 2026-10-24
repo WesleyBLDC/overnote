@@ -79,19 +79,55 @@ struct SearchIndexTests {
         #expect(try f.browseIds(filter: "xyzzy").isEmpty)
     }
 
+    /// Removes one note's index row behind the triggers' back: only a page that really narrows
+    /// through notes_fts loses that note, while a two scalar term keeps the LIKE scan and finds it.
+    @Test func filteredPagesNarrowThroughTheIndex() throws {
+        let f = try Fixture()
+        let hidden = try f.make("Café hidden\nbody", title: "Café hidden")
+        let shown = try f.make("Café shown\nbody", title: "Café shown")
+        try Self.removeFromIndex(f, id: hidden.id)
+        #expect(try f.browseIds(filter: "café") == [shown.id])
+        #expect(try f.listIds(filter: "CAFE") == [shown.id])
+        #expect(try f.browseIds(filter: "ca") == [shown.id, hidden.id])
+    }
+
     @Test func theIndexFollowsEveryWrite() throws {
         let f = try Fixture()
         #expect(try f.repository.schemaVersion() == 2)
         let note = try f.make("alpha bravo\nbody")
+        #expect(try Self.indexedIds(f, "bravo") == [note.id])
         #expect(try f.browseIds(filter: "bravo") == [note.id])
         _ = try f.repository.update(note.id, NotePatch(rawContent: "{}", markdown: "charlie", text: "charlie", title: "charlie"))
+        #expect(try Self.indexedIds(f, "bravo").isEmpty)
+        #expect(try Self.indexedIds(f, "charlie") == [note.id])
         #expect(try f.browseIds(filter: "bravo").isEmpty)
         #expect(try f.browseIds(filter: "charlie") == [note.id])
+        let gone = try f.make("delta gone")
+        try f.repository.delete(gone.id)
+        try f.repository.permanentlyDelete(gone.id)
+        #expect(try Self.indexedIds(f, "delta").isEmpty)
         try f.repository.delete(note.id)
         #expect(try f.browseIds(filter: "charlie").isEmpty)
         _ = try f.repository.recover(note.id)
-        _ = try f.repository.duplicate(note.id)
+        let copy = try f.repository.duplicate(note.id)
+        #expect(try Self.indexedIds(f, "charlie").sorted() == [note.id, copy.id].sorted())
         #expect(try f.browseIds(filter: "charlie").count == 2)
+        // After every write the pages still read the index, not a LIKE scan it fell back to.
+        try Self.removeFromIndex(f, id: copy.id)
+        #expect(try f.browseIds(filter: "charlie") == [note.id])
+    }
+
+    /// The ids notes_fts itself holds for a folded term, read on a separate connection.
+    private static func indexedIds(_ f: Fixture, _ term: String) throws -> [String] {
+        let check = try SQLiteDatabase(path: f.directory.file("notes.sqlite"), readOnly: true)
+        defer { check.close() }
+        return try check.query("SELECT id FROM notes_fts WHERE notes_fts MATCH ? ORDER BY id", [.text(TextFolding.ftsPhrase(for: term) ?? "")]) { $0.text(0) }
+    }
+
+    private static func removeFromIndex(_ f: Fixture, id: String) throws {
+        let side = try SQLiteDatabase(path: f.directory.file("notes.sqlite"))
+        defer { side.close() }
+        #expect(try side.run("DELETE FROM notes_fts WHERE id = ?", [.text(id)]) == 1)
     }
 
     /// Reads on the second connection see each write as soon as it commits, and a restore
