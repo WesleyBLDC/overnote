@@ -36,6 +36,18 @@ final class SQLiteDatabase {
         handle = db
         sqlite3_extended_result_codes(db, 1)
         sqlite3_busy_timeout(db, 3000)
+        if readOnly {
+            // sqlite3_open_v2 is lazy: a file that is not a database opens fine and only
+            // fails at the first query. Probe the schema now so a read only connection
+            // surfaces that failure at open, where callers expect to catch it and fall
+            // back to another connection.
+            do {
+                _ = try queryFirst("SELECT 1 FROM sqlite_master LIMIT 1") { $0.int(0) }
+            } catch {
+                close()
+                throw error
+            }
+        }
     }
 
     deinit {
