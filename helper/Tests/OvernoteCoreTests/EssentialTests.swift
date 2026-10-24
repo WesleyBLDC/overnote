@@ -10,22 +10,162 @@ import Testing
 
 @Suite("Fold rule")
 struct FoldTests {
-    @Test(arguments: [
-        ("Ünïcödé", "unicode"),
-        ("Straße", "straße"),
-        ("ﬁle", "file"),
-        ("ÅNGSTRÖM", "angstrom"),
-        ("Ｆｕｌｌｗｉｄｔｈ", "fullwidth"),
-        ("e\u{301}", "e"),
-    ])
-    func fold(input: String, expected: String) {
-        #expect(TextFolding.fold(input) == expected)
+    @Test func foldMatchesTheSharedGoldenCorpus() throws {
+        // The same file the TypeScript core tests read, so a note is findable identically
+        // from every client: packages/core/tests/fold-corpus.json, relative to this file.
+        let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let url = here.appendingPathComponent("../../../packages/core/tests/fold-corpus.json")
+        let corpus = try JSONDecoder().decode([FoldCase].self, from: Data(contentsOf: url))
+        #expect(corpus.count >= 20)
+        for entry in corpus {
+            #expect(TextFolding.fold(entry.input) == entry.folded, "fold(\(entry.input))")
+        }
+    }
+
+    private struct FoldCase: Decodable {
+        let input: String
+        let folded: String
+    }
+
+    @Test func asciiFastPathMatchesTheGeneralRuleForEveryAsciiScalar() {
+        // Every scalar the ASCII gate admits, control characters, NUL, and DEL included. The
+        // expected value is built independently: only A to Z change, by one bit, byte for byte.
+        let allASCII = String((0...127).map { Character(UnicodeScalar(UInt8($0))) })
+        let expected = allASCII.utf8.map { $0 >= 65 && $0 <= 90 ? $0 + 32 : $0 }
+        #expect(Array(TextFolding.fold(allASCII).utf8) == expected)
+        // Combining marks are never ASCII, so these take the general path and lose their marks.
+        #expect(TextFolding.fold("E\u{301} A\u{300} Cafe\u{301}") == "e a cafe")
+    }
+
+    @Test func ftsPhraseOnlyForTermsOfThreeScalars() {
+        #expect(TextFolding.ftsPhrase(for: "ab") == nil)
+        #expect(TextFolding.ftsPhrase(for: "😀") == nil)
+        #expect(TextFolding.ftsPhrase(for: "   ") == nil)
+        #expect(TextFolding.ftsPhrase(for: " Café ") == "\"cafe\"")
+        #expect(TextFolding.ftsPhrase(for: "say \"hi\"") == "\"say \"\"hi\"\"\"")
     }
 
     @Test func likePatternTrimsFoldsAndEscapesWildcards() {
         #expect(TextFolding.likePattern(for: "  \n") == nil)
         #expect(TextFolding.likePattern(for: " Ab ") == "%ab%")
         #expect(TextFolding.likePattern(for: "50%_\\") == "%50\\%\\_\\\\%")
+    }
+}
+
+@Suite("Schema 2 search")
+struct SearchIndexTests {
+    /// Filtered pages through the trigram index equal the folded substring results, including
+    /// the short terms the index cannot answer and so keep the LIKE scan.
+    @Test func indexedResultsEqualFoldedSubstringResults() throws {
+        let f = try Fixture()
+        let cafe = try f.make("Café Über\nthe body", title: "Café Über")
+        let quix = try f.make("plain\na quixotic café paragraph", title: "plain")
+        let pct = try f.make("Groceries 100%\nsnake_case stuff", title: "Groceries 100%")
+        let emoji = try f.make("Mood 😀 today\nnotes", title: "Mood 😀 today")
+        let cjk = try f.make("中文標題測試\nbody", title: "中文標題測試")
+        let file = try f.make("ﬁle notes\nbody", title: "ﬁle notes")
+        try f.make("unrelated\nnothing here", title: "unrelated")
+        #expect(try f.browseIds(filter: "CAFÉ") == [cafe.id, quix.id])  // title match first
+        #expect(try f.listIds(filter: "cafe") == [quix.id, cafe.id])
+        #expect(try f.browseIds(filter: "quixotic") == [quix.id])
+        #expect(try f.browseIds(filter: "100%") == [pct.id])
+        #expect(try f.browseIds(filter: "%") == [pct.id])
+        #expect(try f.browseIds(filter: "snake_case") == [pct.id])
+        #expect(try f.browseIds(filter: "_") == [pct.id])
+        #expect(try f.browseIds(filter: "😀") == [emoji.id])
+        #expect(try f.browseIds(filter: "中文標") == [cjk.id])
+        #expect(try f.browseIds(filter: "中文") == [cjk.id])
+        #expect(try f.browseIds(filter: "ﬁl") == [file.id])
+        #expect(try f.browseIds(filter: "xyzzy").isEmpty)
+    }
+
+    @Test func theIndexFollowsEveryWrite() throws {
+        let f = try Fixture()
+        #expect(try f.repository.schemaVersion() == 2)
+        let note = try f.make("alpha bravo\nbody")
+        #expect(try f.browseIds(filter: "bravo") == [note.id])
+        _ = try f.repository.update(note.id, NotePatch(rawContent: "{}", markdown: "charlie", text: "charlie", title: "charlie"))
+        #expect(try f.browseIds(filter: "bravo").isEmpty)
+        #expect(try f.browseIds(filter: "charlie") == [note.id])
+        try f.repository.delete(note.id)
+        #expect(try f.browseIds(filter: "charlie").isEmpty)
+        _ = try f.repository.recover(note.id)
+        _ = try f.repository.duplicate(note.id)
+        #expect(try f.browseIds(filter: "charlie").count == 2)
+    }
+
+    /// Reads on the second connection see each write as soon as it commits, and a restore
+    /// reopens that connection on the restored database.
+    @Test func secondConnectionSeesWritesAndRestores() throws {
+        let f = try Fixture()
+        let kept = try f.make("kept note")
+        let backup = f.directory.file("backup.sqlite")
+        try f.repository.backup(to: backup)
+        let later = try f.make("later note")
+        #expect(try f.repository.count() == 2)
+        try f.repository.delete(later.id)
+        #expect(try f.repository.count() == 1)
+        #expect(try f.repository.listDeleted().map(\.summary.id) == [later.id])
+        _ = try f.repository.recover(later.id)
+        #expect(try f.browseIds(filter: "note") == [later.id, kept.id])
+        #expect(try f.repository.restore(from: backup) == [kept.id])
+        #expect(try f.repository.count() == 1)
+        #expect(try f.browseIds(filter: "note") == [kept.id])
+        #expect(try f.repository.listDeleted().isEmpty)
+    }
+
+    /// A version 1 database gains the index and the paging indexes, and its notes stay findable.
+    @Test func versionOneMigratesAndStaysFindable() throws {
+        let directory = TempDirectory()
+        let path = directory.file("notes.sqlite")
+        let db = try SQLiteDatabase(path: path)
+        try Migrations.migrate(db, upTo: 1)
+        try Self.insertRaw(db, id: "01HF7YAT000000000000000001", text: "Café old\nquixotic body")
+        db.close()
+        let repository = try NotesRepository(path: path, clock: TestClock().function)
+        #expect(try repository.schemaVersion() == 2)
+        #expect(try repository.browse(filter: "quixotic").items.map(\.id) == ["01HF7YAT000000000000000001"])
+        #expect(try repository.list(filter: "CAFÉ").items.map(\.id) == ["01HF7YAT000000000000000001"])
+        let check = try SQLiteDatabase(path: path, readOnly: true)
+        let objects = try check.query("SELECT name FROM sqlite_master WHERE name IN ('notes_fts', 'notes_list_page', 'notes_browse_page') ORDER BY name") { $0.text(0) }
+        #expect(objects == ["notes_browse_page", "notes_fts", "notes_list_page"])
+    }
+
+    /// Where the trigram tokenizer is missing, version 2 still applies without the index, and
+    /// every filter keeps the folded LIKE results.
+    @Test func withoutTheTokenizerTheVersionAdvancesAndLikeAnswers() throws {
+        let directory = TempDirectory()
+        let path = directory.file("notes.sqlite")
+        let db = try SQLiteDatabase(path: path)
+        #expect(try Migrations.migrate(db, fts: false) == [1, 2])
+        #expect(try db.queryFirst("SELECT count(*) FROM sqlite_master WHERE name = 'notes_fts'") { $0.int(0) } == 0)
+        try Self.insertRaw(db, id: "01HF7YAT000000000000000002", text: "Café plain\nquixotic")
+        db.close()
+        let repository = try NotesRepository(path: path, clock: TestClock().function)
+        #expect(try repository.browse(filter: "quixotic").items.map(\.id) == ["01HF7YAT000000000000000002"])
+        #expect(try repository.browse(filter: "ca").items.map(\.id) == ["01HF7YAT000000000000000002"])
+        // A table of that name that cannot answer MATCH (a damaged or foreign index): the failed
+        // MATCH drops the index for the process and the LIKE scan answers.
+        let other = directory.file("other.sqlite")
+        let odd = try SQLiteDatabase(path: other)
+        try Migrations.migrate(odd, fts: false)
+        try odd.execute("CREATE TABLE notes_fts (id TEXT, title_fold TEXT, text_fold TEXT)")
+        try Self.insertRaw(odd, id: "01HF7YAT000000000000000003", text: "Café odd\nquixotic")
+        odd.close()
+        let fallback = try NotesRepository(path: other, clock: TestClock().function)
+        #expect(try fallback.browse(filter: "quixotic").items.map(\.id) == ["01HF7YAT000000000000000003"])
+        #expect(try fallback.list(filter: "café odd").items.map(\.id) == ["01HF7YAT000000000000000003"])
+    }
+
+    private static func insertRaw(_ db: SQLiteDatabase, id: String, text: String) throws {
+        let title = String(text.split(separator: "\n").first ?? "")
+        try db.run(
+            """
+            INSERT INTO notes (id, title, text, markdown, raw_content, title_fold, text_fold, pinned,
+                               created_at, updated_at, deleted_at, last_accessed_at, caret_position)
+            VALUES (?, ?, ?, ?, '{}', ?, ?, NULL, 1000, 1000, NULL, 1000, 0)
+            """,
+            [.text(id), .text(title), .text(text), .text(text), .text(TextFolding.fold(title)), .text(TextFolding.fold(text))])
     }
 }
 

@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v3.1 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v3.2 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -177,10 +177,19 @@ The editor's ⌘D sends only `id` and makes an exact copy, with no suffix.
 **Filter matching:** case-insensitive substring match on title or text, folding case for all of Unicode and removing diacritics (an intentional improvement over ASCII-only folding).
 **Fold rule (exact, identical in TS and Swift):** Unicode NFKD normalization, then remove every scalar whose general category is a mark (Mn, Mc, Me), then lowercase with the root locale (TS `toLowerCase()`, Swift `lowercased()`).
 Apply the same fold to the query.
+Both implementations are checked against one shared golden corpus in `packages/core/tests/fold-corpus.json`, covering accents, case, compatibility characters, combining marks, and emoji.
 **charCount** is the number of Unicode code points in `text` (SQLite `length(text)`, Swift `unicodeScalars.count`).
 The editor footer counts grapheme clusters separately.
 The helper stores folded copies (`title_fold`, `text_fold`) and matches with an escaped `LIKE`.
-Cursors are opaque strings encoding the keyset (match group, pin key, order timestamp, id); a cursor is only valid for the source that issued it (helper or read-only fallback).
+Schema version 2 adds an FTS5 trigram index over the folded copies, kept in sync by triggers, plus virtual generated sort columns and paging indexes over them that match the list and browse paging order, so a keyset cursor seeks straight to its page.
+A filtered query whose folded term has at least three Unicode scalars uses the index only to narrow the candidate set, then applies the same escaped `LIKE` predicate to those candidates, so the results are exactly the folded substring results.
+Shorter terms keep the folded `LIKE` scan by design, since the trigram tokenizer cannot index them.
+Where FTS5 or the trigram tokenizer is unavailable, version 2 applies without the index, and when a `MATCH` fails at query time the helper stops using the index until it restarts; both keep the folded `LIKE` scan.
+Ordering does not change: the index never ranks results, and list and browse keep the order stated for each method above, including title matches before text only matches in a filtered browse.
+The read-only fallback mirrors that query shape: on a database with `notes_fts` it narrows with the index and applies the same `LIKE` recheck, on a database with the paging indexes it spells the order over the generated sort columns, and on a schema version 1 or indexless database it keeps the pure folded `LIKE` scan.
+Cursors are opaque strings, and a cursor is only valid for the source that issued it (helper or read-only fallback).
+Helper cursors encode the keyset (match group, pin key, order timestamp, id), and read-only fallback cursors encode an offset into the same order, in the format that fallback has always issued.
+Deep offset paging is the fallback's structural gap: a page deep in the list still walks every row before it, where a helper keyset cursor seeks straight to its page.
 
 ```ts
 interface WindowData {
@@ -268,7 +277,12 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 ```sql
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
--- PRAGMA user_version tracks migrations; version 1 is:
+-- PRAGMA user_version tracks migrations; version 1 is the notes and settings tables with the
+-- two order indexes below, and version 2 adds the virtual generated sort columns, the paging
+-- indexes over them, the FTS5 trigram table over the folded copies, and the triggers that keep
+-- that table in sync with notes.
+-- Where FTS5 or the trigram tokenizer is unavailable (probed outside the migration transaction),
+-- version 2 still applies without the FTS5 table and its triggers.
 
 CREATE TABLE notes (
   id               TEXT PRIMARY KEY,
@@ -283,14 +297,38 @@ CREATE TABLE notes (
   updated_at       INTEGER NOT NULL,
   deleted_at       INTEGER,
   last_accessed_at INTEGER,
-  caret_position   INTEGER
+  caret_position   INTEGER,
+  -- version 2, added with ALTER TABLE ADD COLUMN:
+  sort_pin_group    INTEGER GENERATED ALWAYS AS (pinned IS NULL) VIRTUAL,
+  sort_pin_key      REAL GENERATED ALWAYS AS (COALESCE(pinned, 0.0)) VIRTUAL,
+  sort_updated_neg  INTEGER GENERATED ALWAYS AS (-updated_at) VIRTUAL,
+  sort_accessed_neg INTEGER GENERATED ALWAYS AS (-COALESCE(last_accessed_at, -1)) VIRTUAL
 ) STRICT, WITHOUT ROWID;
 
 CREATE INDEX notes_list_order   ON notes (deleted_at, pinned, updated_at DESC, id);
 CREATE INDEX notes_browse_order ON notes (deleted_at, pinned, last_accessed_at DESC, id);
+-- version 2:
+CREATE INDEX notes_list_page    ON notes (deleted_at, sort_pin_group, sort_pin_key, sort_updated_neg, id);
+CREATE INDEX notes_browse_page  ON notes (deleted_at, sort_pin_group, sort_pin_key, sort_accessed_neg, id);
+
+CREATE VIRTUAL TABLE notes_fts USING fts5(id UNINDEXED, title_fold, text_fold, tokenize = 'trigram');
+CREATE TRIGGER notes_fts_after_insert AFTER INSERT ON notes BEGIN
+  INSERT INTO notes_fts (id, title_fold, text_fold) VALUES (NEW.id, NEW.title_fold, NEW.text_fold);
+END;
+CREATE TRIGGER notes_fts_after_update AFTER UPDATE OF title_fold, text_fold ON notes BEGIN
+  DELETE FROM notes_fts WHERE id = OLD.id;
+  INSERT INTO notes_fts (id, title_fold, text_fold) VALUES (NEW.id, NEW.title_fold, NEW.text_fold);
+END;
+CREATE TRIGGER notes_fts_after_delete AFTER DELETE ON notes BEGIN
+  DELETE FROM notes_fts WHERE id = OLD.id;
+END;
 
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
 ```
+
+The helper keeps a second SQLite connection open read-only for `notes.list`, `notes.browse`, `notes.listDeleted`, and `notes.count`, under its own lock, so those reads run while a write is in flight on the single writer connection and a long read never delays a save.
+A restore closes that connection under its lock and reopens it on the restored database before any read can use it, and when the read-only connection cannot be opened, reads fall back to the writer connection.
+No write ever goes through the second connection, and there is still exactly one writer.
 
 The extension may open the database **read-only** (`node:sqlite`, `readOnly: true`) for instant lists and search when the helper is not running.
 All writes go through the helper.
@@ -400,7 +438,7 @@ The extension honors `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`), which t
 
 ## Protocol versioning
 
-The protocol described here is v3.1 (v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v3.2 (v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.

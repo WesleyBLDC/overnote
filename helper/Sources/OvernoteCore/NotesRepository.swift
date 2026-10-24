@@ -22,8 +22,26 @@ public final class NotesRepository: @unchecked Sendable {
 
     private let lock = NSLock()
     private let db: SQLiteDatabase
+    private let path: String
     private let clock: Clock
     private var ulid = ULIDGenerator()
+    /// Whether the schema v2 FTS5 trigram table exists in this database and still answers.
+    ///
+    /// Pages read it under either connection's lock, so it has a lock of its own.
+    private var ftsAvailable: Bool {
+        get { ftsLock.withLock { ftsFlag } }
+        set { ftsLock.withLock { ftsFlag = newValue } }
+    }
+    private let ftsLock = NSLock()
+    private var ftsFlag = false
+    /// A second, read only connection for list, browse, deleted list, and count queries.
+    ///
+    /// It has its own lock, so those queries no longer wait behind a write on the writer
+    /// connection, and a write no longer waits behind a long page query. SQLite in WAL mode
+    /// serves the reader the latest committed snapshot while the single writer keeps writing.
+    /// Every write still flows through `db` under `lock`; this connection can never write.
+    private let readerLock = NSLock()
+    private var reader: SQLiteDatabase?
 
     public static let systemClock: Clock = { Millis((Date().timeIntervalSince1970 * 1000).rounded(.down)) }
 
@@ -32,6 +50,7 @@ public final class NotesRepository: @unchecked Sendable {
     /// any migration runs; if that backup fails, the migration does not run.
     public init(path: String, clock: @escaping Clock = NotesRepository.systemClock, backups: BackupStore? = nil) throws {
         self.clock = clock
+        self.path = path
         do {
             db = try SQLiteDatabase(path: path)
             try db.execute("PRAGMA journal_mode = WAL")
@@ -42,6 +61,10 @@ public final class NotesRepository: @unchecked Sendable {
                 _ = try backups.create(reason: .preMigration) { try Self.write(db, to: $0) }
             }
             try Migrations.migrate(db)
+            ftsAvailable = try Self.detectFTS(db)
+            // Opened after migration, so the reader only ever sees the current schema. A
+            // failure here is not fatal: reads fall back to the writer connection.
+            reader = try? SQLiteDatabase(path: path, readOnly: true)
         } catch let error as Migrations.NewerSchemaError {
             throw RPCError.internal(error.description)
         } catch {
@@ -50,7 +73,25 @@ public final class NotesRepository: @unchecked Sendable {
     }
 
     public func close() {
+        readerLock.withLock {
+            reader?.close()
+            reader = nil
+        }
         lock.withLock { db.close() }
+    }
+
+    /// Runs `body` on the read only connection when one is open, else on the writer.
+    ///
+    /// The choice and the query run under the reader lock, so a restore invalidating the
+    /// reader (it closes and reopens it under the same lock) can never hand out a closed
+    /// connection. The writer fallback runs under the writer lock, as every read did before.
+    private func read<T>(_ body: (SQLiteDatabase) throws -> T) throws -> T {
+        let viaReader: T? = try withLock(readerLock) {
+            guard let reader else { return nil }
+            return try body(reader)
+        }
+        if let viaReader { return viaReader }
+        return try locked { try body(db) }
     }
 
     /// The schema version recorded in the database.
@@ -61,6 +102,11 @@ public final class NotesRepository: @unchecked Sendable {
     // MARK: - Locking and error mapping
 
     private func locked<T>(_ body: () throws -> T) throws -> T {
+        try withLock(lock, body)
+    }
+
+    private func withLock<T>(_ connectionLock: NSLock, _ body: () throws -> T) throws -> T {
+        let lock = connectionLock
         lock.lock()
         defer { lock.unlock() }
         do {
@@ -301,8 +347,8 @@ public final class NotesRepository: @unchecked Sendable {
 
     /// The number of live notes.
     public func count() throws -> Int {
-        try locked {
-            Int(try db.queryFirst("SELECT count(*) FROM notes WHERE deleted_at IS NULL") { $0.int(0) } ?? 0)
+        try read { connection in
+            Int(try connection.queryFirst("SELECT count(*) FROM notes WHERE deleted_at IS NULL") { $0.int(0) } ?? 0)
         }
     }
 
@@ -385,40 +431,83 @@ public final class NotesRepository: @unchecked Sendable {
     }
 
     private func page(kind: ListCursor.Kind, filter: String?, limit: Int, cursor: String?) throws -> NotePage {
+        try read { connection in
+            try page(kind: kind, filter: filter, limit: limit, cursor: cursor, on: connection)
+        }
+    }
+
+    /// One page on `connection`. The caller holds that connection's lock.
+    ///
+    /// Ordering is unchanged from the folded LIKE era: pinned by key first, then the kind's
+    /// timestamp descending, then id, with title matches before text only matches in a filtered
+    /// browse. The FTS5 trigram table only narrows the candidate set for terms it can index;
+    /// the folded LIKE predicate is still applied to those candidates, and every other term
+    /// takes the LIKE path unchanged, so matching semantics never depend on the index.
+    private func page(
+        kind: ListCursor.Kind, filter: String?, limit: Int, cursor: String?, on connection: SQLiteDatabase
+    ) throws -> NotePage {
         let after = try cursor.map { try ListCursor.decode($0, kind: kind) }
         let limit = Self.clampLimit(limit)
         let pattern = TextFolding.likePattern(for: filter)
-        let matchGroup: String
-        let timestamp: String
-        switch kind {
-        case .list:
-            matchGroup = "0"
-            timestamp = "updated_at"
-        case .browse:
-            matchGroup = "(CASE WHEN ?1 IS NULL OR title_fold LIKE ?1 ESCAPE '\\' THEN 0 ELSE 1 END)"
-            timestamp = "COALESCE(last_accessed_at, -1)"
+        let browseFiltered = kind == .browse && pattern != nil
+        // Parameters are numbered in the order they are bound below, and each optional clause
+        // is only present when its parameter is, so SQLite can turn the keyset comparison into
+        // an index seek instead of scanning from the first row behind an OR guard.
+        var values: [SQLValue] = []
+        func placeholder(_ value: SQLValue) -> String {
+            values.append(value)
+            return "?\(values.count)"
         }
-        let sql = """
-            SELECT * FROM (
-              SELECT \(Self.summaryColumns),
-                     \(matchGroup) AS mg, (pinned IS NULL) AS g, COALESCE(pinned, 0.0) AS pk, -\(timestamp) AS nts
-              FROM notes
-              WHERE deleted_at IS NULL
-                AND (?1 IS NULL OR title_fold LIKE ?1 ESCAPE '\\' OR text_fold LIKE ?1 ESCAPE '\\')
-            )
-            WHERE ?2 IS NULL OR (mg, g, pk, nts, id) > (?3, ?4, ?5, ?6, ?2)
-            ORDER BY mg, g, pk, nts, id
-            LIMIT ?7
+        let patternPlaceholder = pattern.map { placeholder(.text($0)) } ?? ""
+        // Browse with a filter groups title matches first; every other page has one group.
+        let matchGroup =
+            browseFiltered ? "(CASE WHEN notes.title_fold LIKE \(patternPlaceholder) ESCAPE '\\' THEN 0 ELSE 1 END)" : "0"
+        // The negated timestamp sort columns are the generated columns the paging indexes hold,
+        // so a keyset cursor compares plain indexed columns and SQLite seeks to the page.
+        let negated = kind == .list ? "notes.sort_updated_neg" : "notes.sort_accessed_neg"
+        let pinKeys = "notes.sort_pin_group, notes.sort_pin_key, \(negated), notes.id"
+        let orderKeys = browseFiltered ? "\(matchGroup), \(pinKeys)" : pinKeys
+        let filterClause =
+            pattern == nil
+            ? "" : "AND (notes.title_fold LIKE \(patternPlaceholder) ESCAPE '\\' OR notes.text_fold LIKE \(patternPlaceholder) ESCAPE '\\')"
+        var cursorClause = ""
+        if let after {
+            var tupleValues: [String] = []
+            if browseFiltered { tupleValues.append(placeholder(.int(after.matchGroup))) }
+            tupleValues.append(placeholder(.int(after.pinGroup)))
+            tupleValues.append(placeholder(.double(after.pinKey)))
+            tupleValues.append(placeholder(.int(after.negatedTimestamp)))
+            tupleValues.append(placeholder(.text(after.id)))
+            let tuple = browseFiltered ? "(\(matchGroup), \(pinKeys))" : "(\(pinKeys))"
+            cursorClause = "AND \(tuple) > (\(tupleValues.joined(separator: ", ")))"
+        }
+        let limitPlaceholder = placeholder(.int(Int64(limit + 1)))
+        let ftsPlaceholder = "?\(values.count + 1)"
+        let summary = """
+            notes.id, notes.title, substr(notes.text, 1, \(NoteSummary.previewLength)), length(notes.text), \
+            notes.pinned, notes.created_at, notes.updated_at, notes.deleted_at, notes.last_accessed_at
             """
-        return try locked {
+        func sql(useFTS: Bool) -> String {
+            let from = useFTS ? "notes_fts CROSS JOIN notes ON notes.id = notes_fts.id" : "notes"
+            let ftsClause = useFTS ? "AND notes_fts MATCH \(ftsPlaceholder)" : ""
+            return """
+                SELECT \(summary),
+                       \(matchGroup) AS mg, notes.sort_pin_group AS g, notes.sort_pin_key AS pk, \(negated) AS nts
+                FROM \(from)
+                WHERE notes.deleted_at IS NULL
+                  \(filterClause)
+                  \(ftsClause)
+                  \(cursorClause)
+                ORDER BY \(orderKeys)
+                LIMIT \(limitPlaceholder)
+                """
+        }
+        func run(on connection: SQLiteDatabase, useFTS: Bool) throws -> NotePage {
             var keys: [ListCursor] = []
-            var items = try db.query(
-                sql,
-                [
-                    pattern.map(SQLValue.text) ?? .null, after.map { .text($0.id) } ?? .null,
-                    .int(after?.matchGroup ?? 0), .int(after?.pinGroup ?? 0), .double(after?.pinKey ?? 0),
-                    .int(after?.negatedTimestamp ?? 0), .int(Int64(limit + 1)),
-                ]
+            var values = values
+            if useFTS { values.append(.text(TextFolding.ftsPhrase(for: filter) ?? "")) }
+            var items = try connection.query(
+                sql(useFTS: useFTS), values
             ) { row -> NoteSummary in
                 let summary = Self.readSummary(row)
                 keys.append(
@@ -431,6 +520,15 @@ public final class NotesRepository: @unchecked Sendable {
             items.removeLast(items.count - limit)
             return NotePage(items: items, nextCursor: keys[limit - 1].encoded)
         }
+        let useFTS = ftsAvailable && TextFolding.ftsPhrase(for: filter) != nil
+        do {
+            return try run(on: connection, useFTS: useFTS)
+        } catch is SQLiteError where useFTS {
+            // The index exists but cannot answer (for example a backup built where the
+            // trigram tokenizer was missing): drop it for this process and keep LIKE results.
+            ftsAvailable = false
+            return try run(on: connection, useFTS: false)
+        }
     }
 
     static func clampLimit(_ limit: Int) -> Int {
@@ -439,8 +537,8 @@ public final class NotesRepository: @unchecked Sendable {
 
     /// Every trashed note, most recently deleted first, with markdown and the document for previews.
     public func listDeleted() throws -> [DeletedNoteSummary] {
-        try locked {
-            try db.query(
+        try read { connection in
+            try connection.query(
                 "SELECT \(Self.summaryColumns), markdown, raw_content FROM notes WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id ASC"
             ) { row in
                 DeletedNoteSummary(summary: Self.readSummary(row), markdown: row.text(9), rawContent: row.text(10))
@@ -513,6 +611,10 @@ public final class NotesRepository: @unchecked Sendable {
     /// Settings key set when the helper started without a database while backups existed.
     static let restoreOfferKey = "restoreOffer"
 
+    private static func detectFTS(_ db: SQLiteDatabase) throws -> Bool {
+        try db.queryFirst("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'notes_fts'") { $0.int(0) } != nil
+    }
+
     private static func holdsNotes(_ db: SQLiteDatabase) throws -> Bool {
         try db.queryFirst("SELECT EXISTS (SELECT 1 FROM notes)") { $0.int(0) != 0 } ?? false
     }
@@ -557,11 +659,20 @@ public final class NotesRepository: @unchecked Sendable {
             guard version <= Migrations.latestVersion else {
                 throw RPCError.conflict(Migrations.NewerSchemaError(found: version, supported: Migrations.latestVersion).description)
             }
-            try source.copy(into: db)
-            try db.execute("PRAGMA journal_mode = WAL")
-            try Migrations.migrate(db)
-            try db.run("DELETE FROM settings WHERE key = ?", [.text(Self.restoreOfferKey)])
-            return try db.query("SELECT id FROM notes ORDER BY id") { $0.text(0) }
+            // The reader holds its own snapshot of the file being replaced, so close it under
+            // its lock and reopen it once the restore is done or has failed, before any read
+            // can use it. A failed reopen leaves reads on the writer.
+            return try withLock(readerLock) {
+                reader?.close()
+                reader = nil
+                defer { reader = try? SQLiteDatabase(path: self.path, readOnly: true) }
+                try source.copy(into: db)
+                try db.execute("PRAGMA journal_mode = WAL")
+                try Migrations.migrate(db)
+                ftsAvailable = try Self.detectFTS(db)
+                try db.run("DELETE FROM settings WHERE key = ?", [.text(Self.restoreOfferKey)])
+                return try db.query("SELECT id FROM notes ORDER BY id") { $0.text(0) }
+            }
         }
     }
 
