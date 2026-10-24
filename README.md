@@ -176,7 +176,7 @@ Reads come straight from the notes database and work while Overnote is closed; w
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the project layout, the test suites, and the clean-room rule.
-In short: `npm install`, then `npm run dev` to run the extension in Raycast, `npm run dev -w editor` to work on the editor in a browser, and `npm run verify` to run every check locally.
+In short: `npm install`, then `npm run dev` to run the extension in Raycast, `npm run dev -w editor` to work on the editor in a browser (port 5199, or `OVERNOTE_HARNESS_PORT`), and `npm run verify` to run every check locally.
 
 | Doc | Contents |
 |---|---|

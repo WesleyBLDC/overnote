@@ -10,7 +10,7 @@
 # The concurrent save probe (scripts/perf/concurrent-probe.mjs) runs once against the
 # largest note count fixture unless --no-probe is given.
 # Budgets warn by default: a WARN or FAIL comparison still exits 0 unless --strict is given.
-# This script is not wired into verify or CI.
+# This script is not wired into verify.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
