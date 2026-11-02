@@ -55,7 +55,7 @@ jobs:
         run: npm run build:editor
 
       # A release always builds the helper from scratch: no cache.
-      - name: Build helper (universal)
+      - name: Build helper (arm64)
         run: bash scripts/build-helper.sh
 
       - name: Check the helper over its socket

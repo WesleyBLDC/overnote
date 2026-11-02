@@ -51,7 +51,7 @@ Add `?seed=empty` to the URL to start with no notes.
 | Path | What lives there |
 |---|---|
 | `package.json` | The Raycast manifest and the root scripts |
-| `src/` | The Raycast extension: thin command files (`toggle-notes.ts`, `create-note.ts`, `search-notes.tsx`, `recently-deleted.tsx`, `menu-bar.tsx`) |
+| `src/` | The Raycast extension: thin command files (`toggle-notes.ts`, `open-notes.ts`, `create-note.ts`, `search-notes.tsx`, `recently-deleted.tsx`, `menu-bar.tsx`, `check-for-updates.ts`) |
 | `src/domain/` | Helper launcher, socket client, read-only database queries, and other logic with no Raycast imports |
 | `src/api/`, `src/hooks/`, `src/components/` | Calls into the helper, React hooks, and shared list and detail views |
 | `packages/core/` | `@overnote/core`: the ProseMirror schema, Markdown, HTML, and text serializers, and title rules, shared by the editor and the extension |
@@ -62,7 +62,24 @@ Add `?seed=empty` to the URL to start with no notes.
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
 | `metadata/` | Raycast Store screenshots, used by `scripts/prepare-store.sh` |
 | `assets/` | The icon, drawn by `scripts/make-icon.swift`; the editor and helper builds are generated, not committed |
-| `media/` | README screenshots |
+| `media/` | README product shots (`npm run shots:readme`; see Screenshots below) |
+| `scripts/readme-shots.mjs` | Regenerates `media/*.png` from the editor harness at 2× |
+
+## Screenshots (README)
+
+`media/` is the product showcase in the README.
+Refresh it in the same change whenever user-visible chrome that those shots show moves (accent, toolbar, ⌘K icons or Fill actions, Browse section badges, hero content, panel size).
+
+```sh
+npm run dev -w editor -- --port 5299 --strictPort --host 127.0.0.1
+# other terminal:
+npm run shots:readme
+```
+
+The script uses Playwright WebKit already in this repo (same idea as the private Store shot tool).
+It stages the panel on a soft gradient at device scale 2 and writes `note-dark.png`, `note-light.png`, `actions-dark.png`, and `browse-dark.png`.
+Do not copy files from `editor/tests/visual.spec.ts-snapshots/` into `media/`: those are 1× test fixtures, not Retina showcases.
+For Raycast Store images, refresh `metadata/` separately (private `tools/store-shots.mjs`, or real Window Captures before submit).
 
 ## The clean-room rule
 

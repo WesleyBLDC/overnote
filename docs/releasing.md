@@ -28,15 +28,15 @@ It also records the release `version`, which Check for Updates and `npm run upda
    `scripts/build-helper.sh` refuses a mismatch, and the launcher restarts a running helper whose version differs, so every release that changes the helper needs a new version.
    The helper ships arm64 by default.
    A universal binary remains available only by setting `OVERNOTE_HELPER_ARCHES`, for example `OVERNOTE_HELPER_ARCHES="arm64 x86_64"`, when running `scripts/build-helper.sh`, and release packaging refuses a universal binary.
-3. Run `bash scripts/check-version.sh 0.3.0`.
+3. Run `bash scripts/check-version.sh X.Y.Z` (for example `0.5.0`).
    The Release workflow runs the same check on the tag, and again on the packaged zip, and stops before publishing if the tag, `helper/VERSION`, the generated `HelperVersion.current`, or the zip's `prebuilt.json` disagree.
-   `CHANGELOG.md` is not checked: it follows the Raycast Store format, `## [Title] - {PR_MERGE_DATE}`, and the maintainer keeps it.
+   `CHANGELOG.md` is not checked: it follows the Raycast Store format, `## [Title] - {PR_MERGE_DATE}`, and the maintainer keeps it (plus dated GitHub release sections above the Store placeholder).
 4. Optionally, check the packaging locally:
 
    ```sh
    npm run build:editor && npm run build:helper
-   bash scripts/package-release.sh 0.3.0 /tmp/overnote-release
-   bash scripts/check-release.sh /tmp/overnote-release/overnote-0.3.0.zip
+   bash scripts/package-release.sh X.Y.Z /tmp/overnote-release
+   bash scripts/check-release.sh /tmp/overnote-release/overnote-X.Y.Z.zip
    ```
 
    `scripts/package-release.sh` ships the arm64 slice only and refuses any other architecture set.
@@ -45,8 +45,8 @@ It also records the release `version`, which Check for Updates and `npm run upda
 5. Tag and push:
 
    ```sh
-   git tag -a v0.3.0 -m "Overnote 0.3.0"
-   git push origin v0.3.0
+   git tag -a vX.Y.Z -m "Overnote X.Y.Z"
+   git push origin vX.Y.Z
    ```
 
 6. Watch the Release workflow in the Actions tab.
@@ -56,7 +56,7 @@ It also records the release `version`, which Check for Updates and `npm run upda
 
 `scripts/e2e-update.sh`, part of `npm run verify`, covers the update path end to end with fake releases: install, update, rollback guard, backups, and restore after removal.
 
-A tag with a suffix, such as `v0.3.0-beta.1`, is published as a prerelease.
+A tag with a suffix, such as `vX.Y.Z-beta.1`, is published as a prerelease.
 Rerunning the workflow for the same tag replaces the files and the notes of the existing release.
 
 ## Raycast Store copy
@@ -71,6 +71,12 @@ The Store builds an extension from the files committed to its repository, so a S
 
 Add `--check` to also run `npm ci`, `ray lint`, and `ray build` inside the copy.
 Before submitting, take real Window Captures of Search Notes in Raycast and add them to `metadata/` (see the Store's screenshot guidelines), then run `npm run publish` inside the copy.
+
+## README screenshots
+
+Before a release whose UI chrome changed, refresh `media/` with `npm run shots:readme` against the tag commit's editor harness (see CONTRIBUTING).
+Confirm the README still matches the shots (Features, ⌘K Fill actions, Browse).
+Store `metadata/` shots are a separate pass from README `media/`.
 
 ## Signing
 

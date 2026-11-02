@@ -156,6 +156,7 @@
     "install-extension": "bash scripts/install-extension.sh",
     "update-extension": "bash scripts/update-extension.sh",
     "prepare-store": "bash scripts/prepare-store.sh",
+    "shots:readme": "node scripts/readme-shots.mjs",
     "publish": "npx @raycast/api@latest publish"
   },
   "allowScripts": {

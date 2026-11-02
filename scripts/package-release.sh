@@ -99,13 +99,15 @@ FILES="$(cd "$STAGE" && find overnote -type f | sort)"
 cat > "$OUT/release-notes.md" <<EOF
 ## Install
 
-1. Download \`overnote-$VERSION.zip\` below, unzip it, and move the \`overnote\` folder somewhere stable, for example \`~/Applications/Overnote\`.
-2. In Terminal, go into that folder and run \`npm run install-extension\`.
+Overnote is a Raycast extension (not a standalone app).
+
+1. Download \`overnote-$VERSION.zip\` below, unzip it, and move the \`overnote\` folder to a stable path, for example \`~/Applications/Overnote\`.
+2. In Terminal: \`cd ~/Applications/Overnote\` (or that folder) and run \`npm run install-extension\`.
 3. In Raycast Settings, record a hotkey for **Toggle Overnote**.
 
 Already installed? Run \`npm run update-extension\` in your Overnote folder; it backs up your notes first.
 
-You need macOS 14 or later, Node.js 22 or later, and a signed-in Raycast; the Xcode tools are not needed.
+You need an Apple silicon Mac on macOS 14 or later, Node.js 22 or later, and a signed-in Raycast; the Xcode tools are not needed.
 Full steps: [docs/install.md](https://github.com/${GITHUB_REPOSITORY:-WesleyBLDC/overnote}/blob/$COMMIT/docs/install.md).
 
 ## Source summary
