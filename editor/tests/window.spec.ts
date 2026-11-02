@@ -15,12 +15,17 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   expect(await reports()).toEqual([]);
 
   // With auto-sizing on, a one-line note is about 143 points (one 120% line between the bars), footer at the bottom.
+  // The empty note hints overlay the room below the line, so this height is the same with or without them.
   await page.keyboard.press("Meta+Shift+Slash");
   await expect.poll(async () => (await reports()).length).toBeGreaterThan(0);
   const start = (await last())?.contentHeight ?? 0;
   expect(start).toBeGreaterThanOrEqual(134);
   expect(start).toBeLessThanOrEqual(146);
   await expect.poll(appHeight).toBe(start);
+  await page.keyboard.type("x");
+  await expect.poll(async () => (await last())?.contentHeight ?? 0).toBe(start);
+  await page.keyboard.press("Backspace");
+  await expect.poll(async () => (await last())?.contentHeight ?? 0).toBe(start);
   const footerGap = await page
     .getByTestId("footer")
     .evaluate((el) => el.closest(".app")!.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom);
@@ -70,6 +75,68 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
     .getByTestId("new-note")
     .evaluate((el) => el.getBoundingClientRect().top - el.closest(".app")!.getBoundingClientRect().top);
   expect(buttonTop).toBeGreaterThanOrEqual(12);
+});
+
+test("placement actions report the placed harness size", async ({ page }) => {
+  const placeCalls = async (): Promise<string[]> =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __overnoteMock: { store: { windowPlaceCalls: string[] } } }).__overnoteMock.store
+          .windowPlaceCalls,
+    );
+  const rootSize = async () =>
+    page.evaluate(() => {
+      const rect = document.getElementById("root")!.getBoundingClientRect();
+      return { width: Math.round(rect.width), height: Math.round(rect.height) };
+    });
+  const cases = [
+    ["fillLeft", "left", { width: 320, height: 720 }],
+    ["fillRight", "right", { width: 320, height: 720 }],
+    ["fillScreen", "fill", { width: 640, height: 720 }],
+    ["centre", "center", { width: 640, height: 560 }],
+  ] as const;
+  for (const [id, placement, size] of cases) {
+    await openHarness(page, ["Alpha"]);
+    await page.keyboard.press("Meta+k");
+    await page.getByTestId(`action-${id}`).click();
+    await expect.poll(placeCalls).toEqual([placement]);
+    await expect.poll(rootSize).toEqual(size);
+  }
+});
+
+test("Centre leaves auto-sizing alone while Fill Right turns it off through settings.changed", async ({ page }) => {
+  await openHarness(page, ["Alpha"]);
+  const autoSize = async (): Promise<boolean> =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __overnoteMock: { store: { settings: { windowAutoSize: boolean } } } }).__overnoteMock
+          .store.settings.windowAutoSize,
+    );
+  const placeCalls = async (): Promise<string[]> =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __overnoteMock: { store: { windowPlaceCalls: string[] } } }).__overnoteMock.store
+          .windowPlaceCalls,
+    );
+
+  await page.keyboard.press("Meta+Shift+Slash");
+  await expect.poll(autoSize).toBe(true);
+
+  await page.keyboard.press("Control+Alt+ArrowDown");
+  await expect.poll(placeCalls).toEqual(["center"]);
+  await expect.poll(autoSize).toBe(true);
+  // The editor followed the mock's settings.changed event, so its toggle still offers to disable.
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("action-autosize")).toContainText("Disable Window Auto-Sizing");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("command-panel")).toHaveCount(0);
+
+  await page.keyboard.press("Control+Alt+ArrowRight");
+  await expect.poll(placeCalls).toEqual(["center", "right"]);
+  await expect.poll(autoSize).toBe(false);
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("action-autosize")).toContainText("Enable Window Auto-Sizing");
+  await page.keyboard.press("Escape");
 });
 
 test("note text is 120% of the UI base and zoom scales it", async ({ page }) => {
@@ -376,6 +443,44 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   await expect(notice).toHaveCount(0);
 });
 
+test("error notices stay until dismissed, polite notices expire, and the dialog describes its message", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await openHarness(page);
+  await page.keyboard.press("Meta+l");
+  const error = page.locator(".notice.is-error");
+  await expect(error).toContainText("Select text to add a link");
+  await page.clock.runFor(5000);
+  await expect(error).toBeVisible();
+  await page.getByTestId("notice-dismiss").click();
+  await page.clock.runFor(1000);
+  await expect(error).toHaveCount(0);
+
+  await page.keyboard.press("Meta+Shift+d");
+  const polite = page.locator(".notice:not(.is-error)");
+  await expect(polite).toContainText("Copied deeplink");
+  await page.clock.runFor(5000);
+  await expect(polite).toHaveCount(0);
+
+  await page.keyboard.press("Control+Shift+x");
+  const dialog = page.getByTestId("confirm-dialog");
+  await expect(dialog).toHaveAttribute("aria-describedby", "dialog-message");
+  await expect(page.locator("#dialog-message")).toContainText("All notes will move to Recently Deleted");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const gapAnimation = await editor(page).evaluate((el) => {
+    const probe = document.createElement("div");
+    probe.className = "ProseMirror-gapcursor";
+    el.appendChild(probe);
+    const name = getComputedStyle(probe, "::after").animationName;
+    probe.remove();
+    return name;
+  });
+  expect(gapAnimation).toBe("none");
+});
+
 test("opening a note never flashes: hidden until ready, caret and scroll restored in the first frame", async ({
   page,
 }) => {
@@ -666,11 +771,12 @@ test("toolbar drag regions cover the empty toolbar and exclude every button", as
   await verify();
 });
 
-test("the accent is neutral: no cyan anywhere in the key elements", async ({ page }) => {
+test("the accent is iris violet: links use accent strong and no cyan appears in the key elements", async ({ page }) => {
   await openHarness(page, ["Hello\n\n1. one\n\n- [x] done\n\n[link](https://raycast.com)"]);
   await page.mouse.move(320, 200);
   await page.keyboard.press("Alt+Meta+Comma");
   await editor(page).getByText("done").click();
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
   const colors = await page.evaluate(() => {
     const css = (selector: string, ...props: string[]) => {
       const el = document.querySelector(selector);
@@ -678,7 +784,16 @@ test("the accent is neutral: no cyan anywhere in the key elements", async ({ pag
       const style = getComputedStyle(el);
       return props.map((prop) => style.getPropertyValue(prop));
     };
+    const probe = document.createElement("span");
+    document.body.append(probe);
+    probe.style.color = "var(--accent-strong)";
+    const accentStrong = getComputedStyle(probe).color;
+    probe.style.color = "var(--accent)";
+    const accent = getComputedStyle(probe).color;
+    probe.remove();
     return {
+      accentStrong: [accentStrong],
+      accent: [accent],
       caret: css(".note-editor", "caret-color"),
       link: css(".note-editor a", "color", "text-decoration-line", "text-decoration-color"),
       text: css(".note-editor", "color"),
@@ -696,31 +811,44 @@ test("the accent is neutral: no cyan anywhere in the key elements", async ({ pag
       selection: css(".note-editor", "--selection", "--accent", "--accent-soft", "--focus-ring", "--surface-selected"),
     };
   });
-  expect(colors.link[0]).toBe(colors.text[0]);
+  const channelsOf = (values: string[]) =>
+    [...values.join(" ").matchAll(/rgba?\(([^)]+)\)|#([0-9a-f]{6})/gi)].map((m) =>
+      m[1]
+        ? m[1]
+            .split(/[ ,/]+/)
+            .filter(Boolean)
+            .slice(0, 3)
+            .map(Number)
+        : [0, 2, 4].map((i) => parseInt(m[2]!.slice(i, i + 2), 16)),
+    );
+  const isNeutral = ([r, g, b]: number[]) => Math.max(r!, g!, b!) - Math.min(r!, g!, b!) <= 12;
+  const isIrisViolet = ([r, g, b]: number[]) => b! > r! && r! > g!;
+  // The appearance under test is light, where --accent-strong is #4738b0 and --accent is #5b4bd5.
+  expect(colors.accentStrong[0]).toBe("rgb(71, 56, 176)");
+  expect(colors.accent[0]).toBe("rgb(91, 75, 213)");
+  expect(colors.link[0]).toBe(colors.accentStrong[0]);
+  expect(colors.link[0]).toBe("rgb(71, 56, 176)");
+  expect(colors.link[0]).not.toBe(colors.text[0]);
   expect(colors.link[1]).toBe("underline");
+  // Body text stays neutral.
+  for (const channel of channelsOf(colors.text)) expect(isNeutral(channel), `text color ${channel}`).toBe(true);
   const all = Object.values(colors).flat().join(" ");
-  const channels = [...all.matchAll(/rgba?\(([^)]+)\)|#([0-9a-f]{6})/gi)].map((m) =>
-    m[1]
-      ? m[1]
-          .split(/[ ,/]+/)
-          .filter(Boolean)
-          .slice(0, 3)
-          .map(Number)
-      : [0, 2, 4].map((i) => parseInt(m[2]!.slice(i, i + 2), 16)),
-  );
+  const channels = channelsOf(Object.values(colors).flat());
   expect(channels.length).toBeGreaterThan(10);
-  for (const [r, g, b] of channels)
-    expect(Math.max(r!, g!, b!) - Math.min(r!, g!, b!), `color ${r},${g},${b} in ${all}`).toBeLessThanOrEqual(12);
+  expect(channels.some(isIrisViolet)).toBe(true);
+  for (const channel of channels)
+    expect(isNeutral(channel) || isIrisViolet(channel), `color ${channel} in ${all}`).toBe(true);
 
-  // The link popover's focus ring is neutral too.
+  // The link popover's focus ring is iris violet too: --focus-ring is #40309f in light.
   await page.keyboard.press("Meta+l");
-  const ring = await page
-    .getByTestId("link-popover")
-    .getByRole("textbox")
-    .evaluate((el) => `${getComputedStyle(el).borderColor} ${getComputedStyle(el).boxShadow}`);
+  const textbox = page.getByTestId("link-popover").getByRole("textbox");
+  await expect(textbox).toBeFocused();
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+  const ring = await textbox.evaluate((el) => `${getComputedStyle(el).borderColor} ${getComputedStyle(el).boxShadow}`);
+  expect(ring).toContain("rgb(64, 48, 159)");
   for (const m of ring.matchAll(/rgba?\(([^)]+)\)/g)) {
-    const [r, g, b] = m[1]!.split(/[ ,/]+/).map(Number);
-    expect(Math.max(r!, g!, b!) - Math.min(r!, g!, b!)).toBeLessThanOrEqual(12);
+    const channel = m[1]!.split(/[ ,/]+/).map(Number);
+    expect(isNeutral(channel) || isIrisViolet(channel), `ring color ${channel} in ${ring}`).toBe(true);
   }
 });
 

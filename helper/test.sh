@@ -8,6 +8,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Generate HelperVersion.current from helper/VERSION before SwiftPM compiles anything, so a fresh checkout can run these tests before any build.
+bash ../scripts/generate-helper-version.sh
+
 DEV_DIR="$(xcode-select -p 2>/dev/null || echo /Library/Developer/CommandLineTools)"
 FLAGS=()
 for base in "$DEV_DIR/Library/Developer" "$DEV_DIR/Platforms/MacOSX.platform/Developer/Library"; do

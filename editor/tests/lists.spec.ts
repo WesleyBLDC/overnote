@@ -96,6 +96,8 @@ test("four ways to toggle tasks", async ({ page }) => {
   await expect(parent).toHaveAttribute("data-list-checked", "");
   const paragraph = parent.locator("> .list-content > p");
   await expect(paragraph).not.toHaveCSS("text-decoration-line", "line-through");
+  await expect(paragraph).toHaveCSS("color", "rgba(12, 12, 14, 0.62)");
+  await expect(paragraph).toHaveCSS("opacity", "1");
 });
 
 test("list toggles keep attributes and move items", async ({ page }) => {

@@ -71,6 +71,18 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
     if (control.store.settings.windowAutoSize || restingHeight === null) restingHeight = clamp(contentHeight);
     root.style.height = `${restingHeight}px`;
   };
+  // Approximates a placed native panel: the harness root takes the placed size, so a later
+  // Playwright check can see the placement without a real window.
+  const applyPlacedSize = (frame: { width: number; height?: number }) => {
+    const root = target.document.getElementById("root");
+    if (!root) return;
+    root.style.width = `${frame.width}px`;
+    root.style.maxWidth = `${frame.width}px`;
+    if (frame.height !== undefined) {
+      root.style.height = `${frame.height}px`;
+      restingHeight = frame.height;
+    }
+  };
   const receiver = (): BridgeReceiver | undefined => target.overnoteBridge;
   const control: MockControl = {
     store: new MockStore({
@@ -103,6 +115,14 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
               return;
             }
             try {
+              if (message.method === "window.place") {
+                control.store.harnessSize = { width: target.innerWidth, height: target.innerHeight };
+                const root = target.document.getElementById("root");
+                if (root) {
+                  const rect = root.getBoundingClientRect();
+                  control.store.harnessPanelSize = { width: Math.round(rect.width), height: Math.round(rect.height) };
+                }
+              }
               if (message.method === "window.resize")
                 applyPanelHeight(params as { contentHeight: number; temporary?: boolean });
               // The harness panel cannot grow a transparent strip like the helper's window does,
@@ -111,7 +131,11 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
                 const root = target.document.getElementById("root");
                 if (root) root.style.overflow = (params as { height: number }).height > 0 ? "visible" : "";
               }
-              receiver()?.resolve(message.id, control.store.dispatch(message.method, params));
+              const result = control.store.dispatch(message.method, params);
+              if (message.method === "window.place") {
+                applyPlacedSize((result as { frame: { width: number; height?: number } }).frame);
+              }
+              receiver()?.resolve(message.id, result);
             } catch (error) {
               const code = error instanceof MockRpcError ? error.code : rpc.ErrorCode.Internal;
               receiver()?.reject(message.id, { code, message: String((error as Error).message) });
@@ -123,6 +147,12 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
   };
   target.__overnoteMock = control;
   target.document.documentElement.dataset.harness = "true";
+  const harnessParams = new URLSearchParams(target.location.search);
+  const mockLatency = Number(harnessParams.get("mockLatency"));
+  if (Number.isFinite(mockLatency) && mockLatency > 0) control.latency = mockLatency;
+  for (const method of (harnessParams.get("mockHang") ?? "").split(",").filter(Boolean)) control.hang.add(method);
+  const mockFail = harnessParams.get("mockFail");
+  if (mockFail) control.failNext[mockFail] = 500;
   seedFromUrl(control, target.location.search);
   if (!control.store.settings.windowAutoSize) {
     restingHeight = FIRST_OPEN_HEIGHT;

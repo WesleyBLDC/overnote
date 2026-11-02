@@ -1,20 +1,25 @@
 # Installing Overnote from a release
 
+Overnote is a Raycast extension.
+There is no standalone `.app` install: the floating panel is a helper process the extension starts.
 Overnote is not in the Raycast Store yet.
 Each GitHub release carries a zip with everything prebuilt, so you install it without building anything.
 
-You need macOS 14 Sonoma or later, [Raycast](https://www.raycast.com) installed and signed in, and [Node.js](https://nodejs.org) 22 or later.
-You do not need Xcode or the Xcode Command Line Tools.
+You need an Apple silicon Mac on macOS 14 Sonoma or later, [Raycast](https://www.raycast.com) installed and signed in, and [Node.js](https://nodejs.org) 22 or later.
+Release zips ship an arm64 helper only.
+Intel Macs need a source build with `OVERNOTE_HELPER_ARCHES="arm64 x86_64"` (see [CONTRIBUTING.md](../CONTRIBUTING.md)).
+You do not need Xcode or the Xcode Command Line Tools for a release install.
 
 ## Install
 
 1. Download `overnote-<version>.zip` from the latest release on the [Releases page](https://github.com/WesleyBLDC/overnote/releases).
-2. Unzip it and move the `overnote` folder somewhere stable, for example `~/Applications/Overnote`.
-   Raycast runs the extension from this folder, and updates replace its files in place, so keep it there.
+2. Unzip it and move the `overnote` folder to a stable path, renaming it if you like, for example to `~/Applications/Overnote`.
+   That folder is the extension root (it contains `package.json`).
+   Raycast runs the extension from here, and updates replace its files in place, so keep it there.
 3. In Terminal, go into that folder and run the installer:
 
    ```sh
-   cd ~/Applications/Overnote/overnote
+   cd ~/Applications/Overnote
    npm run install-extension
    ```
 
@@ -35,7 +40,7 @@ Run **Check for Updates** in Raycast to see whether a newer release exists.
 If one does, it copies the update command to the clipboard; paste it into Terminal:
 
 ```sh
-cd ~/Applications/Overnote/overnote
+cd ~/Applications/Overnote
 npm run update-extension
 ```
 

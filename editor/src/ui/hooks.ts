@@ -18,26 +18,31 @@ export interface Notice {
 export const NOTICE_MS = 2000;
 
 /**
- * Notices: JS decides when each one leaves (NOTICE_MS), the stylesheet decides how (the
- * .notice[data-leaving] transition on --motion-slow). A notice is removed when its exit transition
- * ends, or by a fallback timer derived from the same token when no transition runs (reduced motion).
+ * Notices: polite notices leave after NOTICE_MS, while error notices stay until dismissed.
+ * The stylesheet decides how a notice leaves (the .notice[data-leaving] transition on
+ * --motion-slow). A notice is removed when its exit transition ends, or by a fallback timer
+ * derived from the same token when no transition runs (reduced motion).
  */
 export function useNotices() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const next = useRef(1);
   const remove = useCallback((id: number) => setNotices((list) => list.filter((notice) => notice.id !== id)), []);
+  const dismiss = useCallback(
+    (id: number) => {
+      setNotices((list) => list.map((notice) => (notice.id === id ? { ...notice, leaving: true } : notice)));
+      setTimeout(() => remove(id), exitFallbackMs("--motion-slow"));
+    },
+    [remove],
+  );
   const notify = useCallback(
     (message: string, kind: NoticeKind = "info") => {
       const id = next.current++;
       setNotices((list) => [...list.slice(-2), { id, message, kind, leaving: false }]);
-      setTimeout(() => {
-        setNotices((list) => list.map((notice) => (notice.id === id ? { ...notice, leaving: true } : notice)));
-        setTimeout(() => remove(id), exitFallbackMs("--motion-slow"));
-      }, NOTICE_MS);
+      if (kind !== "error") setTimeout(() => dismiss(id), NOTICE_MS);
     },
-    [remove],
+    [dismiss],
   );
-  return { notices, notify, remove };
+  return { notices, notify, remove, dismiss };
 }
 
 /** Settings from system.ready and settings.changed, with optimistic local updates. */

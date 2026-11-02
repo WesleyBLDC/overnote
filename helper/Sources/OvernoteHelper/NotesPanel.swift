@@ -8,7 +8,9 @@ import WebKit
 /// it never activates the helper or changes the menu bar, yet it can become key and take
 /// typing. It sits at the modal panel level, one step above ordinary floating windows.
 final class NotesPanel: NSPanel {
-    /// Smallest size a user can drag to, at 100%, matching the auto-height minimum.
+    /// Smallest size a user can drag to at 100 percent zoom, before zoom scaling.
+    /// `PanelController` scales both dimensions linearly with zoom when it applies
+    /// the panel minimum size, so this unzoomed base stays 396 by 128.
     static let minimumWidth: CGFloat = 396
     static let minimumHeight: CGFloat = 128
     /// First open size when no frame is stored: roomy, since auto-sizing is off by default.
@@ -27,13 +29,17 @@ final class NotesPanel: NSPanel {
     init(contentRect: NSRect) {
         super.init(
             contentRect: contentRect,
-            // Not `.resizable`: AppKit's own edge resize for borderless windows is a sliver
-            // that tracks the window server pointer. ResizeOverlayView owns all resizing.
-            styleMask: [.borderless, .nonactivatingPanel],
+            // `.resizable` declares the frame settable, so an external Accessibility
+            // client (a window manager, or the window probe in CI) can set the size and
+            // position and AppKit reports those changes to the delegate. It does not
+            // give AppKit the panel's own pointer resizing: ResizeOverlayView still
+            // owns every user resize drag inside the panel, with its wide hit zones.
+            styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
         )
         isFloatingPanel = true
+        isMovable = true
         level = .modalPanel
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         hidesOnDeactivate = false
@@ -56,6 +62,13 @@ final class NotesPanel: NSPanel {
     var isUserResizing = false
     /// Called once a user resize through the resize zones ends, with the start and end frames.
     var onUserResize: ((NSRect, NSRect) -> Void)?
+    /// Called when a user starts dragging the panel by a drag region or the drag strip.
+    /// The later placement work (ticket T4) consumes this signal; it changes neither
+    /// first click handling nor the drag itself, which `beginDrag` runs as before.
+    var onUserMove: (() -> Void)?
+    /// Called after the drag `beginDrag` ran returns, so a consumer can tell panel
+    /// drag moves apart from external moves while they happen.
+    var onUserMoveEnded: (() -> Void)?
     /// Called for Close Window (⌘W) and any other performClose, since the borderless panel
     /// has no close button for AppKit to press.
     var onClose: (() -> Void)?
@@ -65,11 +78,13 @@ final class NotesPanel: NSPanel {
 
     /// Moves the panel with the pointer, the way a title bar does.
     func beginDrag(with event: NSEvent) {
+        onUserMove?()
         if let dragInterceptor {
             dragInterceptor(event)
         } else {
             performDrag(with: event)
         }
+        onUserMoveEnded?()
     }
 
     override func performClose(_ sender: Any?) {

@@ -6,7 +6,8 @@
 #
 # Checks:
 #   - the version is semver (1.2.3 or 1.2.3-beta.1)
-#   - helper/VERSION and HelperVersion.current (helper/Sources/OvernoteCore/Version.swift)
+#   - helper/VERSION and HelperVersion.current (generated into
+#     helper/Sources/OvernoteCore/GeneratedVersion.swift from helper/VERSION)
 #   - with a zip: its assets/prebuilt.json records the version, the same helper version, and an
 #     integer schemaVersion
 #
@@ -40,7 +41,10 @@ else
   bad "helper/VERSION is $helper_version, the tag says $VERSION"
 fi
 
-swift_version="$(sed -n 's/.*static let current = "\(.*\)".*/\1/p' helper/Sources/OvernoteCore/Version.swift)"
+# HelperVersion.current is generated from helper/VERSION, so generate it before reading
+# it back. The check still compares the generated constant against the tag.
+bash scripts/generate-helper-version.sh
+swift_version="$(sed -n 's/.*static let current = "\(.*\)".*/\1/p' helper/Sources/OvernoteCore/GeneratedVersion.swift)"
 if [[ "$swift_version" == "$VERSION" ]]; then
   ok "HelperVersion.current is $VERSION"
 else

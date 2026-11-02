@@ -1,9 +1,30 @@
 /** Typing and Markdown input rules, through the real editor. */
 import { expect, test } from "@playwright/test";
-import { blocks, calls, docJSON, editor, openHarness } from "./harness";
+import { blocks, calls, docJSON, editor, openHarness, storedNotes } from "./harness";
 
 test.beforeEach(async ({ page }) => {
   await openHarness(page);
+});
+
+test("empty note hints vanish on the first character and never save", async ({ page }) => {
+  const hints = page.getByTestId("empty-hints");
+  await expect(hints).toContainText("Type / to insert a block");
+  await expect(hints).toContainText("Press ⌘K for actions");
+  await expect(hints).toContainText("Press the panel hotkey again to hide");
+  expect((await storedNotes(page)).map((note) => note.text)).toEqual([""]);
+
+  await page.keyboard.type("x");
+  await expect(hints).toHaveCount(0);
+  await expect.poll(async () => (await storedNotes(page))[0]?.text).toBe("x");
+  const [stored] = await storedNotes(page);
+  expect(stored?.markdown).toBe("x");
+  expect(stored?.text).not.toContain("insert a block");
+
+  // A note that merely starts with an empty paragraph gets no hints.
+  await page.keyboard.press("Meta+ArrowUp");
+  await page.keyboard.press("Enter");
+  expect(await blocks(page)).toEqual(["paragraph", "paragraph"]);
+  await expect(hints).toHaveCount(0);
 });
 
 test("block rules create headings, lists, quotes, code, and rules", async ({ page }) => {

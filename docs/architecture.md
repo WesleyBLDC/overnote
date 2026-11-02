@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v2.15 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v3.3 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -15,7 +15,7 @@ Raycast extension (src/)  ──socket JSON-RPC──▶  OvernoteHelper (helper
 | Thing | Path |
 |---|---|
 | Extension root | repo root (`package.json` is the Raycast manifest) |
-| Helper binary (built) | `assets/bin/OvernoteHelper` (universal, ad-hoc signed) plus `assets/bin/OvernoteHelper.sha256` |
+| Helper binary (built) | `assets/bin/OvernoteHelper` (arm64, ad-hoc signed) plus `assets/bin/OvernoteHelper.sha256` |
 | Editor build | `assets/editor/` (`index.html` plus relative assets; Vite `base: "./"`) |
 | Data dir | `environment.supportPath` of the extension, passed to the helper as `--support-dir` |
 | Database | `<support-dir>/notes.sqlite` (WAL) |
@@ -49,7 +49,7 @@ The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups fold
 - Error codes: `-32700` unparseable JSON (with `id: null`), `-32601` unknown method (also bridge-only methods on the socket and socket-only methods on the bridge), `-32602` bad params, `404` note or backup not found, `409` invalid state (for example pin or move on a trashed or unpinned note, or a backup with a newer schema), `500` internal.
 - `touchAccessed` on a missing id is a silent no-op; `permanentlyDelete` on a missing id is 404; `window.show {noteId}` is 404 for a missing note and persists it as current.
 - `notes.update` sets `updatedAt` to max(now, old + 1) so same-millisecond edits still change it.
-- The helper also accepts `--headless` (no window) for smoke tests and CI.
+- The helper also accepts `--headless` (no window) for smoke tests.
 - Clients must time out after 3 s (10 s for `system.shutdown`, 60 s for `system.backup` and `system.restoreBackup`, and 30 min for `file.saveAs`, which waits for the person in a save panel).
 
 ## 3. Bridge protocol (editor ⇄ helper)
@@ -115,9 +115,19 @@ interface Settings {
   showFormatBar: boolean;          // default false
   countMode: "characters" | "words"; // default "characters"
   panelFrame: { x: number; y: number; width: number; height?: number;
-                displays?: { [key: string]: { x: number; y: number } } } | null; // y is the TOP edge; displays keyed "<display uuid>@<w>x<h>"
+                displays?: { [key: string]: PanelPoint } } | null; // y is the TOP edge; displays keyed "<display uuid>@<w>x<h>"
+}
+
+type PanelPlacement = "left" | "right" | "fill" | "center";
+
+interface PanelPoint {             // one display's remembered top left point; y is the TOP edge
+  x: number; y: number;
+  width?: number; height?: number; // the placed size, stored with placement by window.place
+  placement?: PanelPlacement;      // run again when the panel opens on that display
 }
 ```
+
+A display point stored before v3.3 has only `x` and `y`, and reads and writes back unchanged until a placement is stored for that display.
 
 The helper stores `NoteContent` verbatim.
 **It never parses markdown or ProseMirror JSON**; all derivation happens in core (editor or extension).
@@ -137,8 +147,9 @@ The helper stores `NoteContent` verbatim.
 | `window.toggle` | `{}` | `{ visible: boolean }` | Show and focus, or hide |
 | `window.show` | `{ noteId?: NoteId }` | `{ visible: true }` | Shows the panel, optionally on a note (emits `note.open`) |
 | `window.hide` | `{}` | `{ visible: false }` | |
-| `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped 128 to 860 pt times zoom. `temporary: true` (dialogs and popups; panels hang past the note instead, see `window.setOverhang`) applies even when windowAutoSize is off and is restored by the next non-temporary report |
-| `window.setOverhang` (bridge) | `{ height: number }` | `{}` | Lets an open panel (⌘K, browse, settings) hang `height` points past the note's bottom edge: the window grows downward (never past the display's visible area) while the note, its material, and its resize zones keep their size and place; the strip below shows only the web view. Resize zones are off and height reports wait while it is above 0. `0` gives the room back. A hide gives it back too |
+| `window.place` | `{ placement: PanelPlacement }` | `{ placement: PanelPlacement, frame: { x, y, width, height } }` | Places the panel inside the visible frame of its display while it is visible, else of the display under the pointer. A hidden panel stays hidden, except a show that is waiting for its first height report, which this orders in at the placed frame (see below). `frame` is in points in the panelFrame convention: `x` is the left edge and `y` the top edge. Any other placement is `-32602` |
+| `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped from the minimum size (see `window.setMinimumSize`) to 860 pt times zoom. `temporary: true` (confirmation dialogs; panels and dropdowns stay inside the panel instead) applies even when windowAutoSize is off and is restored by the next non-temporary report |
+| `window.setMinimumSize` (bridge) | `{ width: number, height: number }` | `{}` | The smallest the panel may be, in points: the editor's toolbar (its controls plus 6rem for the title), its bottom bar (the counter or the format bar), and one line of note text, at the current zoom. The helper rounds up and never goes below 405 by 197 pt, applies it to user resizing, auto-sizing, temporary growth, and restored frames, and grows a smaller panel at once, keeping its top edge. `-32602` unless both are positive numbers |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
 | `window.setDragRegions` (bridge) | `{ rects: { x: number, y: number, width: number, height: number }[] }` | `{}` | Points (CSS px times zoom), top-left origin, relative to the web view. A mouse down inside drags the window natively (title-bar behavior: it also works as the first click into an unfocused panel) |
 | `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
@@ -152,7 +163,7 @@ The helper stores `NoteContent` verbatim.
 | `notes.recover` | `{ id }` | `Note` | Clears `deletedAt` (pin stays cleared), `updatedAt` = old + 1 ms |
 | `notes.permanentlyDelete` | `{ id }` | `{}` | Only affects notes already in the trash; no-op on live notes |
 | `notes.emptyTrash` | `{}` | `{ count }` | |
-| `notes.duplicate` | `{ id, titleSuffix?: string }` | `Note` | Fresh created/updated/lastAccessed, no pin, caret 0. The current note stays as it was; a caller that opens the copy persists it with `notes.setCurrentNote` (the editor's ⌘D and Search Notes' Duplicate do) or shows it with `window.show { noteId }` |
+| `notes.duplicate` | `{ id } \| { id } & NoteContent` | `Note` | Fresh created/updated/lastAccessed, no pin, caret 0. With only `id` the copy has the source's content verbatim. With content (`rawContent` required, as in `notes.create`), the copy stores that content instead, still verbatim: a caller that renames the copy builds it with core's `duplicateContent`, so the title and the first line agree (see below). `titleSuffix` was removed in v3.0 and is refused with `-32602`, as is content without `rawContent`; 404 if the source is missing. The current note stays as it was; a caller that opens the copy persists it with `notes.setCurrentNote` (the editor's ⌘D and Search Notes' Duplicate do) or shows it with `window.show { noteId }` |
 | `notes.pin` | `{ id }` | `Note` | Appends to the end of the pinned list: key = max pinned key + 1000 (first pin 1000). Does not change `updatedAt` |
 | `notes.unpin` | `{ id }` | `Note` | Does not change `updatedAt` |
 | `notes.movePinnedUp` / `notes.movePinnedDown` | `{ id }` | `{}` | Swap keys with the neighbor pin; no-op at the ends |
@@ -167,13 +178,31 @@ The helper stores `NoteContent` verbatim.
 | `settings.set` | `Partial<Settings>` | `Settings` | Emits `settings.changed` |
 | `settings.reset` | `{}` | `Settings` | Deletes every stored setting so each reads as its default (the panel frame included, so the panel returns to its first open size and place); the current note and the restore offer stay. Emits `settings.changed` |
 
+**Duplicate titles:** a copy's title is never changed apart from its document, since the title is derived from the first line and the next content save would derive it again.
+Search Notes' Duplicate adds the suffix " (Copy)" by sending `duplicateContent(source, " (Copy)")` with `notes.duplicate`.
+`duplicateContent` inserts the suffix as plain text into the line the title comes from: the first textblock with any text (empty blocks are skipped, as in the title rule), right after the last non-space character before its first hard break or newline, or at the start of that line when it is blank (the suffix's leading spaces are then dropped).
+Every field is then derived from the suffixed document, so `title`, `rawContent`, `markdown`, `text`, and the helper's `title_fold` agree, and previews show the suffixed first line.
+For example `# Groceries` becomes `# Groceries (Copy)`, and `**Plan**` becomes `**Plan** (Copy)`.
+The editor's ⌘D sends only `id` and makes an exact copy, with no suffix.
+
 **Filter matching:** case-insensitive substring match on title or text, folding case for all of Unicode and removing diacritics (an intentional improvement over ASCII-only folding).
 **Fold rule (exact, identical in TS and Swift):** Unicode NFKD normalization, then remove every scalar whose general category is a mark (Mn, Mc, Me), then lowercase with the root locale (TS `toLowerCase()`, Swift `lowercased()`).
 Apply the same fold to the query.
+Both implementations are checked against one shared golden corpus in `packages/core/tests/fold-corpus.json`, covering accents, case, compatibility characters, combining marks, and emoji.
 **charCount** is the number of Unicode code points in `text` (SQLite `length(text)`, Swift `unicodeScalars.count`).
 The editor footer counts grapheme clusters separately.
 The helper stores folded copies (`title_fold`, `text_fold`) and matches with an escaped `LIKE`.
-Cursors are opaque strings encoding the keyset (match group, pin key, order timestamp, id); a cursor is only valid for the source that issued it (helper or read-only fallback).
+Schema version 2 adds an FTS5 trigram index over the folded copies, kept in sync by triggers, plus virtual generated sort columns and paging indexes over them that match the list and browse paging order, so a keyset cursor seeks straight to its page.
+A filtered query whose folded term has at least three Unicode scalars uses the index only to narrow the candidate set, then applies the same escaped `LIKE` predicate to those candidates, so the results are exactly the folded substring results.
+Shorter terms keep the folded `LIKE` scan by design, since the trigram tokenizer cannot index them.
+Where FTS5 or the trigram tokenizer is unavailable, version 2 applies without the index, and when a `MATCH` fails at query time the folded `LIKE` scan answers that query; only a failure that names the FTS index itself stops the helper using the index until it restarts, so a lock timeout or another transient error disables nothing.
+Ordering does not change: the index never ranks results, and list and browse keep the order stated for each method above, including title matches before text only matches in a filtered browse.
+The read-only fallback mirrors that query shape: on a database with `notes_fts` it narrows with the index and applies the same `LIKE` recheck, on a database with the paging indexes it spells the order over the generated sort columns, and on a schema version 1 or indexless database it keeps the pure folded `LIKE` scan.
+A SQLite built without FTS5, such as the system `sqlite3` on some macOS versions, still reads and backs up a schema version 2 database, because only a statement that touches `notes_fts` needs the module; the fallback treats that failed `MATCH` like any other and keeps the `LIKE` scan.
+Writing `notes` fires the index triggers, so only a SQLite with FTS5 can write it: the helper, which created the index, and in tests `node:sqlite`, never the system `sqlite3`.
+Cursors are opaque strings, and a cursor is only valid for the source that issued it (helper or read-only fallback).
+Helper cursors encode the keyset (match group, pin key, order timestamp, id), and read-only fallback cursors encode an offset into the same order, in the format that fallback has always issued.
+Deep offset paging is the fallback's structural gap: a page deep in the list still walks every row before it, where a helper keyset cursor seeks straight to its page.
 
 ```ts
 interface WindowData {
@@ -206,19 +235,42 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 
 **Editor-owned behavior (no helper state):**
 - Zoom is applied by the editor in CSS; `window.resize.contentHeight` is in points (CSS px times zoom), measured from the content wrapper (never `documentElement.scrollHeight`).
-- While the ⌘K panel, browse, or a dialog is open the editor reports a larger `contentHeight` (about 34rem; 16rem for small popups) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
+- While a confirmation dialog is open the editor reports a larger `contentHeight` (about 34rem) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
+- Panels (⌘K, browse, settings) and dropdowns (the slash menu, the emoji picker, the link popover, and the format bar's menus) never resize the panel and never draw past it.
+  The panels drop from the toolbar and their lists scroll when the panel is short.
+  Each dropdown opens next to its anchor on its preferred side when it fits there, else on the side with more room, capped to that room so it scrolls inside, and slides sideways to stay inside.
+  All of them keep clear of the drag strip and of the 10 pt resize zones.
 - The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
 - The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. ⌘W hides the panel (helper menu item, like closing a window in any app).
 - The helper gives the borderless panel generous resize hit zones: 10 pt along edges and 24 pt squares at corners, with the matching resize cursors.
-  The panel has no `.resizable` style; these zones do all user resizing, and the top 10 pt of the drag strip is a resize zone.
+  The top 10 pt of the drag strip is a resize zone.
   Keep interactive controls at least 24 pt from the panel corners.
-- Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so ⌘K and browse never resize a roomy window).
+- The panel is resizable (`.resizable`) and reports the standard window subrole (`AXStandardWindow`) to Accessibility, not the system dialog subrole a non activating panel gets by default, so system tiling and window managers can place and size it like an app window.
+  Drags in the drag regions and the drag strip hand off to the window server (`performDrag`), the system's own window move.
+  A frame the helper did not set itself (system tiling, a window manager through Accessibility, the system's own sliver of edge resize) is kept as the person's resize: it is stored like a drag in the resize zones, and a new height turns windowAutoSize off.
+  Such a frame smaller than the minimum size grows to it first, keeping its top left corner; a frame at least the minimum stays exactly where it was put.
+  Limits: the helper never activates, so it has no menu bar of its own (no Window > Move & Resize) and is never the frontmost app, and a borderless panel has no green button; window managers that only act on the frontmost app's focused window cannot reach it.
+- `window.place` geometry, in whole points: `fill` is the display's visible frame; `left` and `right` split its width so the halves meet exactly, the left half taking the extra point of an odd width, at the full visible height; `center` keeps the current size, clamped to the minimum size and the visible frame, and centers it.
+  A fractional visible edge rounds inward, so the placed frame never crosses it.
+  A half narrower than the minimum size grows to it from its own screen edge.
+  `left`, `right`, and `fill` end any temporary growth and turn windowAutoSize off, since they set the height; `center` changes no size and never touches windowAutoSize.
+  The helper stores the placement, with the placed frame, in that display's point in `panelFrame.displays`, and runs it again against the display's current visible frame whenever the panel opens there.
+  A display whose resolution changed has a new key, so a placement stored under another key with the same display uuid runs there too.
+  A user resize, a drag move, a frame set from outside (tiling, a window manager), another placement, or `settings.reset` clears the stored placement for the display the panel is on and keeps the resulting frame.
+  Turning windowAutoSize on clears the stored placement on every display and forgets the stored height, because auto-sizing owns the height on all of them.
+  Unplugging a display clears the placement stored for that display only, and the system move onto the display that remains keeps that display's placement.
+  A placement clear that finds no display stays pending until a save that has one.
+  The editor offers Fill Left, Fill Right, Fill Screen, and Centre in the command panel's window section, with ⌃⌥←, ⌃⌥→, ⌃⌥↑, and ⌃⌥↓, and the menu bar's Window section shows the panel first and then places it.
+- Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so a dialog never resizes a roomy window).
 - The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath.
-  Minimum user size is 396 pt wide by 128 pt times zoom.
-- The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 139 pt with the footer at the bottom.
+- One minimum size covers every way the panel's size is set: user resizing, auto-sizing, temporary growth, restored frames (a smaller saved frame grows to it), frames set from outside (tiling, window managers), and zoom.
+  It is the editor's `window.setMinimumSize` report (the bars plus one line of the note at the current zoom), never below 405 by 197 pt, a floor that shows the toolbar and the first line or two at 100%.
+  At 100% the floor applies; the report passes its width at about 120% zoom (just above 100% with the format bar) and its height at about 140%, and at 200% it is about 669 by 278 pt (747 pt wide with the format bar).
+  Until the editor's first report the floor applies.
+- The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 143 pt, so with auto-sizing on it rests at the 197 pt minimum with the footer at the bottom.
 - With windowAutoSize on and no normal `window.resize` report yet (a cold start, for example `--show`), a show waits with the panel hidden for that first report, up to 3 s (a cold WebKit start on a slow machine takes about 1.5 s), and then orders the panel in at the reported height, so it never flashes the default height.
   A temporary report does not end the wait.
-  While it waits, `window.toggle` cancels the show (result `visible: false`), `window.hide` cancels it too, `window.show { noteId }` still emits `note.open`, and turning windowAutoSize off shows the panel at once.
+  While it waits, `window.toggle` cancels the show (result `visible: false`), `window.hide` cancels it too, `window.show { noteId }` still emits `note.open`, `window.place` orders the panel in at the placed frame and ends the wait, and turning windowAutoSize off shows the panel at once.
 - Helper test-only flags: `--test-hooks` enables `test.*` socket methods.
 - The helper overlays an invisible 12 pt drag strip along the panel's top edge; the editor keeps about 12 pt of non-interactive top padding.
 - Back/forward history is two in-memory stacks in the editor (cap 100).
@@ -234,20 +286,27 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - Content autosave and caret save are debounced 300 ms and flushed on switch, hide, and blur.
 - Every content save sends `expectedUpdatedAt`, the `updatedAt` of the version the editor last loaded or saved.
 - Outside changes are merged, never overwritten.
-  On `notes.changed` the editor reloads the stored note when it has no unsaved edits and the person is not typing (within 1 s of an edit), as before.
+  On `notes.changed` the editor reloads the stored note when it is newer (a later `updatedAt`) than the version the editor last synced with, it has no unsaved edits, and the person is not typing (within 1 s of an edit).
+  A stored note that is not newer, such as a reply that raced a save, is never loaded over the editor.
   Otherwise it merges the stored version into what it shows with `mergeDocs` (base: the version it last synced with), in place, keeping the caret and scroll, and saves the merge if it differs from the stored note.
   The merge adds no undo step: undo takes back only the person's own edits and never removes the outside change.
   A save that gets `conflict` (a socket write the editor was not told about, or one that raced the save) merges the same way and retries against the returned note, up to 3 attempts; after that the edits stay unsaved, the editor shows one "Could not save note" error (not one per attempt), and the next save tries again.
-  When both sides changed the same block differently, the merge keeps both versions and the editor shows "This note also changed elsewhere, so both versions were kept".
+  When both sides changed the same block differently, the merge keeps both versions and the editor shows "This note also changed elsewhere, so both versions were kept", at most once per save, however many attempts kept both versions.
   When one side deleted a block the other changed, the change is kept and no notice shows, since only one version exists.
   While an input method composition is in progress, every merge waits until it ends, because replacing the document mid composition would break the text being composed.
+  The wait is capped at 5 s, so a lost `compositionend` cannot hold saves, note switches, and hides forever: after that the merge is skipped and the edits stay unsaved (a save reports the failure), and the next save merges and tries again.
 
 ## 6. Database schema (owned by the helper)
 
 ```sql
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
--- PRAGMA user_version tracks migrations; version 1 is:
+-- PRAGMA user_version tracks migrations; version 1 is the notes and settings tables with the
+-- two order indexes below, and version 2 adds the virtual generated sort columns, the paging
+-- indexes over them, the FTS5 trigram table over the folded copies, and the triggers that keep
+-- that table in sync with notes.
+-- Where FTS5 or the trigram tokenizer is unavailable (probed outside the migration transaction),
+-- version 2 still applies without the FTS5 table and its triggers.
 
 CREATE TABLE notes (
   id               TEXT PRIMARY KEY,
@@ -262,14 +321,40 @@ CREATE TABLE notes (
   updated_at       INTEGER NOT NULL,
   deleted_at       INTEGER,
   last_accessed_at INTEGER,
-  caret_position   INTEGER
+  caret_position   INTEGER,
+  -- version 2, added with ALTER TABLE ADD COLUMN:
+  sort_pin_group    INTEGER GENERATED ALWAYS AS (pinned IS NULL) VIRTUAL,
+  sort_pin_key      REAL GENERATED ALWAYS AS (COALESCE(pinned, 0.0)) VIRTUAL,
+  sort_updated_neg  INTEGER GENERATED ALWAYS AS (-updated_at) VIRTUAL,
+  sort_accessed_neg INTEGER GENERATED ALWAYS AS (-COALESCE(last_accessed_at, -1)) VIRTUAL
 ) STRICT, WITHOUT ROWID;
 
 CREATE INDEX notes_list_order   ON notes (deleted_at, pinned, updated_at DESC, id);
 CREATE INDEX notes_browse_order ON notes (deleted_at, pinned, last_accessed_at DESC, id);
+-- version 2:
+CREATE INDEX notes_list_page    ON notes (deleted_at, sort_pin_group, sort_pin_key, sort_updated_neg, id);
+CREATE INDEX notes_browse_page  ON notes (deleted_at, sort_pin_group, sort_pin_key, sort_accessed_neg, id);
+
+CREATE VIRTUAL TABLE notes_fts USING fts5(id UNINDEXED, title_fold, text_fold, tokenize = 'trigram');
+CREATE TRIGGER notes_fts_after_insert AFTER INSERT ON notes BEGIN
+  INSERT INTO notes_fts (id, title_fold, text_fold) VALUES (NEW.id, NEW.title_fold, NEW.text_fold);
+END;
+CREATE TRIGGER notes_fts_after_update AFTER UPDATE OF title_fold, text_fold ON notes BEGIN
+  DELETE FROM notes_fts WHERE id = OLD.id;
+  INSERT INTO notes_fts (id, title_fold, text_fold) VALUES (NEW.id, NEW.title_fold, NEW.text_fold);
+END;
+CREATE TRIGGER notes_fts_after_delete AFTER DELETE ON notes BEGIN
+  DELETE FROM notes_fts WHERE id = OLD.id;
+END;
 
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
 ```
+
+The helper keeps a second SQLite connection open read-only for `notes.list`, `notes.browse`, `notes.listDeleted`, and `notes.count`, under its own lock, so those reads run while a write is in flight on the single writer connection and a long read never delays a save.
+A restore closes that connection under its lock and reopens it on the restored database only after the restore has succeeded and before any read can use it, and when the read-only connection cannot be opened, reads fall back to the writer connection.
+A read-only connection probes the schema at open, so a file that is not a database fails at open and takes that fallback instead of failing its first query.
+Before replacing the live database, a restore rehearses the backup's migration on a scratch copy and refuses the backup when that upgrade fails, so the live notes keep listing without a restart.
+No write ever goes through the second connection, and there is still exactly one writer.
 
 The extension may open the database **read-only** (`node:sqlite`, `readOnly: true`) for instant lists and search when the helper is not running.
 All writes go through the helper.
@@ -293,6 +378,7 @@ export function deriveTitle(doc: JSONContent): string;        // first line of p
 export function displayTitle(n: { title: string; text: string }): string; // title, else first non-empty text line trimmed, else "Untitled"
 export function buildNoteContent(doc: JSONContent): NoteContent; // rawContent + markdown + text + title
 export function noteContentFromMarkdown(markdown: string): NoteContent;
+export function duplicateContent(note: { rawContent: string; text: string }, titleSuffix: string): NoteContent; // the copy's content with titleSuffix in the title's line (section 5)
 export function mergeDocs(base: JSONContent, local: JSONContent, remote: JSONContent): { doc: JSONContent; conflicted: boolean; matchesRemote: boolean };
 // three-way merge by top-level block (one list item is one block): changes to different blocks all apply; where both sides
 // changed the same blocks into different non-empty versions, local's version comes first and remote's right after it
@@ -319,7 +405,7 @@ export * as rpc from "./rpc";
 | `create-note` | Create Note | no-view | Optional `text` argument, then `fallbackText`, then selected text, then empty. `notes.create` with `show: true` |
 | `search-notes` | Search Notes | view | List with markdown detail using `notes.list` with `filter` (or the read-only DB with the same order and matching); title matches are moved first within each page; writes through the helper |
 | `recently-deleted` | Recently Deleted Notes | view | Recover, delete permanently, empty trash |
-| `menu-bar` | Overnote Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note, the backup actions, and the restore offer; restarts a dead helper |
+| `menu-bar` | Overnote Menu Bar | menu-bar | `interval: "1m"`, `disabledByDefault: true`; pinned and recent notes, new note, the Window placements (`window.show`, then `window.place`), the backup actions, and the restore offer; restarts a dead helper |
 | `check-for-updates` | Check for Updates | no-view | Reads the version from `assets/prebuilt.json` (the helper's version in a source checkout), asks `https://api.github.com/repos/WesleyBLDC/overnote/releases/latest` with a 5 s timeout, compares semver, and shows a HUD. When newer, copies `cd '<installDir>' && npm run update-extension` to the clipboard; it never runs it. Not part of the Store copy |
 
 Search Notes and the menu bar both offer **Back Up Notes Now**, **Restore Notes from Backup** (a list of backups, restored after a `confirmAlert`), and **Reveal Backups Folder**.
@@ -378,9 +464,10 @@ The extension honors `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`), which t
 
 ## Protocol versioning
 
-The protocol described here is v2.15 (v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v3.3 (v3.3 added `window.place` on the socket and the bridge with the `PanelPlacement` type, and optional `width`, `height`, and `placement` on each `panelFrame.displays` point, which older points simply lack; v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.
 Helper 0.4.0 is the first release that speaks v2.14 and v2.15, so a socket client can tell from `system.ping` (or `system.status`) `version` whether the editor merges outside changes and whether a create or duplicate leaves the current note alone.
+Helper 0.5.0 is the first release that speaks v3.0 through v3.3 (and writes schema 2): `notes.duplicate` takes the copy's content and refuses `titleSuffix`, so a socket client that sent `titleSuffix` to 0.4.0 or earlier sends the content built with `duplicateContent` instead.
 Bump the version at the top of this document in the same pull request as the code change, and name the new version in the pull request description.

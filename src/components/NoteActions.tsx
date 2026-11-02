@@ -30,7 +30,7 @@ import {
   unpinNote,
 } from "../api/notes";
 import { noteDeeplink } from "../domain/deeplink";
-import { escapeNonAscii, summaryTitle } from "../domain/format";
+import { escapeNonAscii, summaryTitle, type PinPosition } from "../domain/format";
 import type { Note, NoteSummary } from "../domain/types";
 import { BackupActionsSection } from "./BackupActions";
 import { NoteDetail } from "./NoteDetail";
@@ -44,7 +44,7 @@ export interface NoteActionsProps {
   /** True inside a pushed Detail, where "View Note" makes no sense. */
   isDetail?: boolean;
   /** Pin position, for Move Up and Move Down (only offered on pinned notes). */
-  pinPosition?: { isFirst: boolean; isLast: boolean };
+  pinPosition?: PinPosition;
   /** The active search text, carried into View Note for highlighting. */
   highlight?: string;
 }
@@ -195,7 +195,7 @@ export function NoteActions({ note, fullNote, onChange, isDetail, pinPosition, h
             title="View Note"
             icon={Icon.Eye}
             shortcut={Keyboard.Shortcut.Common.ToggleQuickLook}
-            target={<NoteDetail note={note} onChange={onChange} highlight={highlight} />}
+            target={<NoteDetail note={note} onChange={onChange} highlight={highlight} pinPosition={pinPosition} />}
           />
         )}
       </ActionPanel.Section>

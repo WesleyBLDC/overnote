@@ -11,6 +11,7 @@ import {
   loadDoc,
   type JSONContent,
   type NoteId,
+  type PanelPlacement,
   type rpc,
 } from "@overnote/core";
 import { EditorContent, useEditor } from "@tiptap/react";
@@ -91,7 +92,7 @@ function sliceJSON(editor: Editor): JSONContent | null {
 }
 
 export function App({ api }: { api: Api }) {
-  const { notices, notify, remove: dismissNotice } = useNotices();
+  const { notices, notify, remove: removeNotice, dismiss: dismissNotice } = useNotices();
   /** Runs a panel action; a failure shows an error notice, and the promise always settles. */
   const attempt = useCallback(
     async (what: string, work: () => Promise<void>) => {
@@ -208,6 +209,12 @@ export function App({ api }: { api: Api }) {
     return new NoteSession({ api, editor: port, notice: (message, kind) => notify(message, kind) });
   }, [api, notify, editor]);
   const state = useSyncExternalStore(session.subscribe, session.getState);
+  const [bootSlow, setBootSlow] = useState(false);
+  useEffect(() => {
+    if (state.ready) return;
+    const timer = setTimeout(() => setBootSlow(true), 300);
+    return () => clearTimeout(timer);
+  }, [state.ready]);
 
   // Edits, caret moves, and blur reach the session.
   useEffect(() => {
@@ -325,6 +332,7 @@ export function App({ api }: { api: Api }) {
 
   useEffect(() => {
     document.documentElement.style.setProperty("--zoom", String(settings.zoom));
+    document.documentElement.dataset.highZoom = settings.zoom >= 1.75 ? "true" : "false";
   }, [settings.zoom]);
 
   // ---- derived UI state ----
@@ -335,6 +343,9 @@ export function App({ api }: { api: Api }) {
   const counts = { characters: countCharacters(text), words: countWords(text) };
   const title = displayTitle({ title: liveTitle, text });
   const blank = text.trim() === "";
+  const onlyBlock = doc.content?.length === 1 ? doc.content[0] : undefined;
+  const entirelyEmpty =
+    !preview && onlyBlock?.type === "paragraph" && !(onlyBlock.content && onlyBlock.content.length > 0);
   const slash = editor.isFocused ? slashQueryAt(editor.state) : null;
   const slashItems = slash && slash.from !== slashDismissed ? filterSlashItems(slash.query) : [];
   const emojiQuery = editor.isFocused ? emojiQueryAt(editor.state) : null;
@@ -418,6 +429,13 @@ export function App({ api }: { api: Api }) {
     );
   }, [copyText, notify, session]);
 
+  const placeWindow = useCallback(
+    (placement: PanelPlacement) => {
+      void api.window.place(placement).catch(() => notify("Could not place the window. Try again.", "error"));
+    },
+    [api, notify],
+  );
+
   const pinned = state.current?.pinned !== null && state.current?.pinned !== undefined;
 
   const moveItem = useCallback(
@@ -441,7 +459,10 @@ export function App({ api }: { api: Api }) {
       root: [
         {
           id: "new",
+
           title: "New Note",
+
+          icon: "plus",
           shortcut: "⌘N",
           section: "notes",
           enabled: !blank,
@@ -452,7 +473,10 @@ export function App({ api }: { api: Api }) {
           : [
               {
                 id: "duplicate",
+
                 title: "Duplicate Note",
+
+                icon: "copy",
                 shortcut: "⌘D",
                 section: "notes",
                 enabled: !blank,
@@ -460,16 +484,22 @@ export function App({ api }: { api: Api }) {
               },
               {
                 id: "pin",
+
                 title: pinned ? "Unpin Note" : "Pin Note",
+
+                icon: "pin",
                 shortcut: "⇧⌘P",
                 section: "notes",
                 run: () => void session.togglePin(),
               },
             ]),
-        { id: "browse", title: "Browse Notes", shortcut: "⌘P", section: "notes", push: "browse" },
+        { id: "browse", title: "Browse Notes", shortcut: "⌘P", section: "notes", icon: "browse", push: "browse" },
         {
           id: "back",
+
           title: "Go Back",
+
+          icon: "back",
           shortcut: "⌘[",
           section: "notes",
           enabled: canGoBack,
@@ -477,23 +507,39 @@ export function App({ api }: { api: Api }) {
         },
         {
           id: "forward",
+
           title: "Go Forward",
+
+          icon: "forward",
           shortcut: "⌘]",
           section: "notes",
           enabled: canGoForward,
           run: () => void session.forward(),
         },
-        { id: "find", title: "Find in Note", shortcut: "⌘F", section: "copy", run: () => setFind({ term: "" }) },
+        {
+          id: "find",
+          title: "Find in Note",
+          shortcut: "⌘F",
+          section: "copy",
+          icon: "search",
+          run: () => setFind({ term: "" }),
+        },
         {
           id: "copyAs",
+
           title: hasSelection ? "Copy Selection As…" : "Copy Note As…",
+
+          icon: "copy",
           shortcut: "⇧⌘C",
           section: "copy",
           push: "copyAs",
         },
         {
           id: "deeplink",
+
           title: "Copy Deeplink",
+
+          icon: "link",
           shortcut: "⇧⌘D",
           section: "copy",
           run: () =>
@@ -503,11 +549,21 @@ export function App({ api }: { api: Api }) {
               () => undefined,
             ),
         },
-        { id: "quicklink", title: "Create Quicklink", shortcut: "⇧⌘L", section: "copy", run: createQuicklink },
-        { id: "export", title: "Export…", shortcut: "⇧⌘E", section: "copy", push: "export" },
+        {
+          id: "quicklink",
+          title: "Create Quicklink",
+          shortcut: "⇧⌘L",
+          section: "copy",
+          icon: "open",
+          run: createQuicklink,
+        },
+        { id: "export", title: "Export…", shortcut: "⇧⌘E", section: "copy", icon: "open", push: "export" },
         {
           id: "moveUp",
+
           title: "Move List Item Up",
+
+          icon: "up",
           shortcut: "⌃⌘↑",
           section: "edit",
           enabled: inList,
@@ -515,30 +571,86 @@ export function App({ api }: { api: Api }) {
         },
         {
           id: "moveDown",
+
           title: "Move List Item Down",
+
+          icon: "down",
           shortcut: "⌃⌘↓",
           section: "edit",
           enabled: inList,
           run: () => moveItem("down"),
         },
-        { id: "format", title: "Format…", shortcut: "⇧⌘,", section: "edit", push: "format" },
+        { id: "format", title: "Format…", shortcut: "⇧⌘,", section: "edit", icon: "format", push: "format" },
         {
           id: "autosize",
+
           title: settings.windowAutoSize ? "Disable Window Auto-Sizing" : "Enable Window Auto-Sizing",
+
+          icon: "expand",
           shortcut: "⇧⌘/",
           section: "window",
           run: () => updateSettings({ windowAutoSize: !settings.windowAutoSize }),
         },
         {
+          id: "fillLeft",
+
+          title: "Fill Left",
+
+          icon: "fillLeft",
+          shortcut: "⌃⌥←",
+          section: "window",
+          keywords: ["snap", "tile", "half", "left", "move"],
+          run: () => placeWindow("left"),
+        },
+        {
+          id: "fillRight",
+
+          title: "Fill Right",
+
+          icon: "fillRight",
+          shortcut: "⌃⌥→",
+          section: "window",
+          keywords: ["snap", "tile", "half", "right", "move"],
+          run: () => placeWindow("right"),
+        },
+        {
+          id: "fillScreen",
+
+          title: "Fill Screen",
+
+          icon: "fillScreen",
+          shortcut: "⌃⌥↑",
+          section: "window",
+          keywords: ["snap", "tile", "fill", "full", "maximise", "move"],
+          run: () => placeWindow("fill"),
+        },
+        {
+          id: "centre",
+
+          title: "Centre",
+
+          icon: "centre",
+          shortcut: "⌃⌥↓",
+          section: "window",
+          keywords: ["snap", "tile", "center", "centre", "move"],
+          run: () => placeWindow("center"),
+        },
+        {
           id: "formatBar",
+
           title: "Toggle Format Bar",
+
+          icon: "format",
           shortcut: "⌥⌘,",
           section: "window",
           run: () => updateSettings({ showFormatBar: !settings.showFormatBar }),
         },
         {
           id: "actualSize",
+
           title: "Actual Size",
+
+          icon: "expand",
           shortcut: "⌘0",
           section: "zoom",
           enabled: settings.zoom !== 1,
@@ -546,7 +658,10 @@ export function App({ api }: { api: Api }) {
         },
         {
           id: "zoomIn",
+
           title: "Zoom In",
+
+          icon: "plus",
           shortcut: "⌘=",
           section: "zoom",
           enabled: settings.zoom < 2,
@@ -554,7 +669,10 @@ export function App({ api }: { api: Api }) {
         },
         {
           id: "zoomOut",
+
           title: "Zoom Out",
+
+          icon: "minus",
           shortcut: "⌘-",
           section: "zoom",
           enabled: settings.zoom > 0.75,
@@ -562,16 +680,22 @@ export function App({ api }: { api: Api }) {
         },
         {
           id: "settings",
+
           title: "Settings…",
+
+          icon: "sliders",
           shortcut: "⌘,",
           section: "settings",
           keywords: ["preferences"],
           push: "settings",
         },
-        { id: "deleted", title: "Show Recently Deleted Notes", section: "danger", push: "deleted" },
+        { id: "deleted", title: "Show Recently Deleted Notes", section: "danger", icon: "trash", push: "deleted" },
         {
           id: "delete",
+
           title: "Delete Note",
+
+          icon: "trash",
           shortcut: "⌃X",
           section: "danger",
           destructive: true,
@@ -579,7 +703,10 @@ export function App({ api }: { api: Api }) {
         },
         {
           id: "deleteAll",
+
           title: "Delete All Notes",
+
+          icon: "trash",
           shortcut: "⌃⇧X",
           section: "danger",
           destructive: true,
@@ -648,6 +775,7 @@ export function App({ api }: { api: Api }) {
     exportAs,
     moveItem,
     createQuicklink,
+    placeWindow,
     preview,
   ]);
 
@@ -669,6 +797,7 @@ export function App({ api }: { api: Api }) {
     deleteAll,
     setZoom,
     openLink,
+    placeWindow,
     preview,
     exitPreview,
   });
@@ -689,6 +818,26 @@ export function App({ api }: { api: Api }) {
       if (matches(event, { code: "KeyE", meta: true, shift: true })) return run(() => setPanel("export"));
       if (matches(event, { code: "Comma", meta: true }))
         return run(() => setPanel(h.panel === "settings" ? null : "settings"));
+      if (matches(event, { code: "ArrowLeft", ctrl: true, alt: true }))
+        return run(() => {
+          setPanel(null);
+          h.placeWindow("left");
+        });
+      if (matches(event, { code: "ArrowRight", ctrl: true, alt: true }))
+        return run(() => {
+          setPanel(null);
+          h.placeWindow("right");
+        });
+      if (matches(event, { code: "ArrowUp", ctrl: true, alt: true }))
+        return run(() => {
+          setPanel(null);
+          h.placeWindow("fill");
+        });
+      if (matches(event, { code: "ArrowDown", ctrl: true, alt: true }))
+        return run(() => {
+          setPanel(null);
+          h.placeWindow("center");
+        });
       if (h.panel) return; // the panel handles the rest of its keys
       const slot = pinSlot(event);
       if (slot !== null) {
@@ -800,6 +949,11 @@ export function App({ api }: { api: Api }) {
         onBrowse={() => setPanel("browse")}
         onNew={() => void session.newNote()}
       />
+      {!state.ready && bootSlow ? (
+        <div className="boot-status" data-testid="boot-status" role="status">
+          Loading your notes…
+        </div>
+      ) : null}
       {find ? <FindBar ref={findRef} editor={editor} initialTerm={find.term} onClose={() => setFind(null)} /> : null}
       {preview ? (
         <div className="preview-banner" data-testid="preview-banner" role="status">
@@ -830,6 +984,13 @@ export function App({ api }: { api: Api }) {
       >
         <div className="content-inner">
           <EditorContent editor={editor} />
+          {entirelyEmpty ? (
+            <div className="empty-hints" data-testid="empty-hints">
+              <p>Type / to insert a block</p>
+              <p>Press ⌘K for actions</p>
+              <p>Press the panel hotkey again to hide</p>
+            </div>
+          ) : null}
         </div>
       </main>
       <Footer
@@ -948,7 +1109,7 @@ export function App({ api }: { api: Api }) {
         token="--motion-fast"
       />
       {confirm ? <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} /> : null}
-      <Notices notices={notices} onExited={dismissNotice} />
+      <Notices notices={notices} onExited={removeNotice} onDismiss={dismissNotice} />
     </div>
   );
 }

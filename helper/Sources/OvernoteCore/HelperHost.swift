@@ -8,6 +8,10 @@ public protocol HelperHost: Sendable {
     func toggleWindow() async -> Bool
     func showWindow() async
     func hideWindow() async
+    /// Places the panel with `placement` and returns the frame it occupies or will open at.
+    /// The frame follows the persisted `panelFrame` convention: `x` is the left edge and
+    /// `y` is the top edge, with `width` and `height` in points.
+    func placeWindow(_ placement: PanelPlacement) async -> PanelFrame
     /// Applies a content driven height (in points), clamped by the host. A `temporary` report
     /// (⌘K, browse, dialogs) applies even with auto-sizing off; the next non temporary report
     /// restores normal behavior.
@@ -54,7 +58,7 @@ public struct DragRect: Equatable, Sendable {
 /// implementation behind `--headless`.
 public final class RecordingHost: HelperHost, @unchecked Sendable {
     public enum Call: Equatable, Sendable {
-        case toggle, show, hide, resize(Double, temporary: Bool), overhang(Double), dragRegions([DragRect]), openURL(String), resignFocus, copy(String, String?), save(String, String)
+        case toggle, show, hide, place(PanelPlacement), resize(Double, temporary: Bool), overhang(Double), dragRegions([DragRect]), openURL(String), resignFocus, copy(String, String?), save(String, String)
         case settingsChanged(Settings), emit(String, JSONValue), shutdown
     }
 
@@ -101,6 +105,15 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
             recorded.append(.hide)
             visible = false
         }
+    }
+
+    /// Records the placement and returns a documented fixed frame in the persisted
+    /// `panelFrame` convention (`x` is the left edge, `y` is the top edge): a 640 by 560
+    /// point panel at the top left of a notional display, so headless tests can assert the
+    /// wire shape without a window.
+    public func placeWindow(_ placement: PanelPlacement) async -> PanelFrame {
+        record(.place(placement))
+        return PanelFrame(x: 0, y: 560, width: 640, height: 560)
     }
 
     public func resizeWindow(contentHeight: Double, temporary: Bool) async {

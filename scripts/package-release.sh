@@ -31,7 +31,7 @@ BIN="assets/bin/OvernoteHelper"
 [[ -x "$BIN" && -f "$BIN.sha256" ]] || die "Helper not built: run scripts/build-helper.sh first"
 [[ -f assets/editor/index.html ]] || die "Editor not built: run npm run build:editor first"
 [[ "$(shasum -a 256 "$BIN" | cut -d' ' -f1)" == "$(cut -d' ' -f1 "$BIN.sha256")" ]] || die "$BIN does not match its .sha256"
-[[ "$(lipo -archs "$BIN")" == *arm64* && "$(lipo -archs "$BIN")" == *x86_64* ]] || die "$BIN is not universal: $(lipo -archs "$BIN")"
+[[ "$(lipo -archs "$BIN")" == "arm64" ]] || die "$BIN is not arm64 only: $(lipo -archs "$BIN") (releases ship the arm64 slice that scripts/build-helper.sh builds by default; rebuild it without OVERNOTE_HELPER_ARCHES set to a universal list)"
 codesign --verify --strict "$BIN" || die "$BIN signature does not verify"
 
 HELPER_VERSION="$("$BIN" --version)"
@@ -99,13 +99,15 @@ FILES="$(cd "$STAGE" && find overnote -type f | sort)"
 cat > "$OUT/release-notes.md" <<EOF
 ## Install
 
-1. Download \`overnote-$VERSION.zip\` below, unzip it, and move the \`overnote\` folder somewhere stable, for example \`~/Applications/Overnote\`.
-2. In Terminal, go into that folder and run \`npm run install-extension\`.
+Overnote is a Raycast extension (not a standalone app).
+
+1. Download \`overnote-$VERSION.zip\` below, unzip it, and move the \`overnote\` folder to a stable path, for example \`~/Applications/Overnote\`.
+2. In Terminal: \`cd ~/Applications/Overnote\` (or that folder) and run \`npm run install-extension\`.
 3. In Raycast Settings, record a hotkey for **Toggle Overnote**.
 
 Already installed? Run \`npm run update-extension\` in your Overnote folder; it backs up your notes first.
 
-You need macOS 14 or later, Node.js 22 or later, and a signed-in Raycast; the Xcode tools are not needed.
+You need an Apple silicon Mac on macOS 14 or later, Node.js 22 or later, and a signed-in Raycast; the Xcode tools are not needed.
 Full steps: [docs/install.md](https://github.com/${GITHUB_REPOSITORY:-WesleyBLDC/overnote}/blob/$COMMIT/docs/install.md).
 
 ## Source summary

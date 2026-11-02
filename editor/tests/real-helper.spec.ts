@@ -5,7 +5,7 @@
  * `npm run verify` builds the helper first; run `npm run build:helper` before running this alone.
  * OVERNOTE_HELPER_BIN points it at another build, such as helper/.build/release/OvernoteHelper.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -148,6 +148,77 @@ test("typing in the shipped editor lands in the helper's database and survives a
     await expect(page.getByTestId("title")).toHaveText("Saved for real");
     await expect(page.locator(".note-editor")).toHaveText("Saved for realsecond line");
     expect(await stored()).toHaveLength(1);
+  } finally {
+    await helper.stop();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a socket write racing an editor save at harness scale is merged, with both changes kept", async ({ page }) => {
+  const root = fs.mkdtempSync("/tmp/overnote-scale-");
+  const helper = new RealHelper(root);
+  try {
+    // Seed a harness scale database with the perf fixture generator, so the merge below happens
+    // against the same shape and volume the perf harness measures, not a one note toy database.
+    const fixture = path.join(root, "fixture");
+    execFileSync(
+      "node",
+      [
+        fileURLToPath(new URL("../../scripts/perf/generate-fixture.mjs", import.meta.url)),
+        "--notes",
+        "1000",
+        "--out",
+        fixture,
+      ],
+      { stdio: "ignore" },
+    );
+    fs.mkdirSync(path.join(root, "support"), { recursive: true });
+    fs.copyFileSync(path.join(fixture, "support", "notes.sqlite"), path.join(root, "support", "notes.sqlite"));
+    const manifest = JSON.parse(fs.readFileSync(path.join(fixture, "manifest.json"), "utf8")) as { lastId: string };
+
+    await helper.start();
+    await bridgeTo(page, helper);
+    await page.clock.install();
+    await page.goto("http://127.0.0.1:5198/index.html");
+    await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
+    await expect(page.getByTestId("app")).toHaveAttribute("data-note-id", manifest.lastId);
+    await expect(page.locator(".note-editor")).toBeFocused();
+    await pauseClock(page);
+    type Stored = { id: string; updatedAt: number; text: string; title: string };
+    const note = async () => (await helper.call("notes.get", { id: manifest.lastId })) as Stored;
+    const before = await note();
+    expect(((await helper.call("notes.count", {})) as { count: number }).count).toBe(1000);
+
+    // The editor facing path: the person edits the first block and the autosave is still pending.
+    await page.keyboard.type("Mine ");
+    // The socket path at the same time: another writer appends a block, guarded by the version it read.
+    const paragraphs = [...before.text.split("\n"), "From socket at scale"];
+    const written = (await helper.call("notes.update", {
+      id: before.id,
+      expectedUpdatedAt: before.updatedAt,
+      rawContent: JSON.stringify({
+        type: "doc",
+        content: paragraphs.map((text) => ({ type: "paragraph", content: [{ type: "text", text }] })),
+      }),
+      markdown: paragraphs.join("\n\n"),
+      text: paragraphs.join("\n\n"),
+      title: before.title,
+    })) as { status: string };
+    expect(written.status).toBe("ok");
+
+    // The editor save meets the socket version, merges instead of overwriting, and saves both changes.
+    await page.clock.runFor(400);
+    await expect
+      .poll(async () => {
+        const text = (await note()).text;
+        return text.startsWith("Mine ") && text.includes("From socket at scale");
+      })
+      .toBe(true);
+    const merged = await note();
+    expect(merged.text).toContain(before.text.split("\n")[1] ?? "");
+    await expect(page.locator(".note-editor")).toContainText("Mine");
+    await expect(page.locator(".note-editor")).toContainText("From socket at scale");
+    expect(((await helper.call("notes.count", {})) as { count: number }).count).toBe(1000);
   } finally {
     await helper.stop();
     fs.rmSync(root, { recursive: true, force: true });

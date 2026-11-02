@@ -18,6 +18,7 @@ export interface PanelAction {
   enabled?: boolean;
   destructive?: boolean;
   keywords?: string[];
+  icon?: IconName;
   run?: () => void;
   push?: PanelViewName;
 }
@@ -82,7 +83,8 @@ export function CommandPanel(props: CommandPanelProps) {
     items: [],
     status: "loading",
   });
-  const [browseLoaded, setBrowseLoaded] = useState(false);
+  const [browseStatus, setBrowseStatus] = useState<LoadStatus>("loading");
+  const browseLoadedOnce = useRef(false);
   const [version, setVersion] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -110,6 +112,7 @@ export function CommandPanel(props: CommandPanelProps) {
   // newer answer is dropped, but every search typed so far still narrows the list as soon as it answers.
   const requested = useRef(0);
   const applied = useRef(0);
+  const browseKey = useRef<string | null>(null);
   // Enter pressed before the answer for the latest search arrived: open its first note once it does.
   const openWhenLoaded = useRef(false);
   const callbacks = useRef(props);
@@ -118,14 +121,18 @@ export function CommandPanel(props: CommandPanelProps) {
   });
   useEffect(() => {
     if (view !== "browse") return;
+    const key = `${query}|${version}|${currentId ?? ""}`;
+    if (browseKey.current === key) return;
+    browseKey.current = key;
     const request = ++requested.current;
     const filter = query.trim();
     api.notes.browse({ filter: filter || undefined, limit: 50 }).then(
       (page) => {
         if (request < applied.current) return;
         applied.current = request;
+        browseLoadedOnce.current = true;
         setBrowse({ items: page.items, cursor: page.nextCursor, loading: false });
-        setBrowseLoaded(true);
+        setBrowseStatus("loaded");
         if (openWhenLoaded.current && request === requested.current) {
           openWhenLoaded.current = false;
           const first = page.items[0];
@@ -143,7 +150,10 @@ export function CommandPanel(props: CommandPanelProps) {
             ),
           );
       },
-      () => setBrowseLoaded(true),
+      () => {
+        if (request !== requested.current) return;
+        if (!browseLoadedOnce.current) setBrowseStatus("error");
+      },
     );
   }, [api, currentId, view, query, version]);
 
@@ -179,6 +189,11 @@ export function CommandPanel(props: CommandPanelProps) {
 
   const retryDeleted = () => {
     setDeleted((state) => ({ ...state, status: "loading" }));
+    setVersion((v) => v + 1);
+  };
+
+  const retryBrowse = () => {
+    setBrowseStatus("loading");
     setVersion((v) => v + 1);
   };
 
@@ -258,7 +273,9 @@ export function CommandPanel(props: CommandPanelProps) {
       if (!patch && direction !== 0) return;
       if (patch) props.onSettings(patch);
     } else if (event.key === "Enter") {
-      if (view === "browse" && applied.current < requested.current) {
+      if (view === "browse" && browseStatus === "error" && !browse.items.length) {
+        retryBrowse();
+      } else if (view === "browse" && applied.current < requested.current) {
         // The list still shows an older search; act on the answer for what was typed.
         openWhenLoaded.current = true;
       } else if (view === "browse" && selectedNote) {
@@ -321,16 +338,40 @@ export function CommandPanel(props: CommandPanelProps) {
           }}
         />
         <div className="panel-list" key={view} ref={listRef} onScroll={onScroll} role="listbox">
+          {view === "browse" && browseStatus === "loading" && !browse.items.length ? <SkeletonRows /> : null}
+          {view === "browse" && browseStatus === "error" && !browse.items.length ? (
+            <EmptyState
+              icon="search"
+              title="Could Not Load Notes"
+              hint="Something went wrong while reading your notes."
+              error
+              action={{ title: "Try Again", run: retryBrowse }}
+            />
+          ) : null}
           {view === "browse"
             ? browse.items.map((note, i) => {
-                const header = i === 0 && pinnedRows.length ? "Pinned" : i === pinnedRows.length ? "Notes" : null;
+                const unpinnedRows = browse.items.length - pinnedRows.length;
+                const header =
+                  i === 0 && pinnedRows.length
+                    ? { label: "Pinned", count: pinnedRows.length }
+                    : i === pinnedRows.length && unpinnedRows
+                      ? { label: "Notes", count: unpinnedRows }
+                      : i === 0 && !pinnedRows.length
+                        ? { label: "Notes", count: unpinnedRows }
+                        : null;
                 const isCurrent = note.id === props.currentId;
                 return (
                   <div key={note.id}>
-                    {header ? <div className="menu-section">{header}</div> : null}
+                    {header ? (
+                      <div className="menu-section panel-section">
+                        <span>{header.label}</span>
+                        <span className="panel-section-count">{header.count}</span>
+                      </div>
+                    ) : null}
                     <div
                       role="option"
                       aria-selected={i === selected}
+                      tabIndex={i === selected ? 0 : -1}
                       className={`panel-row${i === selected ? " is-selected" : ""}`}
                       data-testid="browse-row"
                       onMouseEnter={() => setIndex(i)}
@@ -339,6 +380,9 @@ export function CommandPanel(props: CommandPanelProps) {
                         props.onOpenNote(note.id);
                       }}
                     >
+                      <span className="panel-row-leading" aria-hidden="true">
+                        {note.pinned !== null ? <Icon name="pin" /> : null}
+                      </span>
                       <div className="panel-row-text">
                         <span className="panel-row-title">
                           {displayTitle({ title: note.title, text: note.preview })}
@@ -353,42 +397,40 @@ export function CommandPanel(props: CommandPanelProps) {
                           )}
                         </span>
                       </div>
-                      {i === selected ? (
-                        <span className="panel-row-buttons">
-                          <button
-                            type="button"
-                            className="icon-button"
-                            title={note.pinned === null ? "Pin Note (⇧⌘P)" : "Unpin Note (⇧⌘P)"}
-                            aria-label={note.pinned === null ? "Pin Note" : "Unpin Note"}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void props
-                                .onTogglePin(note.id, note.pinned === null)
-                                .then(() => setVersion((v) => v + 1));
-                            }}
-                          >
-                            <Icon name="pin" />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button"
-                            title="Delete Note (⌃X)"
-                            aria-label="Delete Note"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void props.onDeleteNote(note.id).then(() => setVersion((v) => v + 1));
-                            }}
-                          >
-                            <Icon name="trash" />
-                          </button>
-                        </span>
-                      ) : null}
+                      <span className="panel-row-buttons">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          title={note.pinned === null ? "Pin Note (⇧⌘P)" : "Unpin Note (⇧⌘P)"}
+                          aria-label={note.pinned === null ? "Pin Note" : "Unpin Note"}
+                          tabIndex={-1}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void props.onTogglePin(note.id, note.pinned === null).then(() => setVersion((v) => v + 1));
+                          }}
+                        >
+                          <Icon name="pin" />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          title="Delete Note (⌃X)"
+                          aria-label="Delete Note"
+                          tabIndex={-1}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void props.onDeleteNote(note.id).then(() => setVersion((v) => v + 1));
+                          }}
+                        >
+                          <Icon name="trash" />
+                        </button>
+                      </span>
                     </div>
                   </div>
                 );
               })
             : null}
-          {view === "browse" && !browse.items.length && browseLoaded ? (
+          {view === "browse" && !browse.items.length && browseStatus === "loaded" ? (
             <EmptyState
               icon="search"
               title="No Matching Notes"
@@ -400,6 +442,7 @@ export function CommandPanel(props: CommandPanelProps) {
               {!query && deletedRows.length ? (
                 <div className="panel-banner">Notes in Recently Deleted will be permanently removed after 60 days.</div>
               ) : null}
+              {deleted.status === "loading" ? <SkeletonRows /> : null}
               {deleted.status === "error" ? (
                 <EmptyState
                   icon="trash"
@@ -425,6 +468,7 @@ export function CommandPanel(props: CommandPanelProps) {
                   key={note.id}
                   role="option"
                   aria-selected={i === selected}
+                  tabIndex={i === selected ? 0 : -1}
                   className={`panel-row${i === selected ? " is-selected" : ""}`}
                   data-testid="deleted-row"
                   onMouseEnter={() => setIndex(i)}
@@ -444,6 +488,7 @@ export function CommandPanel(props: CommandPanelProps) {
                         className="icon-button"
                         title="Restore"
                         aria-label="Restore"
+                        tabIndex={-1}
                         onClick={(event) => {
                           event.stopPropagation();
                           void props.onRecover(note.id).then(() => setVersion((v) => v + 1));
@@ -456,6 +501,7 @@ export function CommandPanel(props: CommandPanelProps) {
                         className="icon-button"
                         title="Delete Permanently"
                         aria-label="Delete Permanently"
+                        tabIndex={-1}
                         onClick={(event) => {
                           event.stopPropagation();
                           void props.onPermanentlyDelete(note.id).then(() => setVersion((v) => v + 1));
@@ -502,8 +548,9 @@ export function CommandPanel(props: CommandPanelProps) {
                       data-testid={`action-${action.id}`}
                       onMouseEnter={() => setIndex(i)}
                       onClick={() => runAction(action)}
-                      tabIndex={-1}
+                      tabIndex={i === selected ? 0 : -1}
                     >
+                      {action.icon ? <Icon name={action.icon} /> : null}
                       <span className="panel-row-title">{action.title}</span>
                       {action.push ? (
                         <Icon name="chevron" />
@@ -517,6 +564,23 @@ export function CommandPanel(props: CommandPanelProps) {
             : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Inert placeholder rows with the real two line row geometry, shown only while a first load is pending. */
+function SkeletonRows() {
+  return (
+    <div className="panel-skeleton" data-testid="panel-skeleton" aria-hidden="true">
+      {[0, 1, 2, 3].map((row) => (
+        <div key={row} className="panel-row panel-skeleton-row">
+          <span className="panel-row-leading" />
+          <span className="panel-row-text">
+            <span className="skeleton-line skeleton-title" />
+            <span className="skeleton-line skeleton-subtitle" />
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

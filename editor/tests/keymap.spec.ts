@@ -148,6 +148,144 @@ test("⌘P browses, pins work with ⇧⌘P and ⌘1, ⌃X deletes", async ({ pag
   expect(live[0]?.text).toBe("");
 });
 
+test("⌘0 resets zoom and opens no pinned note with ten pins; ⌘1 opens the first pinned note", async ({ page }) => {
+  const pinnedTitles = Array.from({ length: 10 }, (_, i) => `Pinned ${i + 1}`);
+  await openHarness(page, [...pinnedTitles, "Current"]);
+  const byTitle = new Map((await storedNotes(page)).map((n) => [n.title, n]));
+  const pinnedIds = pinnedTitles.map((name) => byTitle.get(name)!.id);
+  const tenthId = pinnedIds[9]!;
+  const currentId = byTitle.get("Current")!.id;
+
+  // Pin in title order through the mock, then let the editor reload its pin slots.
+  await page.evaluate((ids) => {
+    const handlers = (
+      window as unknown as { __overnoteMock: { store: { handlers: Record<string, (p: unknown) => unknown> } } }
+    ).__overnoteMock.store.handlers;
+    for (const id of ids) handlers["notes.pin"]?.({ id });
+  }, pinnedIds);
+  await emit(page, "notes.changed", { ids: pinnedIds });
+  await settle(page);
+
+  const pinnedStored = (await storedNotes(page))
+    .filter((n) => n.pinned !== null)
+    .sort((a, b) => (a.pinned ?? 0) - (b.pinned ?? 0));
+  expect(pinnedStored.map((n) => n.id)).toEqual(pinnedIds);
+  // Only the first nine pins carry a ⌘ digit; the tenth pinned note has no shortcut slot.
+  const shortcutIds = await page.evaluate(
+    () =>
+      (
+        window as unknown as { __overnoteMock: { store: { windowData(): { pinnedShortcutNoteIds: string[] } } } }
+      ).__overnoteMock.store.windowData().pinnedShortcutNoteIds,
+  );
+  expect(shortcutIds).toEqual(pinnedIds.slice(0, 9));
+  expect(shortcutIds).not.toContain(tenthId);
+
+  await expect(title(page)).toHaveText("Current");
+  await expect(page.getByTestId("app")).toHaveAttribute("data-note-id", currentId);
+  const size = async () => page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+  const base = await size();
+  await page.keyboard.press("Meta+Equal");
+  await expect(page.getByTestId("notices")).toContainText("Zoom 105%");
+  expect(await size()).not.toBe(base);
+  await expect.poll(async () => (await calls(page, "settings.set")).at(-1)?.params).toEqual({ zoom: 1.05 });
+
+  // If pinSlot ever accepted Digit0, this press would be swallowed as a pin slot (or would open
+  // the tenth pinned note) and the zoom would stay at 105% instead of returning to actual size.
+  await page.keyboard.press("Meta+0");
+  await expect.poll(size).toBe(base);
+  await expect.poll(async () => (await calls(page, "settings.set")).at(-1)?.params).toEqual({ zoom: 1 });
+  await expect(title(page)).toHaveText("Current");
+  await expect(page.getByTestId("app")).toHaveAttribute("data-note-id", currentId);
+  expect(await page.getByTestId("app").getAttribute("data-note-id")).not.toBe(tenthId);
+
+  await page.keyboard.press("Meta+1");
+  await expect(title(page)).toHaveText("Pinned 1");
+  await expect(page.getByTestId("app")).toHaveAttribute("data-note-id", pinnedIds[0]!);
+});
+
+const placeCalls = async (page: import("@playwright/test").Page): Promise<string[]> =>
+  page.evaluate(
+    () =>
+      (window as unknown as { __overnoteMock: { store: { windowPlaceCalls: string[] } } }).__overnoteMock.store
+        .windowPlaceCalls,
+  );
+
+test("⌃⌥ arrows place the window, including while the action panel is open", async ({ page }) => {
+  await openHarness(page, ["Alpha"]);
+  const cases = [
+    ["Control+Alt+ArrowLeft", "left"],
+    ["Control+Alt+ArrowRight", "right"],
+    ["Control+Alt+ArrowUp", "fill"],
+    ["Control+Alt+ArrowDown", "center"],
+  ] as const;
+  const expected: string[] = [];
+  for (const [keys, placement] of cases) {
+    await page.keyboard.press(keys);
+    expected.push(placement);
+    await expect.poll(() => placeCalls(page)).toEqual(expected);
+    await expect
+      .poll(async () => (await calls(page, "window.place")).map((call) => call.params.placement))
+      .toEqual(expected);
+  }
+
+  // Before the panel early exit, so the shortcut still places while ⌘K is open.
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-panel")).toBeVisible();
+  await page.keyboard.press("Control+Alt+ArrowLeft");
+  expected.push("left");
+  await expect.poll(() => placeCalls(page)).toEqual(expected);
+  await expect(page.getByTestId("command-panel")).toHaveCount(0);
+});
+
+test("placement shortcuts do nothing while a confirmation dialog is open", async ({ page }) => {
+  await openHarness(page, ["Alpha"]);
+  await page.keyboard.press("Control+Shift+x");
+  const dialog = page.getByTestId("confirm-dialog");
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Control+Alt+ArrowLeft");
+  await page.keyboard.press("Control+Alt+ArrowRight");
+  await page.keyboard.press("Control+Alt+ArrowUp");
+  await page.keyboard.press("Control+Alt+ArrowDown");
+  await settle(page);
+  expect(await placeCalls(page)).toEqual([]);
+  expect(await calls(page, "window.place")).toEqual([]);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+});
+
+test("placement actions run from the action panel and close it before the mock records the call", async ({ page }) => {
+  await openHarness(page, ["Alpha"]);
+  const cases = [
+    ["fillLeft", "Fill Left", "left"],
+    ["fillRight", "Fill Right", "right"],
+    ["fillScreen", "Fill Screen", "fill"],
+    ["centre", "Centre", "center"],
+  ] as const;
+  for (const [id, titleText, placement] of cases) {
+    await page.evaluate(() => {
+      (
+        window as unknown as { __overnoteMock: { store: { windowPlaceCalls: string[] } } }
+      ).__overnoteMock.store.windowPlaceCalls = [];
+    });
+    await page.keyboard.press("Meta+k");
+    const action = page.getByTestId(`action-${id}`);
+    await expect(action).toContainText(titleText);
+    await action.click();
+    // One snapshot reads both facts together, so a recorded call can never precede the close.
+    await expect
+      .poll(async () =>
+        page.evaluate(() => ({
+          calls: (window as unknown as { __overnoteMock: { store: { windowPlaceCalls: string[] } } }).__overnoteMock
+            .store.windowPlaceCalls,
+          panelOpen: document.querySelector("[data-testid=command-panel]") !== null,
+        })),
+      )
+      .toEqual({ calls: [placement], panelOpen: false });
+    await expect(page.getByTestId("command-panel")).toHaveCount(0);
+  }
+});
+
 test("copy as, export, and zoom", async ({ page }) => {
   await openHarness(page, ["# Report\n\nBody **text**"]);
   await clearCalls(page);

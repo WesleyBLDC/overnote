@@ -238,7 +238,10 @@ final class Connection: @unchecked Sendable {
     /// reading may block a write, and only its own responses should wait for it.
     private let writeQueue = DispatchQueue(label: "overnote.socket.write")
     private var source: DispatchSourceRead?
-    private var buffer = Data()
+    private var buffer: [UInt8] = []
+    /// First byte not yet known to be free of a newline. Bytes before it are never rescanned.
+    /// Invariant: `buffer[..<scanOffset]` contains no newline and `scanOffset <= buffer.count`.
+    private var scanOffset = 0
     /// Guards the fields below and every write, so a late response never hits a reused descriptor.
     private let stateLock = NSLock()
     private var closed = false
@@ -296,9 +299,13 @@ final class Connection: @unchecked Sendable {
     }
 
     private func drainLines() {
-        while let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
-            let lineData = buffer[buffer.startIndex..<newline]
-            buffer.removeSubrange(buffer.startIndex...newline)
+        while let newline = NewlineSearch.index(in: buffer, from: scanOffset) {
+            let lineData = Data(buffer[0..<newline])
+            // The buffer shifts by `newline + 1` bytes, so the unscanned remainder starts
+            // at zero again. Searching from zero there scans only up to the next newline
+            // (memchr stops at the first hit), never the whole remainder.
+            buffer.removeSubrange(0...newline)
+            scanOffset = 0
             guard let line = String(data: lineData, encoding: .utf8) else {
                 send(RPCLineHandler.response(id: .null, error: .badParams("Request is not valid UTF-8")))
                 continue
@@ -315,6 +322,10 @@ final class Connection: @unchecked Sendable {
                 }
             }
         }
+        // No newline in the remainder, so every buffered byte is now known to be free
+        // of one. The next search resumes at the end, including when the next chunk
+        // completes a line that was split across many reads.
+        scanOffset = buffer.count
     }
 
     func send(_ line: String) {

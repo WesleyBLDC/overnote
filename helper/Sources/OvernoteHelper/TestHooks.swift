@@ -41,6 +41,14 @@ final class TestHooks {
                 "canJoinAllSpaces": .bool(behavior.contains(.canJoinAllSpaces)),
                 "fullScreenAuxiliary": .bool(behavior.contains(.fullScreenAuxiliary)),
                 "nonactivating": .bool(panel.styleMask.contains(.nonactivatingPanel)),
+                "resizable": .bool(panel.styleMask.contains(.resizable)),
+                "borderless": .bool(panel.styleMask.contains(.borderless)),
+                "movable": .bool(panel.isMovable),
+                "styleMask": .int(Int64(panel.styleMask.rawValue)),
+                "lastAdoption": controller.lastAdoptionClassification.map { .string($0.rawValue) } ?? .null,
+                "lastAdoptionClassification": controller.lastAdoptionClassification.map { .string($0.rawValue) } ?? .null,
+                "expectedFrame": controller.expectedFrame.map(Self.rectJSON) ?? .null,
+                "userMoveSignals": .int(Int64(controller.panelDragMoveCount)),
                 "resizeZones": .bool(Self.find(ResizeOverlayView.self, in: panel.contentView) != nil),
                 "hidesOnDeactivate": .bool(panel.hidesOnDeactivate),
                 "acceptsFirstMouse": .bool(panel.contentView.flatMap(Self.webView(in:))?.acceptsFirstMouse(for: nil) ?? true),
@@ -145,15 +153,34 @@ final class TestHooks {
         case "test.events":
             return .array(controller.emittedEvents.map { ["event": .string($0.0), "payload": $0.1] })
         case "test.simulateUserResize":
-            // Runs the same path as the end of a user's live resize.
+            // Runs the same path as the end of a user's live resize. The direct set
+            // is marked as a user resize while it lands, as the overlay marks its
+            // live drag, so it is not also read as an external adoption.
             let start = panel.frame
             var end = start
             end.size.height = CGFloat(try p.double("height"))
             end.origin.y = start.maxY - end.height
             if let width = try p.optionalInt("width") { end.size.width = CGFloat(width) }
+            panel.isUserResizing = true
             panel.setFrame(end, display: true, animate: false)
+            panel.isUserResizing = false
             controller.userDidResize(from: start, to: panel.frame)
             return [:]
+        case "test.externalSetFrame":
+            // Sets the panel frame directly, bypassing PanelController.setFrame and
+            // its expected frame record, exactly as an Accessibility client would.
+            // The delegate adoption path is what answers, so CI can exercise it
+            // without Accessibility trust. Params are a window frame in AppKit
+            // global coordinates (bottom left origin): { x, y, width, height },
+            // each optional and defaulting to the current frame's value.
+            var frame = panel.frame
+            if let x = try Self.optionalDouble(p, "x") { frame.origin.x = CGFloat(x) }
+            if let y = try Self.optionalDouble(p, "y") { frame.origin.y = CGFloat(y) }
+            if let width = try Self.optionalDouble(p, "width") { frame.size.width = CGFloat(width) }
+            if let height = try Self.optionalDouble(p, "height") { frame.size.height = CGFloat(height) }
+            guard frame.width > 0, frame.height > 0 else { throw RPCError.badParams("width and height must be positive") }
+            panel.setFrame(frame, display: true, animate: false)
+            return ["frame": Self.rectJSON(panel.frame)]
         case "test.moveTo":
             // Moves the top left corner, as a user drag would.
             let top = CGFloat(try p.double("top"))
@@ -179,6 +206,12 @@ final class TestHooks {
         default:
             throw RPCError.methodNotFound(method)
         }
+    }
+
+    private static func optionalDouble(_ params: Params, _ key: String) throws -> Double? {
+        guard let value = params.values[key], !value.isNull else { return nil }
+        guard let number = value.doubleValue, number.isFinite else { throw RPCError.badParams("\(key) must be a number") }
+        return number
     }
 
     private static func webView(in view: NSView) -> NotesWebView? {

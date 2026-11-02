@@ -5,10 +5,13 @@
 import {
   DEFAULT_SETTINGS,
   displayTitle,
+  fold,
   rpc,
   type Note,
   type NoteId,
   type NoteSummary,
+  type PanelFrame,
+  type PanelPlacement,
   type Settings,
   type WindowData,
 } from "@overnote/core";
@@ -47,11 +50,19 @@ export interface MockStoreOptions {
   emit?: (event: rpc.EventName, payload: unknown) => void;
 }
 
+const PANEL_PLACEMENTS: readonly PanelPlacement[] = ["left", "right", "fill", "center"];
+
 export class MockStore {
   notes = new Map<NoteId, Note>();
   settings: Settings = { ...DEFAULT_SETTINGS };
   currentNoteId: NoteId | null = null;
   visible = true;
+  /** Every `window.place` placement the bridge asked for, in order. */
+  windowPlaceCalls: PanelPlacement[] = [];
+  /** The harness visible size in points, set by the mock bridge from the browser window. */
+  harnessSize = { width: 1280, height: 800 };
+  /** The current panel size in points, set by the mock bridge from the harness root. */
+  harnessPanelSize = { width: 640, height: 560 };
   private lastNow = 0;
   private readonly clock: () => number;
   private readonly emit: (event: rpc.EventName, payload: unknown) => void;
@@ -140,16 +151,14 @@ export class MockStore {
   }
 
   private filtered(filter: string | undefined, order: (a: Note, b: Note) => number, titleFirst: boolean): Note[] {
-    const term = filter?.trim().toLocaleLowerCase() ?? "";
+    const term = fold(filter?.trim() ?? "");
     const pinOrder = (a: Note, b: Note) =>
       (a.pinned ?? Number.POSITIVE_INFINITY) - (b.pinned ?? Number.POSITIVE_INFINITY) || order(a, b);
     let notes = this.live().sort(pinOrder);
     if (term) {
-      notes = notes.filter(
-        (n) => n.title.toLocaleLowerCase().includes(term) || n.text.toLocaleLowerCase().includes(term),
-      );
+      notes = notes.filter((n) => fold(n.title).includes(term) || fold(n.text).includes(term));
       if (titleFirst) {
-        const hit = (n: Note) => (displayTitle(n).toLocaleLowerCase().includes(term) ? 0 : 1);
+        const hit = (n: Note) => (fold(displayTitle(n)).includes(term) ? 0 : 1);
         notes = notes.sort((a, b) => hit(a) - hit(b) || pinOrder(a, b));
       }
     }
@@ -162,6 +171,50 @@ export class MockStore {
     const items = notes.slice(start, start + limit).map((n) => this.summary(n));
     const next = start + limit < notes.length ? String(start + limit) : null;
     return { items, nextCursor: next };
+  }
+
+  /** Records a `window.place` call and computes its frame from the harness size, in the persisted convention (x is the left edge, y is the top edge). */
+  placeWindow(placement: PanelPlacement): { placement: PanelPlacement; frame: PanelFrame } {
+    if (!PANEL_PLACEMENTS.includes(placement)) {
+      throw new MockRpcError(rpc.ErrorCode.BadParams, "placement must be one of left, right, fill, center");
+    }
+    this.windowPlaceCalls.push(placement);
+    const { width: visibleWidth, height: visibleHeight } = this.harnessSize;
+    const currentWidth = this.settings.panelFrame?.width ?? this.harnessPanelSize.width;
+    const currentHeight = this.settings.panelFrame?.height ?? this.harnessPanelSize.height;
+    let frame: PanelFrame;
+    if (placement === "fill") {
+      frame = { x: 0, y: 0, width: visibleWidth, height: visibleHeight };
+    } else if (placement === "left" || placement === "right") {
+      const leftWidth = Math.ceil(visibleWidth / 2);
+      frame =
+        placement === "left"
+          ? { x: 0, y: 0, width: leftWidth, height: visibleHeight }
+          : { x: leftWidth, y: 0, width: visibleWidth - leftWidth, height: visibleHeight };
+    } else {
+      frame = {
+        x: Math.round((visibleWidth - currentWidth) / 2),
+        y: Math.round((visibleHeight - currentHeight) / 2),
+        width: currentWidth,
+        height: currentHeight,
+      };
+    }
+    const displays = {
+      [`mock@${visibleWidth}x${visibleHeight}`]: {
+        x: frame.x,
+        y: frame.y,
+        width: frame.width,
+        height: frame.height,
+        placement,
+      },
+    };
+    this.settings = {
+      ...this.settings,
+      ...(placement === "center" ? {} : { windowAutoSize: false }),
+      panelFrame: { ...frame, displays },
+    };
+    this.emit(rpc.Event.SettingsChanged, { ...this.settings });
+    return { placement, frame: { ...frame } };
   }
 
   readonly handlers: { [M in rpc.MethodName]: (params: rpc.Params<M>) => rpc.Result<M> } = {
@@ -190,6 +243,7 @@ export class MockStore {
       this.emit(rpc.Event.WindowDidHide, {});
       return { visible: false };
     },
+    "window.place": (params) => this.placeWindow(params.placement),
     "window.resize": () => ({}),
     "window.setOverhang": () => ({}),
     "window.resignFocus": () => ({}),

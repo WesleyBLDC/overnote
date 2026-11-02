@@ -1,16 +1,32 @@
 import Foundation
 
 /// A remembered top left point on one display. `y` is the **top** edge.
+/// `width`, `height`, and `placement` are optional, so a point stored before they existed
+/// reads back unchanged and writes back without them until a placement is stored.
 public struct PanelPoint: Equatable, Sendable {
     public var x: Double
     public var y: Double
+    public var width: Double?
+    public var height: Double?
+    public var placement: PanelPlacement?
 
-    public init(x: Double, y: Double) {
+    public init(
+        x: Double, y: Double, width: Double? = nil, height: Double? = nil, placement: PanelPlacement? = nil
+    ) {
         self.x = x
         self.y = y
+        self.width = width
+        self.height = height
+        self.placement = placement
     }
 
-    public var json: JSONValue { ["x": .double(x), "y": .double(y)] }
+    public var json: JSONValue {
+        var object: [String: JSONValue] = ["x": .double(x), "y": .double(y)]
+        if let width { object["width"] = .double(width) }
+        if let height { object["height"] = .double(height) }
+        if let placement { object["placement"] = .string(placement.rawValue) }
+        return .object(object)
+    }
 }
 
 /// The panel geometry the helper remembers, in AppKit global coordinates (origin at the
@@ -22,6 +38,7 @@ public struct PanelPoint: Equatable, Sendable {
 /// - `height`: the user's height, stored only when `windowAutoSize` is off.
 /// - `displays`: one remembered top left point per display, keyed by
 ///   `"<display uuid>@<width>x<height>"` (the display identity plus its size in points).
+///   Each point may also carry the width, height, and placement it was placed at.
 ///   Optional, so an older `{ x, y, width, height? }` value without it still reads and writes fine.
 public struct PanelFrame: Equatable, Sendable {
     public var x: Double
@@ -36,6 +53,30 @@ public struct PanelFrame: Equatable, Sendable {
         self.width = width
         self.height = height
         self.displays = displays
+    }
+
+    /// Builds the per display key from a display UUID and its size in points, matching the
+    /// format the panel controller already writes from a screen.
+    public static func displayKey(uuid: String, displayWidth: Double, displayHeight: Double) -> String {
+        "\(uuid)@\(Int(displayWidth))x\(Int(displayHeight))"
+    }
+
+    /// The display UUID inside a per display key, or the whole key when it carries no size.
+    public static func displayUUID(fromKey key: String) -> String {
+        guard let separator = key.firstIndex(of: "@") else { return key }
+        return String(key[..<separator])
+    }
+
+    /// The remembered point for a display UUID, whatever size the stored key was written at.
+    /// A display keeps its UUID when its size changes, so matching on the UUID alone lets a
+    /// remembered point survive a resolution change instead of being lost with the old key.
+    /// When stale keys for several sizes of one display are present, the point under the
+    /// lexicographically smallest key wins, so the answer never depends on dictionary order.
+    public func rememberedPoint(forDisplayUUID uuid: String) -> PanelPoint? {
+        for key in displays.keys.sorted() where Self.displayUUID(fromKey: key) == uuid {
+            return displays[key]
+        }
+        return nil
     }
 
     public var json: JSONValue {
@@ -69,7 +110,30 @@ public struct PanelFrame: Equatable, Sendable {
                 guard let px = value["x"]?.doubleValue, let py = value["y"]?.doubleValue, px.isFinite, py.isFinite else {
                     throw RPCError.badParams("panelFrame.displays values must be { x, y }")
                 }
-                displays[key] = PanelPoint(x: px, y: py)
+                var pointWidth: Double?
+                if let rawWidth = value["width"], !rawWidth.isNull {
+                    guard let parsed = rawWidth.doubleValue, parsed.isFinite, parsed > 0 else {
+                        throw RPCError.badParams("panelFrame.displays width must be a positive number when present")
+                    }
+                    pointWidth = parsed
+                }
+                var pointHeight: Double?
+                if let rawHeight = value["height"], !rawHeight.isNull {
+                    guard let parsed = rawHeight.doubleValue, parsed.isFinite, parsed > 0 else {
+                        throw RPCError.badParams("panelFrame.displays height must be a positive number when present")
+                    }
+                    pointHeight = parsed
+                }
+                var pointPlacement: PanelPlacement?
+                if let rawPlacement = value["placement"], !rawPlacement.isNull {
+                    guard let rawValue = rawPlacement.stringValue, let parsed = PanelPlacement(rawValue: rawValue) else {
+                        let names = PanelPlacement.allCases.map(\.rawValue).joined(separator: ", ")
+                        throw RPCError.badParams("panelFrame.displays placement must be one of \(names)")
+                    }
+                    pointPlacement = parsed
+                }
+                displays[key] = PanelPoint(
+                    x: px, y: py, width: pointWidth, height: pointHeight, placement: pointPlacement)
             }
         }
         self.init(x: x, y: y, width: width, height: height, displays: displays)

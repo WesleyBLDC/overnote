@@ -14,15 +14,19 @@ export default async function CheckForUpdates() {
     const installed = await readInstalledVersion(environment.assetsPath, () => getLauncher().expectedVersion());
     const latest = await fetchLatestRelease();
     if (installed.source === "source") {
-      await showHUD(`Overnote runs from source (${installed.version}); the latest release is ${latest.version}`);
+      await showHUD(
+        `Overnote ${installed.version} is a source build with no release metadata. Latest release is ${latest.version}. No update command was copied.`,
+      );
       return;
     }
     if (compareVersions(latest.version, installed.version) <= 0) {
-      await showHUD(`Overnote ${installed.version} is up to date`);
+      await showHUD(`Overnote ${installed.version} is up to date. Latest release is ${latest.version}.`);
       return;
     }
     await Clipboard.copy(updateCommand(installed.installDir));
-    await showHUD(`Overnote ${latest.version} is available. Copied the update command; paste it into Terminal`);
+    await showHUD(
+      `Overnote ${latest.version} is available. You have ${installed.version}. Copied the update command to the clipboard. Paste it into Terminal to update.`,
+    );
   } catch (error) {
     await showFailureToast(error, { title: "Could not check for updates" });
   }

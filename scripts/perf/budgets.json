@@ -1,0 +1,57 @@
+{
+  "comment": "Perf budgets in milliseconds. A result over budget warns. A result over budget times failMultiplier fails the comparison, which only changes the exit code under --strict. These numbers are deliberately looser than a fast developer machine so a loaded CI runner warns instead of flapping.",
+  "failMultiplier": 2,
+  "scales": {
+    "default": {
+      "startupToPing": { "medianMs": 500, "p95Ms": 500 },
+      "browse": { "medianMs": 10, "p95Ms": 25 },
+      "browseFilteredSparse": { "medianMs": 10, "p95Ms": 25 },
+      "browseFilteredFolded": { "medianMs": 10, "p95Ms": 25 },
+      "list": { "medianMs": 10, "p95Ms": 25 },
+      "listFilteredSparse": { "medianMs": 10, "p95Ms": 25 },
+      "count": { "medianMs": 5, "p95Ms": 15 },
+      "getFirst": { "medianMs": 5, "p95Ms": 15 },
+      "listPagingPerPage": { "medianMs": 10, "p95Ms": 25 },
+      "listPagingFullWalk": { "medianMs": 50, "p95Ms": 100 },
+      "create": { "medianMs": 10, "p95Ms": 25 },
+      "debouncedSaveRpc": { "medianMs": 10, "p95Ms": 25 },
+      "debouncedSaveWall": { "medianMs": 400, "p95Ms": 450 },
+      "listDeleted": { "medianMs": 10, "p95Ms": 25 }
+    },
+    "10000": {
+      "startupToPing": { "medianMs": 500, "p95Ms": 500 },
+      "browse": { "medianMs": 50, "p95Ms": 100 },
+      "browseFilteredSparse": { "medianMs": 50, "p95Ms": 100 },
+      "browseFilteredFolded": { "medianMs": 50, "p95Ms": 100 },
+      "list": { "medianMs": 50, "p95Ms": 100 },
+      "listFilteredSparse": { "medianMs": 50, "p95Ms": 100 },
+      "count": { "medianMs": 10, "p95Ms": 25 },
+      "getFirst": { "medianMs": 5, "p95Ms": 15 },
+      "listPagingPerPage": { "medianMs": 50, "p95Ms": 100 },
+      "listPagingFullWalk": { "medianMs": 2500, "p95Ms": 4000 },
+      "create": { "medianMs": 15, "p95Ms": 40 },
+      "debouncedSaveRpc": { "medianMs": 15, "p95Ms": 40 },
+      "debouncedSaveWall": { "medianMs": 400, "p95Ms": 450 },
+      "listDeleted": { "medianMs": 10, "p95Ms": 25 },
+      "getLarge": { "medianMs": 50, "p95Ms": 100 },
+      "updateLarge": { "medianMs": 100, "p95Ms": 250 },
+      "browseWithLargePresent": { "medianMs": 50, "p95Ms": 100 },
+      "listWithLargePresent": { "medianMs": 50, "p95Ms": 100 }
+    },
+    "large-1024": {
+      "getFirst": { "medianMs": 10, "p95Ms": 25 },
+      "getLarge": { "medianMs": 10, "p95Ms": 25 },
+      "updateLarge": { "medianMs": 15, "p95Ms": 40 }
+    },
+    "large-51200": {
+      "getFirst": { "medianMs": 15, "p95Ms": 40 },
+      "getLarge": { "medianMs": 15, "p95Ms": 40 },
+      "updateLarge": { "medianMs": 40, "p95Ms": 100 }
+    },
+    "large-512000": {
+      "getFirst": { "medianMs": 50, "p95Ms": 100 },
+      "getLarge": { "medianMs": 50, "p95Ms": 100 },
+      "updateLarge": { "medianMs": 150, "p95Ms": 400 }
+    }
+  }
+}

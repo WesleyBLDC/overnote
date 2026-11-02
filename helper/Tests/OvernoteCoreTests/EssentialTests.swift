@@ -1,3 +1,5 @@
+import CoreGraphics
+import Darwin
 import Foundation
 import Testing
 @testable import OvernoteCore
@@ -21,10 +23,149 @@ struct FoldTests {
         #expect(TextFolding.fold(input) == expected)
     }
 
+    @Test func asciiFastPathMatchesTheGeneralRuleForEveryAsciiScalar() {
+        // Every scalar the ASCII gate can admit, in one string: uppercase and lowercase
+        // letters, digits, punctuation, and the control characters including NUL and DEL.
+        // The expected value is built independently of the implementation, by mapping
+        // only A to Z in the UTF-8 bytes and leaving every other byte unchanged.
+        let allASCII = String((0...127).map { Character(UnicodeScalar($0)!) })
+        let expected = String(decoding: allASCII.utf8.map { byte in
+            byte >= 65 && byte <= 90 ? byte + 32 : byte
+        }, as: UTF8.self)
+        #expect(Array(TextFolding.fold(allASCII).utf8) == Array(expected.utf8))
+        #expect(TextFolding.fold("ABC XYZ 0123 [Task] (Done); Note: A,B.C!") == "abc xyz 0123 [task] (done); note: a,b.c!")
+        #expect(TextFolding.fold("Tab\tNew\nLine\r\nNUL\u{0}DEL\u{7F}") == "tab\tnew\nline\r\nnul\u{0}del\u{7F}")
+    }
+
+    @Test func combiningMarksStayOnTheGeneralPath() {
+        // U+0300 and U+0301 are not ASCII, so these sequences must not take the fast path
+        // and the marks must still be removed, leaving only the ASCII base letters.
+        #expect(TextFolding.fold("E\u{301} A\u{300} Cafe\u{301}") == "e a cafe")
+    }
+
     @Test func likePatternTrimsFoldsAndEscapesWildcards() {
         #expect(TextFolding.likePattern(for: "  \n") == nil)
         #expect(TextFolding.likePattern(for: " Ab ") == "%ab%")
         #expect(TextFolding.likePattern(for: "50%_\\") == "%50\\%\\_\\\\%")
+    }
+
+    @Test func foldMatchesTheSharedGoldenCorpus() throws {
+        // The same file the TypeScript core tests read, so a note is findable identically
+        // from every client: packages/core/tests/fold-corpus.json, relative to this file.
+        let here = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let url = here.appendingPathComponent("../../../packages/core/tests/fold-corpus.json")
+        let data = try Data(contentsOf: url)
+        let corpus = try JSONDecoder().decode([FoldCase].self, from: data)
+        #expect(corpus.count >= 20)
+        for entry in corpus {
+            #expect(TextFolding.fold(entry.input) == entry.folded, "fold(\(entry.input))")
+        }
+    }
+
+    private struct FoldCase: Decodable {
+        let input: String
+        let folded: String
+    }
+
+    @Test func ftsPhraseOnlyForIndexableTerms() {
+        #expect(TextFolding.ftsPhrase(for: "ab") == nil)
+        #expect(TextFolding.ftsPhrase(for: "😀") == nil)
+        #expect(TextFolding.ftsPhrase(for: " Café ") == "\"cafe\"")
+        #expect(TextFolding.ftsPhrase(for: "say \"hi\" now") == "\"say \"\"hi\"\" now\"")
+        #expect(TextFolding.ftsPhrase(for: "   ") == nil)
+    }
+}
+
+@Suite("FTS search")
+struct FTSSearchTests {
+    /// Filtered results through the index must equal the folded substring results, including
+    /// the terms the index cannot answer and so keep the LIKE path.
+    @Test func ftsResultsMatchFoldedSubstringSemantics() throws {
+        let f = try Fixture()
+        let cafe = try f.make("Café Über\nthe cafe body", title: "Café Über")
+        let quix = try f.make("plain\na quixotic paragraph", title: "plain")
+        let pct = try f.make("Groceries 100%\nsnake_case stuff", title: "Groceries 100%")
+        let emoji = try f.make("Mood 😀 today\nnotes", title: "Mood 😀 today")
+        let cjk = try f.make("中文標題測試\nbody", title: "中文標題測試")
+        let file = try f.make("ﬁle notes\nbody", title: "ﬁle notes")
+        _ = try f.make("unrelated\nnothing here", title: "unrelated")
+        func ids(_ filter: String, browse: Bool = true) throws -> [String] {
+            browse ? try f.browseIds(filter: filter) : try f.repository.list(filter: filter).items.map(\.id)
+        }
+        #expect(try ids("cafe") == [cafe.id])
+        #expect(try ids("CAFÉ") == [cafe.id])
+        #expect(try ids("quixotic") == [quix.id])
+        #expect(try ids("quixotic", browse: false) == [quix.id])
+        #expect(try ids("100%") == [pct.id])
+        #expect(try ids("%") == [pct.id])
+        #expect(try ids("snake_case") == [pct.id])
+        #expect(try ids("_") == [pct.id])
+        #expect(try ids("😀") == [emoji.id])
+        #expect(try ids("中文標") == [cjk.id])
+        #expect(try ids("中文") == [cjk.id])
+        #expect(try ids("file") == [file.id])
+        #expect(try ids("ﬁl") == [file.id])
+        // Title matches still come before text only matches in a filtered browse.
+        #expect(try ids("cafe").first == cafe.id)
+    }
+
+    @Test func ftsStaysInSyncAcrossWritesAndSchemaIsVersionTwo() throws {
+        let f = try Fixture()
+        #expect(try f.repository.schemaVersion() == Migrations.latestVersion)
+        #expect(Migrations.latestVersion == 2)
+        let note = try f.make("alpha bravo\nbody", title: "alpha bravo")
+        #expect(try f.browseIds(filter: "bravo") == [note.id])
+        let updated = try f.repository.update(
+            note.id, NotePatch(rawContent: "{}", markdown: "charlie delta", text: "charlie delta", title: "charlie delta"))
+        #expect(updated.note.content.title == "charlie delta")
+        #expect(try f.browseIds(filter: "bravo").isEmpty)
+        #expect(try f.browseIds(filter: "delta") == [note.id])
+        try f.repository.delete(note.id)
+        #expect(try f.browseIds(filter: "delta").isEmpty)
+        _ = try f.repository.recover(note.id)
+        #expect(try f.browseIds(filter: "delta") == [note.id])
+        _ = try f.repository.duplicate(note.id)
+        #expect(try f.browseIds(filter: "delta").count == 2)
+    }
+
+    /// Reads served by the second connection see every write as soon as it commits.
+    @Test func readsThroughTheSecondConnectionReflectWritesImmediately() throws {
+        let f = try Fixture()
+        let note = try f.make("reader check\nbody", title: "reader check")
+        #expect(try f.repository.count() == 1)
+        #expect(try f.listIds() == [note.id])
+        #expect(try f.browseIds(filter: "reader") == [note.id])
+        try f.repository.delete(note.id)
+        #expect(try f.repository.count() == 0)
+        #expect(try f.repository.listDeleted().map(\.summary.id) == [note.id])
+        _ = try f.repository.recover(note.id)
+        #expect(try f.repository.count() == 1)
+        #expect(try f.repository.listDeleted().isEmpty)
+    }
+
+    /// A version 1 database gains the index and the paging indexes, with its notes findable.
+    @Test func migrationFromVersionOneBuildsTheIndex() throws {
+        let directory = TempDirectory()
+        let path = directory.file("notes.sqlite")
+        let db = try SQLiteDatabase(path: path)
+        _ = try Migrations.migrate(db, upTo: 1)
+        try db.run(
+            """
+            INSERT INTO notes (id, title, text, markdown, raw_content, title_fold, text_fold, pinned,
+                               created_at, updated_at, deleted_at, last_accessed_at, caret_position)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, ?, 0)
+            """,
+            [
+                .text("01HF7YAT000000000000000001"), .text("Café old"), .text("Café old\nquixotic body"),
+                .text("Café old"), .text("{}"), .text(TextFolding.fold("Café old")),
+                .text(TextFolding.fold("Café old\nquixotic body")), .int(1000), .int(1000), .int(1000),
+            ])
+        db.close()
+        let repository = try NotesRepository(path: path, clock: TestClock().function)
+        #expect(try repository.schemaVersion() == 2)
+        let page = try repository.browse(filter: "quixotic")
+        #expect(page.items.map(\.id) == ["01HF7YAT000000000000000001"])
+        #expect(try repository.browse(filter: "cafe").items.count == 1)
     }
 }
 
@@ -293,6 +434,81 @@ struct FramingTests {
     }
 }
 
+@Suite("Socket ingestion")
+struct SocketIngestionTests {
+    /// One essential end to end test at the socket seam: a large request arrives in many
+    /// small pieces (splitting multi byte UTF-8 sequences), a second request is pipelined
+    /// behind it on the same connection, and both responses come back matched by id with
+    /// the stored content byte identical to what was sent.
+    @Test func largeRequestInSmallPiecesWithAPipelinedSecondRequest() async throws {
+        let fixture = try Fixture()
+        let lineHandler = RPCLineHandler(
+            dispatcher: RPCDispatcher(repository: fixture.repository, host: RecordingHost()), source: .socket)
+        let server = SocketServer(path: fixture.directory.file("h.sock")) { line in
+            await lineHandler.handle(line: line)
+        }
+        try server.start()
+        defer { server.stop() }
+
+        let largeText = "Large title\n" + String(repeating: "abcdé🙂 xyz\n", count: 18_000)
+        let secondText = "Second pipelined\nbody é🙂"
+        func requestBytes(id: Int, text: String) -> [UInt8] {
+            let line = JSONValue.object([
+                "id": .int(Int64(id)), "method": .string("notes.create"),
+                "params": .object([
+                    "rawContent": .string(#"{"type":"doc"}"#), "markdown": .string(text),
+                    "text": .string(text), "title": .string(String(text.split(separator: "\n").first ?? "")),
+                ]),
+            ]).serialized()
+            return Array((line + "\n").utf8)
+        }
+        let largeRequest = requestBytes(id: 41, text: largeText)
+        let secondRequest = requestBytes(id: 42, text: secondText)
+        #expect(largeRequest.count > 200_000)
+
+        let fd = try SocketPaths.connect(to: server.path)
+        defer { Darwin.close(fd) }
+        // 997 is not a divisor of any UTF-8 sequence length here, so slices regularly
+        // land inside a multi byte sequence and inside the JSON framing.
+        var offset = 0
+        while offset < largeRequest.count {
+            let end = min(offset + 997, largeRequest.count)
+            try SocketPaths.writeAll(fd: fd, data: Data(largeRequest[offset..<end]), timeout: 5)
+            offset = end
+        }
+        try SocketPaths.writeAll(fd: fd, data: Data(secondRequest), timeout: 5)
+
+        var received: [UInt8] = []
+        var responses: [Int: JSONValue] = [:]
+        let deadline = Date().addingTimeInterval(15)
+        while responses.count < 2, Date() < deadline {
+            var pollFd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            guard poll(&pollFd, 1, 1000) > 0 else { continue }
+            var chunk = [UInt8](repeating: 0, count: 16 * 1024)
+            let count = chunk.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
+            guard count > 0 else { break }
+            received.append(contentsOf: chunk[0..<count])
+            while let newline = received.firstIndex(of: UInt8(ascii: "\n")) {
+                let line = String(decoding: received[0..<newline], as: UTF8.self)
+                received.removeSubrange(0...newline)
+                let parsed = try JSONValue.parse(line)
+                if let id = parsed["id"]?.intValue { responses[Int(id)] = parsed }
+            }
+        }
+
+        let largeResponse = try #require(responses[41])
+        let secondResponse = try #require(responses[42])
+        #expect(largeResponse["error"] == nil)
+        #expect(secondResponse["error"] == nil)
+        let largeId = try #require(largeResponse["result"]?["id"]?.stringValue)
+        let secondId = try #require(secondResponse["result"]?["id"]?.stringValue)
+        #expect(Array(try fixture.repository.get(largeId).content.text.utf8) == Array(largeText.utf8))
+        #expect(Array(try fixture.repository.get(secondId).content.text.utf8) == Array(secondText.utf8))
+        #expect(largeResponse["result"]?["text"]?.stringValue == largeText)
+        #expect(secondResponse["result"]?["text"]?.stringValue == secondText)
+    }
+}
+
 @Suite("Backups")
 struct BackupTests {
     let day: Millis = 24 * 60 * 60 * 1000
@@ -381,5 +597,166 @@ struct BackupTests {
         // Pruning runs once the restore is done.
         #expect(try store.list().count == 10)
         #expect(!FileManager.default.fileExists(atPath: oldest.path))
+    }
+}
+
+@Suite("Panel frame settings")
+struct PanelFrameSettingsTests {
+    @Test func oldJSONWithoutTheNewDisplayFieldsReadsBackEqual() throws {
+        let old = try JSONValue.parse(
+            #"{"x":10,"y":900,"width":640,"height":420,"displays":{"uuid@1728x1117":{"x":10,"y":900}}}"#)
+        let parsed = try PanelFrame(json: old)
+        #expect(
+            parsed == PanelFrame(
+                x: 10, y: 900, width: 640, height: 420,
+                displays: ["uuid@1728x1117": PanelPoint(x: 10, y: 900)]))
+        // Writing it back adds nothing the old shape did not have.
+        let rewritten = try PanelFrame(json: JSONValue.parse(parsed.json.serialized()))
+        #expect(rewritten == parsed)
+        #expect(parsed.displays["uuid@1728x1117"]?.width == nil)
+        #expect(parsed.displays["uuid@1728x1117"]?.placement == nil)
+    }
+
+    @Test func newDisplayFieldsRoundTrip() throws {
+        let point = PanelPoint(x: 720, y: 900, width: 720, height: 900, placement: .right)
+        let frame = PanelFrame(x: 720, y: 900, width: 720, height: 900, displays: ["uuid@1440x900": point])
+        let parsed = try PanelFrame(json: JSONValue.parse(frame.json.serialized()))
+        #expect(parsed == frame)
+        #expect(parsed.displays["uuid@1440x900"] == point)
+        // The same values survive a settings patch, as `settings.set` stores them.
+        let settings = try Settings.defaults.applying(["panelFrame": frame.json])
+        #expect(settings.panelFrame == frame)
+    }
+}
+
+@Suite("Panel geometry")
+struct PanelGeometryTests {
+    private let minimum = CGSize(width: 396, height: 128)
+
+    private func frame(
+        _ placement: PanelPlacement, current: CGRect, visible: CGRect, zoom: Double = 1
+    ) -> CGRect {
+        PanelGeometry.frame(
+            for: placement, currentFrame: current, visibleFrame: visible, minimumSize: minimum, zoom: zoom)
+    }
+
+    @Test func placementRawValuesMatchTheFutureWireNames() {
+        #expect(PanelPlacement.left.rawValue == "left")
+        #expect(PanelPlacement.right.rawValue == "right")
+        #expect(PanelPlacement.fill.rawValue == "fill")
+        #expect(PanelPlacement.center.rawValue == "center")
+        #expect(PanelPlacement(rawValue: "center") == .center)
+    }
+
+    @Test(arguments: [1000.0, 1001.0])
+    func leftAndRightPartitionTheVisibleFrameExactly(width: Double) {
+        let visible = CGRect(x: 10, y: 20, width: width, height: 600)
+        let current = CGRect(x: 0, y: 0, width: 640, height: 560)
+        let left = frame(.left, current: current, visible: visible)
+        let right = frame(.right, current: current, visible: visible)
+        #expect(left.minX == visible.minX)
+        #expect(left.maxX == right.minX)
+        #expect(right.maxX == visible.maxX)
+        #expect(left.width + right.width == visible.width)
+        #expect(left.minY == visible.minY && left.height == visible.height)
+        #expect(right.minY == visible.minY && right.height == visible.height)
+        #expect(left == left.integral && right == right.integral)
+    }
+
+    @Test func fillEqualsTheVisibleFrameMadeIntegral() {
+        let visible = CGRect(x: 10.2, y: 20.4, width: 1000.5, height: 600.25)
+        let current = CGRect(x: 0, y: 0, width: 640, height: 560)
+        #expect(frame(.fill, current: current, visible: visible) == visible.integral)
+        let integralVisible = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        #expect(frame(.fill, current: current, visible: integralVisible) == integralVisible)
+    }
+
+    @Test func centerKeepsSizeAndCentresInsideTheVisibleFrame() {
+        let visible = CGRect(x: 100, y: 50, width: 1000, height: 600)
+        let current = CGRect(x: 0, y: 0, width: 640, height: 400)
+        let result = frame(.center, current: current, visible: visible)
+        #expect(result.width == 640 && result.height == 400)
+        #expect(result.midX == visible.midX && result.midY == visible.midY)
+        #expect(visible.contains(result))
+        #expect(result == result.integral)
+    }
+
+    @Test func centerClampsOversizeAndRaisesUndersizeToTheZoomedMinimum() {
+        let visible = CGRect(x: 0, y: 0, width: 500, height: 300)
+        let oversize = frame(
+            .center, current: CGRect(x: 0, y: 0, width: 900, height: 800), visible: visible)
+        #expect(oversize == visible)
+        // Both minimum dimensions scale linearly with zoom, so at zoom 2 the
+        // minimum doubles to 792 by 256 from the 396 by 128 base at 100 percent.
+        let roomy = CGRect(x: 0, y: 0, width: 1000, height: 600)
+        let undersize = frame(
+            .center, current: CGRect(x: 0, y: 0, width: 100, height: 50), visible: roomy, zoom: 2)
+        #expect(undersize.width == 792 && undersize.height == 256)
+        #expect(roomy.contains(undersize))
+        #expect(undersize.midX == roomy.midX)
+        // At 75 percent zoom the minimum shrinks to 297 by 96.
+        let narrower = CGRect(x: 0, y: 0, width: 999, height: 600)
+        let shrunk = frame(
+            .center, current: CGRect(x: 0, y: 0, width: 100, height: 50), visible: narrower, zoom: 0.75)
+        #expect(shrunk.width == 297 && shrunk.height == 96)
+        #expect(narrower.contains(shrunk))
+        // Containment still wins when even the zoomed minimum cannot fit: at
+        // zoom 2 on a 500 point display the width stops at the display width.
+        let contained = frame(
+            .center, current: CGRect(x: 0, y: 0, width: 100, height: 50), visible: visible, zoom: 2)
+        #expect(contained.width == 500 && contained.height == 256)
+        #expect(visible.contains(contained))
+    }
+
+    @Test func onePointChangeIsNoneWithTheExistingTwoPointTolerance() {
+        let old = CGRect(x: 100, y: 100, width: 640, height: 400)
+        let new = CGRect(x: 101, y: 99, width: 641, height: 401)
+        #expect(PanelGeometry.classify(oldFrame: old, newFrame: new) == .none)
+        #expect(PanelGeometry.defaultTolerance == 2)
+    }
+
+    @Test func threePointHeightChangeIsHeightChanged() {
+        let old = CGRect(x: 100, y: 100, width: 640, height: 400)
+        #expect(
+            PanelGeometry.classify(oldFrame: old, newFrame: CGRect(x: 100, y: 97, width: 640, height: 403))
+                == .heightChanged)
+        // Height wins even when the width also changed.
+        #expect(
+            PanelGeometry.classify(oldFrame: old, newFrame: CGRect(x: 90, y: 97, width: 660, height: 403))
+                == .heightChanged)
+    }
+
+    @Test func widthOnlyAndMoveOnlyClassification() {
+        let old = CGRect(x: 100, y: 100, width: 640, height: 400)
+        #expect(
+            PanelGeometry.classify(oldFrame: old, newFrame: CGRect(x: 80, y: 100, width: 660, height: 400))
+                == .widthOnly)
+        #expect(
+            PanelGeometry.classify(oldFrame: old, newFrame: CGRect(x: 130, y: 120, width: 640, height: 400))
+                == .moveOnly)
+    }
+
+    @Test func overhangGrowthAloneIsNotANoteResize() {
+        let old = CGRect(x: 100, y: 100, width: 640, height: 400)
+        // The window grew 50 points downward for a dropdown: its bottom edge moved down and
+        // its height grew, while the note frame inside it did not change at all.
+        let new = CGRect(x: 100, y: 50, width: 640, height: 450)
+        #expect(
+            PanelGeometry.classify(
+                oldFrame: old, newFrame: new, oldOverhang: 0, newOverhang: 50) == .none)
+    }
+
+    @Test func placementLookupSurvivesADisplaySizeChangeInsideTheKey() {
+        let uuid = "37D8832A-2D66-02CA-B9F7-8F30A301B230"
+        var saved = PanelFrame(x: 10, y: 900, width: 640)
+        // Written when the display was 1920 by 1080.
+        let storedKey = PanelFrame.displayKey(uuid: uuid, displayWidth: 1920, displayHeight: 1080)
+        saved.displays[storedKey] = PanelPoint(x: 42, y: 1000)
+        #expect(PanelFrame.displayUUID(fromKey: storedKey) == uuid)
+        // The display now reports a different size, so its fresh key would not match, yet the
+        // remembered point is still found by UUID alone.
+        #expect(PanelFrame.displayKey(uuid: uuid, displayWidth: 2560, displayHeight: 1440) != storedKey)
+        #expect(saved.rememberedPoint(forDisplayUUID: uuid) == PanelPoint(x: 42, y: 1000))
+        #expect(saved.rememberedPoint(forDisplayUUID: "00000000-0000-0000-0000-000000000000") == nil)
     }
 }

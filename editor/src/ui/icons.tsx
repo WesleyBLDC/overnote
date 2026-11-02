@@ -35,6 +35,13 @@ const paths: Record<string, ReactElement> = {
   close: <path d="m4 4 8 8M12 4l-8 8" />,
   search: <path d="M7 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10ZM13.5 13.5 10.6 10.6" />,
   sliders: <path d="M3 5h4m3 0h3M3 11h2m3 0h5M8.5 3.5v3M6.5 9.5v3" />,
+  back: <path d="M10 3 5 8l5 5" />,
+  forward: <path d="m6 3 5 5-5 5" />,
+  fillLeft: <path d="M3 3h10v10H3zM8 3v10M5.5 6v4" />,
+  fillRight: <path d="M3 3h10v10H3zM8 3v10M10.5 6v4" />,
+  fillScreen: <path d="M3 3h10v10H3z" />,
+  centre: <path d="M5.5 5.5h5v5h-5zM3 3v2M13 3v2M3 13v-2M13 13v-2" />,
+  expand: <path d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3" />,
 };
 
 export type IconName = keyof typeof paths;

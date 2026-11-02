@@ -9,7 +9,7 @@ import { BackupActionsSection } from "./components/BackupActions";
 import { NoteActions } from "./components/NoteActions";
 import { NoteListItem } from "./components/NoteListItem";
 import { RestoreBackupList } from "./components/RestoreBackupList";
-import { backupDate } from "./domain/format";
+import { backupDate, pinPositions } from "./domain/format";
 import { groupIntoSections } from "./domain/sections";
 import { useNote } from "./hooks/useNote";
 import { useSearch } from "./hooks/useSearch";
@@ -88,8 +88,9 @@ function SearchNotesList() {
   };
 
   const sections = useMemo(() => groupIntoSections(notes), [notes]);
-  const pinnedIds = useMemo(() => notes.filter((note) => note.pinned !== null).map((note) => note.id), [notes]);
   const hasQuery = searchText.trim().length > 0;
+  // A filtered list holds only some pinned notes, so their shortcut places are shown only unfiltered.
+  const pinnedPositions = useMemo(() => (hasQuery ? new Map() : pinPositions(notes)), [notes, hasQuery]);
   const showOffer = offer?.available === true && !hasQuery;
 
   return (
@@ -127,6 +128,7 @@ function SearchNotesList() {
               note={note}
               fullNote={selected}
               highlight={hasQuery ? searchText : undefined}
+              pinPosition={pinnedPositions.get(note.id)}
               isLoadingDetail={note.id === selectedId && isLoadingSelected}
               actions={
                 <NoteActions
@@ -134,11 +136,7 @@ function SearchNotesList() {
                   fullNote={selected}
                   onChange={reload}
                   highlight={hasQuery ? searchText : undefined}
-                  pinPosition={
-                    note.pinned === null || hasQuery
-                      ? undefined
-                      : { isFirst: pinnedIds[0] === note.id, isLast: pinnedIds[pinnedIds.length - 1] === note.id }
-                  }
+                  pinPosition={pinnedPositions.get(note.id)}
                 />
               }
             />

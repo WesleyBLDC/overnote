@@ -2,7 +2,17 @@
  * Method names, params, results, and events from docs/architecture.md sections 3 and 5.
  * Both the socket client (extension) and the bridge client (editor) use these.
  */
-import type { Millis, Note, NoteContent, NoteId, NoteSummary, Settings, WindowData } from "./types";
+import type {
+  Millis,
+  Note,
+  NoteContent,
+  NoteId,
+  NoteSummary,
+  PanelFrame,
+  PanelPlacement,
+  Settings,
+  WindowData,
+} from "./types";
 
 export const ErrorCode = {
   UnknownMethod: -32601,
@@ -31,6 +41,7 @@ export const Method = {
   WindowToggle: "window.toggle",
   WindowShow: "window.show",
   WindowHide: "window.hide",
+  WindowPlace: "window.place",
   WindowResize: "window.resize",
   WindowSetOverhang: "window.setOverhang",
   WindowResignFocus: "window.resignFocus",
@@ -171,6 +182,8 @@ export interface Methods {
   "window.toggle": { params: Empty; result: { visible: boolean } };
   "window.show": { params: { noteId?: NoteId }; result: { visible: true } };
   "window.hide": { params: Empty; result: { visible: false } };
+  /** Places the panel on its display; the frame follows the persisted panelFrame convention (x is the left edge, y is the top edge). */
+  "window.place": { params: { placement: PanelPlacement }; result: { placement: PanelPlacement; frame: PanelFrame } };
   "window.resize": { params: { contentHeight: number; temporary?: boolean }; result: Empty };
   /** Lets a dropdown hang `height` points past the note's bottom edge; the note keeps its size. 0 gives the room back. */
   "window.setOverhang": { params: { height: number }; result: Empty };

@@ -4,6 +4,7 @@ import { showFailureToast, useCachedPromise } from "@raycast/utils";
 import { backUpNow, revealBackupsFolder } from "./api/backups";
 import { loadMenuData } from "./api/menu-data";
 import { createNote, openInOvernote } from "./api/notes";
+import { showAndPlace } from "./api/window";
 import { summaryTitle } from "./domain/format";
 import type { NoteSummary } from "./domain/types";
 
@@ -37,7 +38,8 @@ const openRestoreList = () =>
   );
 
 export default function MenuBar() {
-  const { data, isLoading, error } = useCachedPromise(loadMenuData, [], { keepPreviousData: true });
+  const { data, isLoading, error, revalidate } = useCachedPromise(loadMenuData, [], { keepPreviousData: true });
+  const hasNotes = data !== undefined && (data.pinned.length > 0 || data.recent.length > 0);
 
   return (
     <MenuBarExtra icon={Icon.Document} tooltip="Overnote" isLoading={isLoading}>
@@ -59,9 +61,64 @@ export default function MenuBar() {
         />
         <MenuBarExtra.Item title="New Note" icon={Icon.Plus} onAction={() => run("Could not create a note", newNote)} />
       </MenuBarExtra.Section>
+      <MenuBarExtra.Section title="Window">
+        <MenuBarExtra.Item
+          title="Fill Left"
+          icon={Icon.AppWindowSidebarLeft}
+          onAction={() =>
+            run("Could not place the window", async () => {
+              await showAndPlace("left");
+            })
+          }
+        />
+        <MenuBarExtra.Item
+          title="Fill Right"
+          icon={Icon.AppWindowSidebarRight}
+          onAction={() =>
+            run("Could not place the window", async () => {
+              await showAndPlace("right");
+            })
+          }
+        />
+        <MenuBarExtra.Item
+          title="Fill Screen"
+          icon={Icon.Maximize}
+          onAction={() =>
+            run("Could not place the window", async () => {
+              await showAndPlace("fill");
+            })
+          }
+        />
+        <MenuBarExtra.Item
+          title="Centre"
+          icon={Icon.Center}
+          onAction={() =>
+            run("Could not place the window", async () => {
+              await showAndPlace("center");
+            })
+          }
+        />
+      </MenuBarExtra.Section>
       {error ? (
         <MenuBarExtra.Section>
-          <MenuBarExtra.Item title="Could Not Load Notes" subtitle={error.message} icon={Icon.ExclamationMark} />
+          <MenuBarExtra.Item
+            title="Could Not Load Notes"
+            subtitle={error.message}
+            icon={{ source: Icon.ExclamationMark, tintColor: Color.Orange }}
+            onAction={() => {
+              void revalidate();
+            }}
+          />
+        </MenuBarExtra.Section>
+      ) : null}
+      {data && !error && !hasNotes ? (
+        <MenuBarExtra.Section>
+          <MenuBarExtra.Item
+            title="Create Your First Note"
+            subtitle="No notes yet"
+            icon={Icon.Plus}
+            onAction={() => run("Could not create a note", newNote)}
+          />
         </MenuBarExtra.Section>
       ) : null}
       {data && data.pinned.length > 0 ? (

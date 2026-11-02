@@ -31,6 +31,11 @@
 # Environment:
 #   HELPER            helper binary (default assets/bin/OvernoteHelper)
 #   OVERNOTE_LOG_DIR  on failure, copy the helper logs here (CI uploads this folder)
+#   OVERNOTE_AX_EXPECT_TRUSTED  when 1, the Accessibility adoption path must carry
+#                     the external right half set below; a runner that is not
+#                     Accessibility trusted, has no matched panel row, or cannot
+#                     set the frame through Accessibility fails instead of
+#                     silently falling back to test.externalSetFrame
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -202,6 +207,17 @@ async function stop(target) {
 }
 
 const probeWindows = (pid) => JSON.parse(execFileSync(PROBE, ["windows", String(pid)], { encoding: "utf8" }));
+const probeAX = (pid) => {
+  try {
+    return execFileSync(PROBE, ["ax", String(pid)], { encoding: "utf8", env: { ...process.env, WINDOW_PROBE_AX_TRY_SET_SIZE: "0" } }).trim();
+  } catch (error) { return `unavailable (${error.message})`; }
+};
+const probeAXReport = (pid) => {
+  try { return JSON.parse(probeAX(pid)); } catch { return null; }
+};
+const probeAXSet = (pid, index, frame) => JSON.parse(execFileSync(
+  PROBE, ["ax-set", String(pid), String(index), String(frame.x), String(frame.y), String(frame.width), String(frame.height)],
+  { encoding: "utf8" }));
 const frontmostPid = () => Number(execFileSync(PROBE, ["frontmost"], { encoding: "utf8" }).trim());
 const panelWindow = (pid, state) =>
   probeWindows(pid).find((w) => Math.abs(w.width - state.frame.width) < 1 && Math.abs(w.height - state.frame.height) < 1);
@@ -301,6 +317,8 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     assert.equal(server.onscreen, true, "window server onscreen");
     assert.equal(server.sharing, 1, "shareable (read only) by default");
   });
+  // Report only: CI logs carry the Accessibility view of the shown panel for the resizable probe.
+  console.log(`[e2e] ax-report ${probeAX(pid)}`);
   // Hide While Screen Sharing: the window server stops offering the panel to capture tools
   // (kCGWindowSharingState 0, NSWindow.sharingType .none), and offers it again when turned off.
   await call("settings.set", { hideWhileScreenSharing: true });
@@ -686,6 +704,230 @@ const near = (x) => (value) => Math.abs(value - x) <= 1;
     assert.equal(after.frame.top, target.top, "top");
     assert.equal(after.frame.width, sizeBeforeRestart.width, "width");
     assert.equal(after.frame.height, sizeBeforeRestart.height, "height");
+  });
+
+  // External frame adoption: a frame set from outside the controller, through
+  // Accessibility when this runner is trusted and through test.externalSetFrame
+  // otherwise, is classified against the frame the controller last set itself
+  // and then remembered with the same rules as a user resize. Frames here are
+  // AppKit frames (bottom left origin), as test.windowState reports them.
+  const adoptState = async () => (lastState = await helper.call("test.windowState"));
+  const adoptSettings = () => helper.call("settings.get");
+  const frameNear = (a, b, tolerance = 1) =>
+    Math.abs(a.x - b.x) <= tolerance && Math.abs(a.y - b.y) <= tolerance &&
+    Math.abs(a.width - b.width) <= tolerance && Math.abs(a.height - b.height) <= tolerance;
+  const awaitAdoption = (classification, also) => poll(async () => {
+    const st = await adoptState();
+    return { st, settings: await adoptSettings() };
+  }, (value) => value.st.lastAdoption === classification && also(value), UI_MS);
+
+  // The restarted placeholder editor reports its height once as it loads; wait
+  // until it has gone quiet, as the first phase does, so a late report cannot
+  // land in the middle of the adoption frames below.
+  const adoptCalls = () => helper.call("test.bridgeCalls");
+  await until("placeholder editor finishes loading after the restart (adoption baseline)", adoptCalls,
+    (calls) => calls.methods.includes("notes.setCurrentNote"), PAGE_LOAD_MS);
+  let adoptQuietSince = Date.now();
+  let adoptLastCount = -1;
+  await until("placeholder editor goes quiet before adoption (no bridge calls for 300 ms)", async () => {
+    const count = (await adoptCalls()).methods.length;
+    if (count !== adoptLastCount) { adoptLastCount = count; adoptQuietSince = Date.now(); }
+    return Date.now() - adoptQuietSince;
+  }, (quietFor) => quietFor >= 300, UI_MS);
+  let adoptNow = await adoptState();
+  await check("panel declares resizable and movable, and reports its expected frame and last adoption", () => {
+    assert.equal(adoptNow.resizable, true, "resizable style mask bit");
+    assert.equal(adoptNow.movable, true, "movable");
+    assert.equal(adoptNow.borderless, true, "borderless style mask bit");
+    assert.equal(adoptNow.nonactivating, true, "nonactivating style mask bit");
+    assert.ok(adoptNow.expectedFrame, "expected frame recorded by the controller");
+    assert.ok(frameNear(adoptNow.expectedFrame, adoptNow.frame), `expected ${JSON.stringify(adoptNow.expectedFrame)} vs frame ${JSON.stringify(adoptNow.frame)}`);
+  });
+  // A known baseline: auto-sizing on, at a 300 pt content height.
+  await helper.call("settings.set", { windowAutoSize: true });
+  await helper.call("test.asBridge", { method: "window.resize", params: { contentHeight: 300 } });
+  adoptNow = await poll(adoptState, (st) => Math.abs(st.frame.height - 300) <= 1);
+  const adoptVisible = adoptNow.visibleFrame;
+
+  // Width only, through the test hook: auto-sizing stays on and no height is stored.
+  const widthTarget = {
+    x: Math.min(adoptNow.frame.x, adoptVisible.x + adoptVisible.width - (adoptNow.frame.width + 40)),
+    y: adoptNow.frame.y, width: adoptNow.frame.width + 40, height: adoptNow.frame.height,
+  };
+  await helper.call("test.externalSetFrame", widthTarget);
+  const widthAdopted = await awaitAdoption("widthOnly", ({ st, settings }) =>
+    frameNear(st.frame, widthTarget) && settings.windowAutoSize === true &&
+    Math.round(settings.panelFrame?.width ?? -1) === Math.round(widthTarget.width) && settings.panelFrame?.height == null);
+  await check("external width only change is adopted, keeps auto-sizing on, and stores no height", () => {
+    assert.equal(widthAdopted.st.lastAdoption, "widthOnly", "last adoption (positive reading: widthOnly)");
+    assert.equal(widthAdopted.settings.windowAutoSize, true, "windowAutoSize");
+    assert.equal(widthAdopted.settings.panelFrame.height ?? null, null, "stored height while auto-sizing");
+  });
+
+  // Move only, through the test hook: only the per display top left point is remembered.
+  const moveFrame = widthAdopted.st.frame;
+  const moveTarget = {
+    x: moveFrame.x > adoptVisible.x + 60 ? moveFrame.x - 30 : moveFrame.x + 30,
+    y: moveFrame.top + 50 <= adoptVisible.y + adoptVisible.height ? moveFrame.y + 50 : moveFrame.y - 50,
+    width: moveFrame.width, height: moveFrame.height,
+  };
+  await helper.call("test.externalSetFrame", moveTarget);
+  const moveAdopted = await awaitAdoption("moveOnly", ({ st, settings }) =>
+    frameNear(st.frame, moveTarget) && settings.windowAutoSize === true &&
+    Math.round(settings.panelFrame?.displays?.[st.screenKey]?.x ?? -1) === Math.round(moveTarget.x) &&
+    Math.round(settings.panelFrame?.displays?.[st.screenKey]?.y ?? -1) === Math.round(moveTarget.y + moveTarget.height));
+  await check("external move only change is adopted and remembers the per display point", () => {
+    assert.equal(moveAdopted.st.lastAdoption, "moveOnly", "last adoption (positive reading: moveOnly)");
+    assert.deepEqual(moveAdopted.settings.panelFrame.displays[moveAdopted.st.screenKey],
+      { x: moveTarget.x, y: moveTarget.y + moveTarget.height }, "per display point (top left)");
+    assert.equal(moveAdopted.settings.windowAutoSize, true, "windowAutoSize");
+  });
+
+  // Height while a dropdown hangs past the note: the stored height is the note
+  // height (window height minus the overhang), never the taller window height.
+  await helper.call("test.asBridge", { method: "window.setOverhang", params: { height: 80 } });
+  const hangingAdopt = await poll(adoptState, (st) => st.overhang === 80);
+  const overhangTarget = {
+    x: hangingAdopt.frame.x, y: hangingAdopt.frame.y,
+    width: hangingAdopt.frame.width, height: hangingAdopt.frame.height + 50,
+  };
+  await helper.call("test.externalSetFrame", overhangTarget);
+  const overhangAdopted = await awaitAdoption("heightChanged", ({ st, settings }) =>
+    frameNear(st.frame, overhangTarget) && settings.windowAutoSize === false &&
+    Math.round(settings.panelFrame?.height ?? -1) === Math.round(overhangTarget.height - 80));
+  await helper.call("test.asBridge", { method: "window.setOverhang", params: { height: 0 } });
+  const overhangRestored = await poll(adoptState, (st) => st.overhang === 0 && Math.abs(st.frame.height - (overhangTarget.height - 80)) <= 1);
+  await check("external height change under an overhang stores the note height, not the window height", () => {
+    assert.equal(overhangAdopted.st.lastAdoption, "heightChanged", "last adoption (positive reading: heightChanged)");
+    assert.equal(Math.round(overhangAdopted.settings.panelFrame.height), Math.round(overhangTarget.height - 80), "stored note height");
+    assert.equal(overhangRestored.frame.height, overhangTarget.height - 80, "frame height once the overhang is given back");
+  });
+
+  // The right half of the visible frame, set through Accessibility when the
+  // ax report shows trust and a matched panel row, else through the test hook.
+  // Either way the same adoption assertions carry the check, and the log says
+  // which path carried them.
+  await helper.call("settings.set", { windowAutoSize: true });
+  await helper.call("test.asBridge", { method: "window.resize", params: { contentHeight: 300 } });
+  const beforeRight = await poll(adoptState, (st) => Math.abs(st.frame.height - 300) <= 1);
+  const rightVisible = beforeRight.visibleFrame;
+  const rightTotal = Math.round(rightVisible.width);
+  const rightLeftWidth = Math.ceil(rightTotal / 2);
+  const rightHalf = {
+    x: rightVisible.x + rightLeftWidth, y: rightVisible.y,
+    width: rightTotal - rightLeftWidth, height: rightVisible.height,
+  };
+  const axReport = probeAXReport(helper.child.pid);
+  const axMatched = axReport?.windows?.find((row) => row.size &&
+    Math.abs(row.size.width - beforeRight.frame.width) <= 1 && Math.abs(row.size.height - beforeRight.frame.height) <= 1) ?? null;
+  console.log(`[e2e] ax readings accessibilityTrusted=${axReport?.accessibilityTrusted ?? "unavailable"} (positive reading: true) windowsError=${JSON.stringify(axReport?.windowsError ?? "unavailable")} (positive reading: null) matchedPanel=${axMatched ? axMatched.index : "none"} (positive reading: an index) sizeSettable=${axMatched?.sizeSettable ?? "unavailable"} (positive reading: true after the resizable change) positionSettable=${axMatched?.positionSettable ?? "unavailable"} (positive reading: true)`);
+  const expectAX = process.env.OVERNOTE_AX_EXPECT_TRUSTED === "1";
+  let adoptionPath = null;
+  if (axReport?.accessibilityTrusted === true && axMatched) {
+    const setReport = probeAXSet(helper.child.pid, axMatched.index, rightHalf);
+    console.log(`[e2e] ax-set report ${JSON.stringify(setReport)}`);
+    const afterAX = await poll(adoptState, (st) => frameNear(st.frame, rightHalf), 2_000);
+    if (frameNear(afterAX.frame, rightHalf) && setReport.sizeSetError === null && setReport.positionSetError === null) {
+      adoptionPath = "Accessibility ax-set right half";
+    } else {
+      console.log("[e2e] ax-set did not carry the right half frame");
+    }
+  }
+  if (!adoptionPath) {
+    if (expectAX) {
+      throw new Error(`expected the Accessibility path to carry adoption, but accessibilityTrusted=${axReport?.accessibilityTrusted ?? "unavailable"}, matchedPanel=${axMatched ? axMatched.index : "none"}, sizeSettable=${axMatched?.sizeSettable ?? "unavailable"}`);
+    }
+    await helper.call("test.externalSetFrame", rightHalf);
+    adoptionPath = `test.externalSetFrame (Accessibility unavailable: accessibilityTrusted=${axReport?.accessibilityTrusted ?? "unavailable"}, matchedPanel=${axMatched ? axMatched.index : "none"})`;
+  }
+  console.log(`[e2e] external adoption carried by: ${adoptionPath}`);
+  const rightAdopted = await awaitAdoption("heightChanged", ({ st, settings }) =>
+    frameNear(st.frame, rightHalf) && settings.windowAutoSize === false &&
+    Math.round(settings.panelFrame?.height ?? -1) === Math.round(rightHalf.height) &&
+    Math.round(settings.panelFrame?.width ?? -1) === Math.round(rightHalf.width));
+  await check("external right half set is adopted as a height change and turns auto-sizing off", () => {
+    assert.equal(rightAdopted.st.lastAdoption, "heightChanged", "last adoption (positive reading: heightChanged)");
+    assert.ok(frameNear(rightAdopted.st.frame, rightHalf), `frame ${JSON.stringify(rightAdopted.st.frame)} vs right half ${JSON.stringify(rightHalf)}`);
+    assert.equal(rightAdopted.settings.windowAutoSize, false, "windowAutoSize");
+    assert.equal(Math.round(rightAdopted.settings.panelFrame.height), Math.round(rightHalf.height), "stored height (note height, no overhang)");
+    assert.deepEqual(rightAdopted.settings.panelFrame.displays[rightAdopted.st.screenKey],
+      { x: rightHalf.x, y: rightHalf.y + rightHalf.height }, "per display point (top left)");
+  });
+
+  // A negative reading: setting the frame it already has changes nothing, and
+  // is not a new adoption.
+  const settingsBeforeNoop = await adoptSettings();
+  await helper.call("test.externalSetFrame", rightHalf);
+  const noopState = await adoptState();
+  const settingsAfterNoop = await adoptSettings();
+  await check("external set to the current frame is a negative reading: no new adoption, settings unchanged", () => {
+    assert.equal(noopState.lastAdoption, "heightChanged", "last adoption (negative reading: still the right half adoption)");
+    assert.deepEqual(settingsAfterNoop, settingsBeforeNoop, "settings after a no-op external set");
+    assert.ok(frameNear(noopState.frame, rightHalf), "frame after a no-op external set");
+  });
+
+  // window.place: snapped placement, stored per display, restored across hide and show.
+  // Frames from window.place follow the persisted convention (x is the left edge, y is
+  // the top edge), while test.windowState reports AppKit frames (bottom left origin).
+  const placedRight = await helper.call("window.place", { placement: "right" });
+  const placedState = await poll(adoptState, (st) => frameNear(st.frame, rightHalf));
+  const placedSettings = await adoptSettings();
+  await check("window.place right matches the visible frame right half within 1 point, with auto-sizing off and the placed frame stored", () => {
+    assert.equal(placedRight.placement, "right", "placement");
+    assert.ok(Math.abs(placedRight.frame.x - rightHalf.x) <= 1, `placed x ${placedRight.frame.x} vs ${rightHalf.x}`);
+    assert.ok(Math.abs(placedRight.frame.y - (rightVisible.y + rightVisible.height)) <= 1, `placed top ${placedRight.frame.y}`);
+    assert.ok(Math.abs(placedRight.frame.width - rightHalf.width) <= 1, "placed width");
+    assert.ok(Math.abs(placedRight.frame.height - rightHalf.height) <= 1, "placed height");
+    assert.ok(frameNear(placedState.frame, rightHalf), `frame ${JSON.stringify(placedState.frame)} vs right half ${JSON.stringify(rightHalf)}`);
+    assert.equal(placedSettings.windowAutoSize, false, "windowAutoSize after placing right");
+    assert.equal(Math.round(placedSettings.panelFrame.width), Math.round(rightHalf.width), "stored width");
+    assert.equal(Math.round(placedSettings.panelFrame.height), Math.round(rightHalf.height), "stored height");
+    assert.equal(placedSettings.panelFrame.displays[placedState.screenKey]?.placement, "right", "stored per display placement");
+  });
+  await helper.call("test.asBridge", { method: "window.resize", params: { contentHeight: 200 } });
+  const afterPlaceResize = await adoptState();
+  await check("a bridge window.resize does not move a placed panel with auto-sizing off", () => {
+    assert.ok(frameNear(afterPlaceResize.frame, rightHalf), `frame ${JSON.stringify(afterPlaceResize.frame)} vs right half ${JSON.stringify(rightHalf)}`);
+  });
+  await helper.call("window.hide");
+  await helper.call("window.show");
+  const restoredPlace = await poll(adoptState, (st) => st.visible && frameNear(st.frame, rightHalf));
+  const restoredSettings = await adoptSettings();
+  await check("hide and show restores the placed panel", () => {
+    assert.equal(restoredPlace.visible, true, "visible");
+    assert.ok(frameNear(restoredPlace.frame, rightHalf), "restored frame");
+    assert.equal(restoredSettings.panelFrame.displays[restoredPlace.screenKey]?.placement, "right", "stored placement after hide and show");
+  });
+  const sizeBeforeCentre = restoredPlace.frame;
+  const centred = await helper.call("window.place", { placement: "center" });
+  const centredState = await poll(adoptState, (st) =>
+    Math.abs(st.frame.width - sizeBeforeCentre.width) <= 1 && Math.abs(st.frame.height - sizeBeforeCentre.height) <= 1 &&
+    Math.abs(st.frame.x + st.frame.width / 2 - (rightVisible.x + rightVisible.width / 2)) <= 1 &&
+    Math.abs(st.frame.y + st.frame.height / 2 - (rightVisible.y + rightVisible.height / 2)) <= 1);
+  const centredSettings = await adoptSettings();
+  await check("window.place center keeps the size and centres the panel", () => {
+    assert.equal(centred.placement, "center", "placement");
+    assert.ok(Math.abs(centred.frame.width - sizeBeforeCentre.width) <= 1, "centred width");
+    assert.ok(Math.abs(centred.frame.height - sizeBeforeCentre.height) <= 1, "centred height");
+    assert.equal(centredState.frame.width, sizeBeforeCentre.width, "frame width after centre");
+    assert.equal(centredState.frame.height, sizeBeforeCentre.height, "frame height after centre");
+    assert.equal(centredSettings.windowAutoSize, false, "windowAutoSize after centre (it was off and centre never touches it)");
+    assert.equal(centredSettings.panelFrame.displays[centredState.screenKey]?.placement, "center", "stored placement after centre");
+  });
+  await helper.call("test.simulateUserResize", { height: 300 });
+  const unsnappedSettings = await adoptSettings();
+  await check("a simulated user resize clears the stored placement while keeping the resulting frame", () => {
+    assert.equal(unsnappedSettings.panelFrame.displays[centredState.screenKey]?.placement ?? null, null, "stored placement after a user resize");
+    assert.equal(Math.round(unsnappedSettings.panelFrame.height), 300, "stored height after a user resize");
+  });
+  await helper.call("window.place", { placement: "right" });
+  const replacedSettings = await adoptSettings();
+  assert.equal(replacedSettings.panelFrame.displays[centredState.screenKey]?.placement, "right", "stored placement before reset");
+  const resetSettings = await helper.call("settings.reset");
+  const afterResetSettings = await adoptSettings();
+  await check("settings.reset clears the stored placement", () => {
+    assert.equal(resetSettings.panelFrame, null, "panelFrame in the reset result");
+    assert.equal(afterResetSettings.panelFrame, null, "stored panelFrame after reset");
   });
   await stop(helper);
 

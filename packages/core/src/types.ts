@@ -45,11 +45,25 @@ export interface NoteSummary {
 
 export type CountMode = "characters" | "words";
 
+/** Where the panel sits inside one display, named exactly as `window.place` names it on the wire. */
+export type PanelPlacement = "left" | "right" | "fill" | "center";
+
+/** A remembered top left point on one display, with the size and placement it was placed at when known. */
+export interface PanelPoint {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  placement?: PanelPlacement;
+}
+
 export interface PanelFrame {
   x: number;
   y: number;
   width: number;
   height?: number;
+  /** One remembered point per display, keyed by `"<display uuid>@<width>x<height>"`. */
+  displays?: { [key: string]: PanelPoint };
 }
 
 export interface Settings {

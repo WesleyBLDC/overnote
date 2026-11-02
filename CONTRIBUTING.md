@@ -38,6 +38,11 @@ For editor work you often do not need Raycast at all:
 npm run dev -w editor
 ```
 
+The dev server listens on port 5199.
+Set `OVERNOTE_HARNESS_PORT` to use another port, for example when two worktrees run the browser harness at once.
+The Playwright suite starts its own servers on that port and on `OVERNOTE_PREVIEW_PORT` (default one lower, 5198) and never reuses a running one.
+`npm run verify` picks a free pair on its own when `OVERNOTE_HARNESS_PORT` is unset.
+
 This serves the editor in your browser with an in-memory mock of the helper (`editor/src/dev/mockBridge.ts`).
 Add `?seed=empty` to the URL to start with no notes.
 
@@ -46,7 +51,7 @@ Add `?seed=empty` to the URL to start with no notes.
 | Path | What lives there |
 |---|---|
 | `package.json` | The Raycast manifest and the root scripts |
-| `src/` | The Raycast extension: thin command files (`toggle-notes.ts`, `create-note.ts`, `search-notes.tsx`, `recently-deleted.tsx`, `menu-bar.tsx`) |
+| `src/` | The Raycast extension: thin command files (`toggle-notes.ts`, `open-notes.ts`, `create-note.ts`, `search-notes.tsx`, `recently-deleted.tsx`, `menu-bar.tsx`, `check-for-updates.ts`) |
 | `src/domain/` | Helper launcher, socket client, read-only database queries, and other logic with no Raycast imports |
 | `src/api/`, `src/hooks/`, `src/components/` | Calls into the helper, React hooks, and shared list and detail views |
 | `packages/core/` | `@overnote/core`: the ProseMirror schema, Markdown, HTML, and text serializers, and title rules, shared by the editor and the extension |
@@ -57,7 +62,24 @@ Add `?seed=empty` to the URL to start with no notes.
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
 | `metadata/` | Raycast Store screenshots, used by `scripts/prepare-store.sh` |
 | `assets/` | The icon, drawn by `scripts/make-icon.swift`; the editor and helper builds are generated, not committed |
-| `media/` | README screenshots |
+| `media/` | README product shots (`npm run shots:readme`; see Screenshots below) |
+| `scripts/readme-shots.mjs` | Regenerates `media/*.png` from the editor harness at 2× |
+
+## Screenshots (README)
+
+`media/` is the product showcase in the README.
+Refresh it in the same change whenever user-visible chrome that those shots show moves (accent, toolbar, ⌘K icons or Fill actions, Browse section badges, hero content, panel size).
+
+```sh
+npm run dev -w editor -- --port 5299 --strictPort --host 127.0.0.1
+# other terminal:
+npm run shots:readme
+```
+
+The script uses Playwright WebKit already in this repo (same idea as the private Store shot tool).
+It stages the panel on a soft gradient at device scale 2 and writes `note-dark.png`, `note-light.png`, `actions-dark.png`, and `browse-dark.png`.
+Do not copy files from `editor/tests/visual.spec.ts-snapshots/` into `media/`: those are 1× test fixtures, not Retina showcases.
+For Raycast Store images, refresh `metadata/` separately (private `tools/store-shots.mjs`, or real Window Captures before submit).
 
 ## The clean-room rule
 
@@ -79,7 +101,9 @@ Overnote has few unit tests and many end-to-end tests.
   - full flows inside real Raycast in development mode (hotkey toggle, panel, typing, persistence across restarts).
 - A feature is done when its end-to-end test passes, not when its unit tests pass.
 
-Run the whole suite, in the same order as CI, with one command:
+Testing targets macOS on Apple silicon only; Intel Macs and other platforms are not tested.
+Checks run locally and there is no CI gate for now, so `npm run verify` is the only gate.
+Run the whole suite with one command:
 
 ```sh
 npx playwright install webkit   # once
@@ -87,10 +111,15 @@ npm run verify
 ```
 
 `npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, and builds the extension, stopping at the first failing step.
-CI runs the same command.
+For the editing loop, `npm run verify:fast` (alias `npm run check`) runs the three typechecks, ESLint, Prettier, the core fixtures, the editor unit tests, and the helper unit tests, with the independent checks running concurrently.
+The fast mode reads the same step list as the full gate in `scripts/verify.sh`, so it is a strict subset by construction and never replaces the full gate before landing.
 Playwright needs only WebKit, the engine of the native panel.
-The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so `npm run verify` skips it on a workstation and runs it in CI.
-Set `OVERNOTE_WINDOW_E2E=1` to run it locally, or `OVERNOTE_WINDOW_E2E=0` to skip it even in CI.
+The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so it is skipped for now and `npm run verify` does not run it.
+Only the maintainer sets `OVERNOTE_WINDOW_E2E=1` to run it by hand.
+
+For performance work, `bash scripts/perf.sh` seeds deterministic fixtures of 100, 1,000, and 10,000 notes plus single notes of about 1 KB, 50 KB, and 500 KB, times the real helper headless over its socket, and compares each run with the budgets in `scripts/perf/budgets.json`.
+Budgets warn by default and fail the run only with `--strict`, and results land as JSON under `scripts/perf/results/`.
+The harness is not part of `npm run verify`; [`scripts/perf/README.md`](scripts/perf/README.md) lists what it measures and what it does not.
 
 To run one suite at a time:
 
@@ -107,7 +136,6 @@ bash scripts/smoke-helper.sh     # helper end-to-end over its socket
 bash scripts/e2e-window.sh       # panel window behavior end-to-end
 bash scripts/e2e-update.sh       # install, update, backups, and restore end-to-end (headless)
 ```
-
 Every suite that starts the helper points `OVERNOTE_BACKUP_DIR` at a temporary folder, so tests never write into your real backups.
 Keep it that way when you add one.
 

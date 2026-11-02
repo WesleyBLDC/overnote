@@ -1,11 +1,20 @@
 import type { Notice } from "./hooks";
+import { Icon } from "./icons";
 
 /**
  * Two live regions that always exist, so screen readers notice what is added to them: one polite
  * (role status) for confirmations and one assertive (role alert) for errors. The notices inside
  * are plain elements; a live region nested in another would be announced twice.
  */
-export function Notices({ notices, onExited }: { notices: Notice[]; onExited: (id: number) => void }) {
+export function Notices({
+  notices,
+  onExited,
+  onDismiss,
+}: {
+  notices: Notice[];
+  onExited: (id: number) => void;
+  onDismiss: (id: number) => void;
+}) {
   const render = (notice: Notice) => (
     <div
       key={notice.id}
@@ -15,7 +24,18 @@ export function Notices({ notices, onExited }: { notices: Notice[]; onExited: (i
         if (notice.leaving && event.target === event.currentTarget) onExited(notice.id);
       }}
     >
-      {notice.message}
+      <span>{notice.message}</span>
+      {notice.kind === "error" ? (
+        <button
+          type="button"
+          className="notice-dismiss"
+          aria-label="Dismiss notice"
+          data-testid="notice-dismiss"
+          onClick={() => onDismiss(notice.id)}
+        >
+          <Icon name="close" />
+        </button>
+      ) : null}
     </div>
   );
   return (

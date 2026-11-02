@@ -5,7 +5,9 @@ import Foundation
 /// helper instance to forward `--show` to the running one.
 public final class RPCClient {
     private let fd: Int32
-    private var buffer = Data()
+    private var buffer: [UInt8] = []
+    /// First byte not yet known to be free of a newline. Bytes before it are never rescanned.
+    private var scanOffset = 0
     private var nextId: Int64 = 1
 
     public init(path: String) throws {
@@ -25,11 +27,16 @@ public final class RPCClient {
     public func readLine(timeout: Double = 3) throws -> String? {
         let deadline = Date().addingTimeInterval(timeout)
         while true {
-            if let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
-                let line = buffer[buffer.startIndex..<newline]
-                buffer.removeSubrange(buffer.startIndex...newline)
+            if let newline = NewlineSearch.index(in: buffer, from: scanOffset) {
+                let line = buffer[0..<newline]
+                // The buffer shifts by `newline + 1` bytes, so the unscanned remainder
+                // starts at zero again (memchr stops at its first newline).
+                buffer.removeSubrange(0...newline)
+                scanOffset = 0
                 return String(decoding: line, as: UTF8.self)
             }
+            // No newline yet: resume the next search where this one stopped.
+            scanOffset = buffer.count
             let remaining = deadline.timeIntervalSinceNow
             guard remaining > 0 else { return nil }
             var pollFd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)

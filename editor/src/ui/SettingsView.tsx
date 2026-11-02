@@ -126,6 +126,7 @@ export function SettingsList({ rows, settings, selected, grouped, onHover, onCha
             <div
               role="option"
               aria-selected={i === selected}
+              tabIndex={i === selected ? 0 : -1}
               className={`panel-row setting-row${i === selected ? " is-selected" : ""}`}
               data-testid={`setting-${row.id}`}
               onMouseEnter={() => onHover(i)}
