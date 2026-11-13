@@ -79,6 +79,7 @@ The app and the extension share one database and one running panel:
 - When you quit the app, the extension starts its own panel again on its next command.
 
 If you used the extension before this version, update it and run any of its commands once before the app's first start, so your notes move to the shared folder (see below).
+Text you typed just before a takeover, a quit, or an update is saved before the panel closes.
 
 ## Back up and restore
 

@@ -1,7 +1,8 @@
 /**
  * The web side of the WKWebView bridge (docs/architecture.md section 3).
  * Requests go out through window.webkit.messageHandlers.overnote; the native side answers by
- * calling window.overnoteBridge.resolve / reject and pushes events through emit.
+ * calling window.overnoteBridge.resolve / reject and pushes events through emit. Before it shuts
+ * down, it awaits window.overnoteBridge.flush(), which saves the pending edits.
  */
 import { rpc, type RpcErrorPayload } from "@overnote/core";
 
@@ -24,6 +25,11 @@ export interface BridgeReceiver {
   resolve(id: number | string, result: unknown): void;
   reject(id: number | string, error: RpcErrorPayload): void;
   emit(event: string, payload: unknown): void;
+  /**
+   * Saves pending edits now and resolves once the helper has answered the save: true when saved
+   * or when nothing was pending. The helper awaits it before a shutdown (docs/architecture.md section 3).
+   */
+  flush(): Promise<boolean>;
 }
 
 export class BridgeError extends Error {
@@ -60,6 +66,7 @@ export class BridgeClient implements BridgeReceiver {
   private readonly pending = new Map<number, Pending>();
   private readonly listeners = new Map<string, Set<AnyListener>>();
   private readonly buffered = new Map<string, unknown[]>();
+  private flushHandler: (() => Promise<boolean>) | null = null;
   private readonly timeoutMs: number;
   private readonly bufferLimit: number;
 
@@ -151,6 +158,26 @@ export class BridgeClient implements BridgeReceiver {
     };
   }
 
+  /** Registers what `flush()` runs (the note session's save); returns an unregister function. */
+  onFlush(handler: () => Promise<boolean>): () => void {
+    this.flushHandler = handler;
+    return () => {
+      if (this.flushHandler === handler) this.flushHandler = null;
+    };
+  }
+
+  /** Runs the registered flush; with no editor loaded yet, there is nothing to save. */
+  async flush(): Promise<boolean> {
+    const handler = this.flushHandler;
+    if (!handler) return true;
+    try {
+      return await handler();
+    } catch (error) {
+      console.error("[bridge] flush failed", error);
+      return false;
+    }
+  }
+
   /** Number of requests still waiting for an answer. */
   get inFlight(): number {
     return this.pending.size;
@@ -178,6 +205,7 @@ export function installBridge(target: BridgeWindow, options?: BridgeOptions): Br
     resolve: (id, result) => client.resolve(id, result),
     reject: (id, error) => client.reject(id, error),
     emit: (event, payload) => client.emit(event, payload),
+    flush: () => client.flush(),
   };
   return client;
 }

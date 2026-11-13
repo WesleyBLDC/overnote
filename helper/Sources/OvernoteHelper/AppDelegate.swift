@@ -52,8 +52,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    /// Quitting saves the editor's pending edits first; the shutdown then exits the process.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        runtime.shutdown(reason: "terminate")
+        runtime.shutdownAfterFlush(reason: "terminate")
+        return .terminateLater
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {

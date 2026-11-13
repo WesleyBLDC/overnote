@@ -17,6 +17,10 @@ final class HelperRuntime {
     private var purgeScheduler: PurgeScheduler?
     private var signalSources: [DispatchSourceSignal] = []
     private var isShuttingDown = false
+    /// The host serving requests, asked to flush the editor before a shutdown.
+    private var host: (any HelperHost)?
+    /// A shutdown is waiting for the editor to save; further requests wait with it.
+    private var isFlushing = false
 
     init(arguments: HelperArguments) {
         self.arguments = arguments
@@ -87,6 +91,7 @@ final class HelperRuntime {
     /// Starts serving requests through `host`, and starts the purge schedule.
     func start(host: any HelperHost, extensionHandler: RPCDispatcher.ExtensionHandler? = nil) {
         guard let repository else { return }
+        self.host = host
         let dispatcher = RPCDispatcher(
             repository: repository, host: host, backups: backups, hostKind: arguments.hostKind,
             extensionHandler: extensionHandler)
@@ -121,7 +126,25 @@ final class HelperRuntime {
     /// Exits after the reply in flight has had time to reach the client.
     nonisolated func scheduleShutdown() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            MainActor.assumeIsolated { () -> Void in self.shutdown(reason: "system.shutdown") }
+            MainActor.assumeIsolated { () -> Void in self.shutdownAfterFlush(reason: "system.shutdown") }
+        }
+    }
+
+    /// How long a shutdown waits for the editor to save its pending edits.
+    static let flushTimeout: TimeInterval = 1.5
+
+    /// Asks the editor to save what the person typed in the last moments (its saves are
+    /// debounced), waits for it at most `flushTimeout` while the database and the socket stay
+    /// open to take that save, then shuts down (docs/architecture.md section 1, Shutdown).
+    func shutdownAfterFlush(reason: String) {
+        guard !isShuttingDown, !isFlushing else { return }
+        guard let host else { shutdown(reason: reason) }
+        isFlushing = true
+        Task { @MainActor in
+            if !(await host.flushEditor(timeout: Self.flushTimeout)) {
+                logger.log("The editor did not confirm a save before the shutdown")
+            }
+            shutdown(reason: reason)
         }
     }
 
@@ -145,7 +168,7 @@ final class HelperRuntime {
             signal(signalNumber, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
             source.setEventHandler {
-                MainActor.assumeIsolated { () -> Void in self.shutdown(reason: "signal \(signalNumber)") }
+                MainActor.assumeIsolated { () -> Void in self.shutdownAfterFlush(reason: "signal \(signalNumber)") }
             }
             source.resume()
             signalSources.append(source)
