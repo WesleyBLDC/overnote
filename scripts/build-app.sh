@@ -9,7 +9,8 @@
 # assets/editor and assets/bin/OvernoteHelper), so this script only assembles and signs:
 #   Contents/MacOS/Overnote        the helper binary, which runs in app mode from this bundle
 #   Contents/Resources/editor/     the built editor
-#   Contents/Resources/Overnote.icns  made from assets/extension-icon.png with sips and iconutil
+#   Contents/Resources/Overnote.icns  made from assets/brand/overnote-logo-1024.png with sips and
+#                                     iconutil, every size from 16 to 512@2x (1024 px)
 #   Contents/Info.plist            com.wesleybldc.overnote, version from helper/VERSION
 # The bundle is signed ad hoc (codesign --sign -) for this Mac only: no Developer ID, no
 # notarization.
@@ -70,15 +71,18 @@ cp "$BIN" "$STAGE/Contents/MacOS/Overnote"
 chmod 755 "$STAGE/Contents/MacOS/Overnote"
 ditto assets/editor "$STAGE/Contents/Resources/editor"
 
-log "Icon: Overnote.icns from assets/extension-icon.png"
+ICON_SRC="assets/brand/overnote-logo-1024.png"
+[[ -f "$ICON_SRC" ]] || die "$ICON_SRC is missing: it is the 1024 px logo master the app icon is made from."
+[[ "$(sips -g pixelWidth "$ICON_SRC" | awk '/pixelWidth/ {print $2}')" == 1024 ]] || die "$ICON_SRC must be 1024 px wide."
+log "Icon: Overnote.icns from $ICON_SRC"
 for size in 16 32 128 256 512; do
-  sips -z "$size" "$size" assets/extension-icon.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+  sips -z "$size" "$size" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
   double=$((size * 2))
-  # The source is 512 px, so the 512@2x slot is the source itself.
-  if ((double <= 512)); then
-    sips -z "$double" "$double" assets/extension-icon.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+  # The source is 1024 px, so the 512@2x slot is the source itself.
+  if ((double < 1024)); then
+    sips -z "$double" "$double" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
   else
-    cp assets/extension-icon.png "$ICONSET/icon_${size}x${size}@2x.png"
+    cp "$ICON_SRC" "$ICONSET/icon_${size}x${size}@2x.png"
   fi
 done
 iconutil -c icns "$ICONSET" -o "$STAGE/Contents/Resources/Overnote.icns"

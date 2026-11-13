@@ -22,7 +22,7 @@ Both are named Overnote, and both open the same database.
 | Editor build | `assets/editor/` (`index.html` plus relative assets; Vite `base: "./"`) |
 | Data dir | `~/Library/Application Support/Overnote/`, shared by the extension and `Overnote.app`; the extension passes it as `--support-dir`, and `OVERNOTE_SUPPORT_DIR` overrides it in the extension (`src/domain/paths.ts`) and in `scripts/update-extension.sh` |
 | Legacy data dir | `environment.supportPath` of the extension, where releases up to helper 0.5.0 kept the database; the extension passes it as `--legacy-support-dir`, and the helper only ever reads it (see [section 9](#9-backups-installs-and-updates)) |
-| App bundle | `dist-app/Overnote.app` from `scripts/build-app.sh`: `Contents/MacOS/Overnote` (the helper binary), `Contents/Resources/editor/` (the editor build), `Contents/Resources/Overnote.icns`, and `Contents/Info.plist` with `CFBundleIdentifier` `com.wesleybldc.overnote`; `npm run app:install` copies it to `/Applications` |
+| App bundle | `dist-app/Overnote.app` from `scripts/build-app.sh`: `Contents/MacOS/Overnote` (the helper binary), `Contents/Resources/editor/` (the editor build), `Contents/Resources/Overnote.icns` (made from the 1024 px logo master `assets/brand/overnote-logo-1024.png`), and `Contents/Info.plist` with `CFBundleIdentifier` `com.wesleybldc.overnote`; `npm run app:install` copies it to `/Applications` |
 | Database | `<support-dir>/notes.sqlite` (WAL) |
 | Socket | `/tmp/overnote-<uid>/helper.sock`; the directory is created with mode 0700 by whoever starts first |
 | PID file | `/tmp/overnote-<uid>/helper.pid` |
