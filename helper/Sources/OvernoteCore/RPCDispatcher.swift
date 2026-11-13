@@ -14,6 +14,8 @@ public final class RPCDispatcher: Sendable {
     /// The backups folder; nil disables the `system.*Backup*` methods (unit tests).
     public let backups: BackupStore?
     private let processId: Int32
+    /// Reported by `system.ping`, so the extension never replaces a running `Overnote.app`.
+    public let hostKind: HelperHostKind
     private let extensionHandler: ExtensionHandler?
 
     /// Extra socket methods (the `--test-hooks` set). Returns nil for methods it does not own.
@@ -31,8 +33,9 @@ public final class RPCDispatcher: Sendable {
 
     public init(
         repository: NotesRepository, host: any HelperHost, backups: BackupStore? = nil, processId: Int32 = getpid(),
-        extensionHandler: ExtensionHandler? = nil
+        hostKind: HelperHostKind = .extension, extensionHandler: ExtensionHandler? = nil
     ) {
+        self.hostKind = hostKind
         self.repository = repository
         self.host = host
         self.backups = backups
@@ -65,7 +68,9 @@ public final class RPCDispatcher: Sendable {
         switch method {
         // MARK: system
         case "system.ping":
-            return ["version": .string(HelperVersion.current), "pid": .int(Int64(processId))]
+            return [
+                "version": .string(HelperVersion.current), "pid": .int(Int64(processId)), "host": .string(hostKind.rawValue),
+            ]
         case "system.shutdown":
             await host.requestShutdown()
             return [:]

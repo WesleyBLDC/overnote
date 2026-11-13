@@ -165,17 +165,26 @@ public struct HelperArguments: Equatable, Sendable {
     public var testHooks = false
     /// Development only: reloads the editor when its build in `--editor-dir` changes.
     public var watchEditor = false
+    /// App mode (`Overnote.app`, or `--app`): app defaults for the paths, the hotkey, the menu
+    /// bar item, and `host: "app"` in `system.ping`.
+    public var app = false
+    /// A folder whose `notes.sqlite` is copied into `supportDir` once, when `supportDir` has none.
+    public var legacySupportDir: String?
+
+    public var hostKind: HelperHostKind { app ? .app : .extension }
 
     public static let usage = """
-        Usage: OvernoteHelper --support-dir <dir> [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--watch-editor] [--headless] [--test-hooks] [--version] [--schema-version]
+        Usage: OvernoteHelper --support-dir <dir> [--legacy-support-dir <dir>] [--app] [--socket <path>] [--pid-file <path>] [--editor-dir <dir>] [--show] [--watch-editor] [--headless] [--test-hooks] [--version] [--schema-version]
         """
 
     public struct ParseError: Error, CustomStringConvertible {
         public let description: String
     }
 
-    public static func parse(_ arguments: [String]) throws -> HelperArguments {
+    /// Parses the command line. In app mode every path has a default, and explicit flags still win.
+    public static func parse(_ arguments: [String], context: LaunchContext = .current) throws -> HelperArguments {
         var supportDir: String?
+        var legacySupportDir: String?
         var socketPath: String?
         var pidFile: String?
         var editorDir: String?
@@ -193,6 +202,8 @@ public struct HelperArguments: Equatable, Sendable {
             case "--socket": socketPath = try value(for: argument)
             case "--pid-file": pidFile = try value(for: argument)
             case "--editor-dir": editorDir = try value(for: argument)
+            case "--legacy-support-dir": legacySupportDir = try value(for: argument)
+            case "--app": result.app = true
             case "--show": result.show = true
             case "--version": result.version = true
             case "--schema-version": result.schemaVersion = true
@@ -209,11 +220,22 @@ public struct HelperArguments: Equatable, Sendable {
         if result.version || result.schemaVersion {
             return result
         }
-        guard let supportDir else { throw ParseError(description: "--support-dir is required") }
-        result.supportDir = supportDir
-        result.socketPath = socketPath ?? SocketPaths.defaultDirectory + "/helper.sock"
-        result.pidFile = pidFile ?? SocketPaths.defaultDirectory + "/helper.pid"
-        result.editorDir = editorDir
+        if context.isAppBundle { result.app = true }
+        let runtimeDir = "/tmp/overnote-\(context.uid)"
+        if result.app {
+            result.supportDir = supportDir ?? AppMode.supportDirectory(home: context.home)
+            // No legacy default: the extension knows its old folder and passes it; the app only
+            // ever opens the shared folder.
+            result.legacySupportDir = legacySupportDir
+            result.editorDir = editorDir ?? context.resourcePath.map { ($0 as NSString).appendingPathComponent("editor") }
+        } else {
+            guard let supportDir else { throw ParseError(description: "--support-dir is required") }
+            result.supportDir = supportDir
+            result.legacySupportDir = legacySupportDir
+            result.editorDir = editorDir
+        }
+        result.socketPath = socketPath ?? runtimeDir + "/helper.sock"
+        result.pidFile = pidFile ?? runtimeDir + "/helper.pid"
         return result
     }
 }

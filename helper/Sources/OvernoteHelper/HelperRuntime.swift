@@ -44,15 +44,28 @@ final class HelperRuntime {
             try SocketPaths.prepareDirectory(for: arguments.pidFile)
             try SocketPaths.prepareDirectory(for: arguments.socketPath)
             let lock = InstanceLock(path: arguments.pidFile)
-            try lock.acquire()
+            do {
+                try lock.acquire()
+            } catch let error as InstanceLock.AlreadyRunning {
+                // The app takes over from a helper the extension started; any other pair keeps
+                // the running one (docs/architecture.md section 1, Handover).
+                guard arguments.app, takeOver(from: error.pid) else { throw error }
+                try lock.acquire()
+            }
             self.lock = lock
         } catch let error as InstanceLock.AlreadyRunning {
             logger.log("\(error); exiting")
-            forwardShowIfRequested()
+            if arguments.app {
+                forwardShow()
+            } else {
+                forwardShowIfRequested()
+            }
             return .alreadyRunning
         } catch {
             fail("Cannot take the instance lock: \(error)")
         }
+
+        migrateLegacyDatabase()
 
         do {
             let path = (arguments.supportDir as NSString).appendingPathComponent("notes.sqlite")
@@ -74,7 +87,9 @@ final class HelperRuntime {
     /// Starts serving requests through `host`, and starts the purge schedule.
     func start(host: any HelperHost, extensionHandler: RPCDispatcher.ExtensionHandler? = nil) {
         guard let repository else { return }
-        let dispatcher = RPCDispatcher(repository: repository, host: host, backups: backups, extensionHandler: extensionHandler)
+        let dispatcher = RPCDispatcher(
+            repository: repository, host: host, backups: backups, hostKind: arguments.hostKind,
+            extensionHandler: extensionHandler)
         self.dispatcher = dispatcher
 
         let logger = logger
@@ -134,6 +149,74 @@ final class HelperRuntime {
             }
             source.resume()
             signalSources.append(source)
+        }
+    }
+
+    /// How long the app waits for an extension helper to exit before it gives up.
+    static let takeOverTimeout: TimeInterval = 5
+
+    /// App mode, with the lock held by another helper: when that helper is an extension host (or
+    /// an older one that reports no host), asks it to shut down and waits for the lock to free.
+    /// Returns false when the running helper is an app host, which this process defers to.
+    private func takeOver(from pid: Int32?) -> Bool {
+        var host: String?
+        if let client = try? RPCClient(path: arguments.socketPath), let ping = try? client.call("system.ping", timeout: 2) {
+            host = ping["host"]?.stringValue ?? HelperHostKind.extension.rawValue
+            if host == HelperHostKind.app.rawValue { return false }
+            logger.log("Taking over from the extension's helper (pid \(pid.map(String.init) ?? "unknown"))")
+            _ = try? client.call("system.shutdown", timeout: 10)
+        }
+        let deadline = Date().addingTimeInterval(Self.takeOverTimeout)
+        var signalled = false
+        while Date() < deadline {
+            if !Self.lockIsHeld(arguments.pidFile) { return true }
+            // A helper that does not answer, or that answered but did not exit, gets SIGTERM
+            // halfway through the wait.
+            if !signalled, Date() > deadline.addingTimeInterval(-Self.takeOverTimeout / 2), let pid, pid > 0 {
+                signalled = true
+                kill(pid, SIGTERM)
+            }
+            usleep(50_000)
+        }
+        logger.log("The running helper did not exit within \(Int(Self.takeOverTimeout)) s (host \(host ?? "unknown"))")
+        return false
+    }
+
+    /// True while some process holds the instance lock on `path`.
+    private static func lockIsHeld(_ path: String) -> Bool {
+        let fd = open(path, O_RDONLY | O_CLOEXEC)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        if flock(fd, LOCK_EX | LOCK_NB) == 0 {
+            flock(fd, LOCK_UN)
+            return false
+        }
+        return true
+    }
+
+    /// Copies the legacy database into the shared folder once (docs/architecture.md section 9).
+    /// A failed copy stops the start, so the helper never creates an empty database that would
+    /// hide the legacy notes; the legacy file is untouched and the next start tries again.
+    private func migrateLegacyDatabase() {
+        let decision = LegacyMigration.decide(
+            supportDir: arguments.supportDir, legacySupportDir: arguments.legacySupportDir,
+            fileExists: { FileManager.default.fileExists(atPath: $0) })
+        guard case .copy(let source) = decision else { return }
+        do {
+            try LegacyMigration.copy(from: source, toSupportDir: arguments.supportDir)
+            logger.log("Copied the notes from \(source) into \(arguments.supportDir); the original stays as it was")
+        } catch {
+            fail("Could not copy the notes from \(source): \(error)")
+        }
+    }
+
+    /// App mode, a second launch (opening the app again): shows the running helper's panel.
+    private func forwardShow() {
+        do {
+            let client = try RPCClient(path: arguments.socketPath)
+            _ = try client.call("window.show")
+        } catch {
+            logger.log("Could not ask the running helper to show its panel: \(error)")
         }
     }
 

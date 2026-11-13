@@ -171,7 +171,7 @@ export interface DragRect {
 
 /** Params and result for every method, keyed by method name. */
 export interface Methods {
-  "system.ping": { params: Empty; result: { version: string; pid: number } };
+  "system.ping": { params: Empty; result: { version: string; pid: number; host?: "app" | "extension" } };
   "system.shutdown": { params: Empty; result: Empty };
   "system.ready": { params: Empty; result: { settings: Settings; windowData: WindowData } };
   "system.status": { params: Empty; result: SystemStatus };
