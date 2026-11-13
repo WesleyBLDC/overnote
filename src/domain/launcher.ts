@@ -137,32 +137,49 @@ export class HelperLauncher {
 
     const running = await this.ping();
     if (running && (await this.reusable(running, expected, launch))) {
-      return { client: this.client, ...running, started: false };
+      return this.reused(running);
     }
 
     return this.withLaunchLock(async () => {
       // Another command may have fixed things while we waited for the lock.
       const current = await this.ping();
       if (current && (await this.reusable(current, expected, launch))) {
-        return { client: this.client, ...current, started: false };
+        return this.reused(current);
       }
       if (current) await this.stop(current.pid);
       else {
         // Overnote.app may be starting up: reuse it once it answers, never replace it.
         const app = await this.clearStale();
-        if (app) return { client: this.client, ...app, started: false };
+        if (app) return this.reused(app);
       }
 
       const pid = await this.spawn(options);
       const ready = await this.waitForReady(pid);
       // Overnote.app took the lock first, so ours exited and the app answered instead.
-      if (ready.host === "app") return { client: this.client, ...ready, started: false };
+      if (ready.host === "app") return this.reused(ready);
       if (ready.version !== expected) {
         throw new HelperLaunchError(`The helper reports version ${ready.version}, expected ${expected}.`);
       }
       await this.recordLaunch(ready.pid, launch);
       return { client: this.client, ...ready, started: true };
     });
+  }
+
+  /**
+   * A running helper this call did not start. Overnote.app never got this extension's legacy
+   * folder, so it may have created an empty shared database first: hand it the folder with
+   * `system.importLegacy`, which imports only into a database that holds no note at all
+   * (docs/architecture.md section 9). Older apps without the method, and any failure, change nothing.
+   */
+  private async reused(running: PingResult): Promise<EnsureResult> {
+    if (running.host === "app" && this.paths.legacySupportDir !== null) {
+      try {
+        await this.client.call("system.importLegacy", { dir: this.paths.legacySupportDir });
+      } catch {
+        // The app keeps running on its database as it is.
+      }
+    }
+    return { client: this.client, ...running, started: false };
   }
 
   /**

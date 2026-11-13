@@ -78,16 +78,16 @@ The app and the extension share one database and one running panel:
 - When the app starts while the extension's panel runs, the app takes over.
 - When you quit the app, the extension starts its own panel again on its next command.
 
-If you used the extension before this version, update it and run any of its commands once before the app's first start, so your notes move to the shared folder (see below).
+If you used the extension before this version, update it; your notes move to the shared folder the first time you run any of its commands, even when the app started first (see below).
 Text you typed just before a takeover, a quit, or an update is saved before the panel closes.
 
 ## Back up and restore
 
 Your notes live in one SQLite file, `notes.sqlite`, in `~/Library/Application Support/Overnote`, which the extension and the app share.
-Releases up to 0.5.0 kept it in the extension's Raycast support folder; the first start of a newer release copies it into the shared folder once, and leaves the original untouched.
+Releases up to 0.5.0 kept it in the extension's Raycast support folder; a newer release copies it into the shared folder once, as long as the shared folder holds no note yet, and leaves the original untouched.
 Backups are kept in `~/Library/Application Support/Overnote/backups`.
 
-- Overnote writes a backup once a day while it runs, and before every update, database upgrade, and restore.
+- Overnote writes a backup once a day while it runs, and before every update, database upgrade, restore, and import of older notes.
 - It keeps the latest 10 backups, plus the newest one from each of the last 4 weeks.
 - Each backup is a complete, ordinary SQLite file named like `notes-20261015T093000.000Z-v0.3.0-daily.sqlite`: the time in UTC, the Overnote version, and why it was written.
 

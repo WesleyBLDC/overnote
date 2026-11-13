@@ -359,6 +359,71 @@ describe("the shared data folder and the Overnote.app handover, against the real
     expect(await waitForExit(appPid, 5000)).toBe(true);
   });
 
+  it("hands its legacy folder to an app that started first on an empty database, and never overwrites notes", async () => {
+    // The old release's notes, written in the legacy folder.
+    const old = launcherFor("legacy-late");
+    const first = await ensure(old);
+    await old.client.call("notes.create", contentFromMarkdown("Waiting in the old folder"));
+    await old.stop(first.pid);
+
+    // Overnote.app starts before the extension ever ran: it has no legacy folder, so it creates an
+    // empty shared database. Its notes.changed events are readable through the test hooks.
+    const launcher = launcherFor("shared-late", "legacy-late");
+    const appPid = startHelperProcess(launcher.paths, ["--app", "--test-hooks"]);
+    pids.add(appPid);
+    await waitForHost(launcher, "app", appPid);
+    expect((await launcher.client.call("notes.count", {})).count).toBe(0);
+
+    // The extension's next command finds the app and hands it the legacy folder.
+    expect(await ensure(launcher)).toMatchObject({ started: false, pid: appPid, host: "app" });
+    expect((await launcher.client.call("notes.list", {})).items.map((note) => note.title)).toEqual([
+      "Waiting in the old folder",
+    ]);
+    // test.events is a test hook, outside the typed protocol.
+    const testHook = launcher.client.call.bind(launcher.client) as unknown as (
+      method: string,
+      params: object,
+    ) => Promise<unknown>;
+    const events = (await testHook("test.events", {})) as { event: string }[];
+    expect(events.map((entry) => entry.event)).toContain("notes.changed");
+    const backups = (await launcher.client.call("system.listBackups", {})).items;
+    expect(backups.filter((backup) => backup.reason === "pre-import")).toHaveLength(1);
+
+    // From now on the shared database holds notes, deleted ones count too, and nothing replaces it.
+    const [imported] = (await launcher.client.call("notes.list", {})).items;
+    await launcher.client.call("notes.delete", { id: imported?.id ?? "" });
+    const again = await launcher.client.call("system.importLegacy", { dir: path.join(root, "legacy-late") });
+    expect(again).toMatchObject({ imported: false, preImportBackup: null, noteCount: 0 });
+    expect((await launcher.client.call("notes.listDeleted", {})).items).toHaveLength(1);
+    await launcher.client.call("system.shutdown", {});
+    expect(await waitForExit(appPid, 5000)).toBe(true);
+  });
+
+  it("imports at startup into a shared database an app left empty", async () => {
+    const old = launcherFor("legacy-start");
+    const first = await ensure(old);
+    await old.client.call("notes.create", contentFromMarkdown("Carried at startup"));
+    await old.stop(first.pid);
+
+    // The app ran once and quit, leaving an empty shared database behind.
+    const launcher = launcherFor("shared-start", "legacy-start");
+    const appPid = startHelperProcess(launcher.paths, ["--app"]);
+    pids.add(appPid);
+    await waitForHost(launcher, "app", appPid);
+    await launcher.client.call("system.shutdown", {});
+    expect(await waitForExit(appPid, 5000)).toBe(true);
+    expect(fs.existsSync(path.join(root, "shared-start", "notes.sqlite"))).toBe(true);
+
+    // The extension's own helper gets --legacy-support-dir and treats empty as not migrated.
+    const started = await ensure(launcher);
+    expect(started).toMatchObject({ started: true, host: "extension" });
+    expect((await launcher.client.call("notes.list", {})).items.map((note) => note.title)).toEqual([
+      "Carried at startup",
+    ]);
+    await launcher.stop(started.pid);
+    expect(fs.readFileSync(path.join(root, "shared-start", "helper.log"), "utf8")).toMatch(/Imported 1 note\(s\) from/);
+  });
+
   it("an app start shuts down the extension's helper and takes over, on the same data", async () => {
     const launcher = launcherFor("shared", "legacy");
     const extension = await ensure(launcher);

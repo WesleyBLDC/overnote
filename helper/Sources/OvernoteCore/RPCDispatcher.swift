@@ -24,6 +24,7 @@ public final class RPCDispatcher: Sendable {
     /// Methods only the socket may call: backups and restores are for the extension and scripts.
     public static let socketOnlyMethods: Set<String> = [
         "system.status", "system.backup", "system.listBackups", "system.restoreBackup", "system.dismissRestoreOffer",
+        "system.importLegacy",
     ]
 
     /// Methods only the editor may call.
@@ -107,6 +108,18 @@ public final class RPCDispatcher: Sendable {
             await host.emit("notes.changed", ["ids": .array(outcome.result.map(JSONValue.string))])
             return [
                 "restored": outcome.restored.json, "preRestoreBackup": outcome.preRestore.json,
+                "noteCount": .int(Int64(try repository.count())),
+            ]
+        case "system.importLegacy":
+            let dir = try p.string("dir")
+            guard dir.hasPrefix("/") else { throw RPCError.badParams("dir must be absolute") }
+            let outcome = try LegacyMigration.importLegacy(legacySupportDir: dir, into: repository, backups: backups)
+            if let ids = outcome.ids {
+                // Every note changed, so an open editor reloads.
+                await host.emit("notes.changed", ["ids": .array(ids.map(JSONValue.string))])
+            }
+            return [
+                "imported": .bool(outcome.imported), "preImportBackup": outcome.backup?.json ?? .null,
                 "noteCount": .int(Int64(try repository.count())),
             ]
         case "system.dismissRestoreOffer":

@@ -1122,16 +1122,32 @@ struct AppModeTests {
         #expect(!plain.app && plain.hostKind == .extension && plain.legacySupportDir == nil)
     }
 
-    @Test func theLegacyDatabaseIsCopiedOnlyIntoAnEmptySharedFolder() throws {
-        let files: Set<String> = ["/legacy/notes.sqlite"]
-        let decide = { (support: String, legacy: String?) in
-            LegacyMigration.decide(supportDir: support, legacySupportDir: legacy, fileExists: files.contains)
+    @Test func theLegacyDatabaseMovesOnlyIntoASharedDatabaseWithNoNoteAtAll() throws {
+        // holdsNotes: nil means the database cannot be read.
+        func decide(shared: Bool?, legacy: Bool?, legacyDir: String? = "/legacy") -> LegacyMigration.Decision {
+            var files: Set<String> = []
+            if shared != nil { files.insert("/shared/notes.sqlite") }
+            if legacy != nil { files.insert("/legacy/notes.sqlite") }
+            let notes: [String: Bool?] = ["/shared/notes.sqlite": shared, "/legacy/notes.sqlite": legacy]
+            return LegacyMigration.decide(
+                supportDir: "/shared", legacySupportDir: legacyDir, fileExists: files.contains,
+                holdsNotes: { notes[$0] ?? nil })
         }
-        #expect(decide("/shared", "/legacy") == .copy(from: "/legacy/notes.sqlite"))
-        #expect(decide("/legacy", "/legacy/") == .alreadyMigrated)
-        #expect(decide("/shared", nil) == .noLegacyFolder)
-        #expect(decide("/shared", "/shared/") == .noLegacyFolder)
-        #expect(decide("/shared", "/elsewhere") == .nothingToCopy)
+        // No shared database yet: the file is copied before the database opens.
+        #expect(decide(shared: nil, legacy: true) == .copy(from: "/legacy/notes.sqlite"))
+        #expect(decide(shared: nil, legacy: nil) == .nothingToCopy)
+        // An empty shared database (Overnote.app started first) takes a legacy one with notes.
+        #expect(decide(shared: false, legacy: true) == .importInto(from: "/legacy/notes.sqlite"))
+        #expect(decide(shared: false, legacy: false) == .nothingToCopy)
+        #expect(decide(shared: false, legacy: nil) == .nothingToCopy)
+        // A shared database with any note, or one that cannot be read, is never touched.
+        #expect(decide(shared: true, legacy: true) == .alreadyMigrated)
+        let unreadable = LegacyMigration.decide(
+            supportDir: "/shared", legacySupportDir: "/legacy", fileExists: { _ in true },
+            holdsNotes: { $0.hasPrefix("/legacy") ? true : nil })
+        #expect(unreadable == .alreadyMigrated)
+        #expect(decide(shared: false, legacy: true, legacyDir: nil) == .noLegacyFolder)
+        #expect(decide(shared: false, legacy: true, legacyDir: "/shared/") == .noLegacyFolder)
 
         // The copy carries the notes, and the legacy file is byte for byte unchanged.
         let directory = try TempDirectory()

@@ -660,66 +660,87 @@ public final class NotesRepository: @unchecked Sendable {
     /// live connection with the online backup API, then migrates it if it is older. The backup
     /// must pass `quick_check` and must not have a newer schema. Returns every note id after.
     public func restore(from path: String) throws -> [String] {
+        try locked { try restoreLocked(from: path) }
+    }
+
+    /// The database file this repository opened.
+    public var databasePath: String { path }
+
+    /// Whether the database holds any note, live or deleted.
+    public func holdsAnyNote() throws -> Bool {
+        try locked { try Self.holdsNotes(db) }
+    }
+
+    /// `restore(from:)`, but only into a database that holds no note at all, live or deleted;
+    /// the check and the copy run under the same lock, so a note written in between is never
+    /// overwritten. Returns nil, changing nothing, when the database holds a note
+    /// (`system.importLegacy`, docs/architecture.md section 9).
+    public func restoreIntoEmpty(from path: String) throws -> [String]? {
         try locked {
-            let source: SQLiteDatabase
+            if try Self.holdsNotes(db) { return nil }
+            return try restoreLocked(from: path)
+        }
+    }
+
+    private func restoreLocked(from path: String) throws -> [String] {
+        let source: SQLiteDatabase
+        do {
+            source = try SQLiteDatabase(path: path, readOnly: true)
+        } catch {
+            throw RPCError.badParams("Cannot open the backup: \(error)")
+        }
+        defer { source.close() }
+        let check = (try? source.queryFirst("PRAGMA quick_check") { $0.text(0) }) ?? nil
+        guard check == "ok" else { throw RPCError.badParams("The backup is damaged (\(check ?? "not a database"))") }
+        let version = try source.userVersion
+        guard version >= 1 else { throw RPCError.badParams("The backup has no Overnote notes") }
+        guard version <= Migrations.latestVersion else {
+            throw RPCError.conflict(Migrations.NewerSchemaError(found: version, supported: Migrations.latestVersion).description)
+        }
+        // Rehearse the upgrade on a scratch copy first. Replacing the live database
+        // and only then discovering that its migration fails would leave every list
+        // serving an unmigrated schema until the helper restarted and tried again.
+        // A backup that cannot be upgraded is refused here, with the live database
+        // untouched, in the same spirit as the damaged and newer schema refusals.
+        let scratchPath = (NSTemporaryDirectory() as NSString)
+            .appendingPathComponent("overnote-restore-check-\(UUID().uuidString).sqlite")
+        func removeScratch() {
+            for suffix in ["", "-wal", "-shm", "-journal"] {
+                try? FileManager.default.removeItem(atPath: scratchPath + suffix)
+            }
+        }
+        defer { removeScratch() }
+        let scratch = try SQLiteDatabase(path: scratchPath)
+        do {
+            try source.copy(into: scratch)
+            try Migrations.migrate(scratch)
+            scratch.close()
+        } catch let error as RPCError {
+            scratch.close()
+            throw error
+        } catch {
+            scratch.close()
+            throw RPCError.badParams("The backup cannot be upgraded to the current schema: \(error)")
+        }
+        // The reader holds its own snapshot of the file being replaced, so close it under
+        // its lock and reopen it only once the restore has succeeded, before any read
+        // can use it. A failed restore leaves the reader closed, so reads fall back to
+        // the writer instead of reopening on a database whose migration did not finish.
+        return try withLock(readerLock) {
+            reader?.close()
+            reader = nil
             do {
-                source = try SQLiteDatabase(path: path, readOnly: true)
+                try source.copy(into: db)
+                try db.execute("PRAGMA journal_mode = WAL")
+                try Migrations.migrate(db)
+                ftsAvailable = try Self.detectFTS(db)
+                try db.run("DELETE FROM settings WHERE key = ?", [.text(Self.restoreOfferKey)])
+                let ids = try db.query("SELECT id FROM notes ORDER BY id") { $0.text(0) }
+                reader = try? SQLiteDatabase(path: self.path, readOnly: true)
+                return ids
             } catch {
-                throw RPCError.badParams("Cannot open the backup: \(error)")
-            }
-            defer { source.close() }
-            let check = (try? source.queryFirst("PRAGMA quick_check") { $0.text(0) }) ?? nil
-            guard check == "ok" else { throw RPCError.badParams("The backup is damaged (\(check ?? "not a database"))") }
-            let version = try source.userVersion
-            guard version >= 1 else { throw RPCError.badParams("The backup has no Overnote notes") }
-            guard version <= Migrations.latestVersion else {
-                throw RPCError.conflict(Migrations.NewerSchemaError(found: version, supported: Migrations.latestVersion).description)
-            }
-            // Rehearse the upgrade on a scratch copy first. Replacing the live database
-            // and only then discovering that its migration fails would leave every list
-            // serving an unmigrated schema until the helper restarted and tried again.
-            // A backup that cannot be upgraded is refused here, with the live database
-            // untouched, in the same spirit as the damaged and newer schema refusals.
-            let scratchPath = (NSTemporaryDirectory() as NSString)
-                .appendingPathComponent("overnote-restore-check-\(UUID().uuidString).sqlite")
-            func removeScratch() {
-                for suffix in ["", "-wal", "-shm", "-journal"] {
-                    try? FileManager.default.removeItem(atPath: scratchPath + suffix)
-                }
-            }
-            defer { removeScratch() }
-            let scratch = try SQLiteDatabase(path: scratchPath)
-            do {
-                try source.copy(into: scratch)
-                try Migrations.migrate(scratch)
-                scratch.close()
-            } catch let error as RPCError {
-                scratch.close()
-                throw error
-            } catch {
-                scratch.close()
-                throw RPCError.badParams("The backup cannot be upgraded to the current schema: \(error)")
-            }
-            // The reader holds its own snapshot of the file being replaced, so close it under
-            // its lock and reopen it only once the restore has succeeded, before any read
-            // can use it. A failed restore leaves the reader closed, so reads fall back to
-            // the writer instead of reopening on a database whose migration did not finish.
-            return try withLock(readerLock) {
-                reader?.close()
                 reader = nil
-                do {
-                    try source.copy(into: db)
-                    try db.execute("PRAGMA journal_mode = WAL")
-                    try Migrations.migrate(db)
-                    ftsAvailable = try Self.detectFTS(db)
-                    try db.run("DELETE FROM settings WHERE key = ?", [.text(Self.restoreOfferKey)])
-                    let ids = try db.query("SELECT id FROM notes ORDER BY id") { $0.text(0) }
-                    reader = try? SQLiteDatabase(path: self.path, readOnly: true)
-                    return ids
-                } catch {
-                    reader = nil
-                    throw error
-                }
+                throw error
             }
         }
     }

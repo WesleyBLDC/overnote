@@ -69,7 +69,7 @@ final class HelperRuntime {
             fail("Cannot take the instance lock: \(error)")
         }
 
-        migrateLegacyDatabase()
+        let pendingImport = migrateLegacyDatabase()
 
         do {
             let path = (arguments.supportDir as NSString).appendingPathComponent("notes.sqlite")
@@ -85,6 +85,7 @@ final class HelperRuntime {
         } catch {
             fail("Cannot open the database: \(error)")
         }
+        if let pendingImport { importLegacyDatabase(from: pendingImport) }
         return .started
     }
 
@@ -217,19 +218,39 @@ final class HelperRuntime {
         return true
     }
 
-    /// Copies the legacy database into the shared folder once (docs/architecture.md section 9).
-    /// A failed copy stops the start, so the helper never creates an empty database that would
-    /// hide the legacy notes; the legacy file is untouched and the next start tries again.
-    private func migrateLegacyDatabase() {
+    /// Moves the legacy database into the shared folder (docs/architecture.md section 9). With no
+    /// shared database it copies the file before the database opens; a failed copy stops the
+    /// start, so the helper never creates an empty database that would hide the legacy notes.
+    /// A shared database with no note at all counts as not migrated: returns the legacy folder,
+    /// which `importLegacyDatabase` imports once the database is open.
+    private func migrateLegacyDatabase() -> String? {
         let decision = LegacyMigration.decide(
             supportDir: arguments.supportDir, legacySupportDir: arguments.legacySupportDir,
-            fileExists: { FileManager.default.fileExists(atPath: $0) })
-        guard case .copy(let source) = decision else { return }
+            fileExists: { FileManager.default.fileExists(atPath: $0) }, holdsNotes: LegacyMigration.holdsNotes(at:))
+        if case .importInto = decision { return arguments.legacySupportDir }
+        guard case .copy(let source) = decision else { return nil }
         do {
             try LegacyMigration.copy(from: source, toSupportDir: arguments.supportDir)
             logger.log("Copied the notes from \(source) into \(arguments.supportDir); the original stays as it was")
         } catch {
             fail("Could not copy the notes from \(source): \(error)")
+        }
+        return nil
+    }
+
+    /// Imports the legacy notes into the empty shared database, the way `system.importLegacy`
+    /// does. A failure leaves the database as it was and the start goes on; the next start, or
+    /// the extension's next command, tries again.
+    private func importLegacyDatabase(from legacySupportDir: String) {
+        guard let repository else { return }
+        do {
+            let outcome = try LegacyMigration.importLegacy(
+                legacySupportDir: legacySupportDir, into: repository, backups: backups)
+            if let ids = outcome.ids {
+                logger.log("Imported \(ids.count) note(s) from \(legacySupportDir) into the empty shared database")
+            }
+        } catch {
+            logger.log("Could not import the notes from \(legacySupportDir): \(error)")
         }
     }
 

@@ -224,6 +224,7 @@ export class MockStore {
     "system.listBackups": () => socketOnly("system.listBackups"),
     "system.restoreBackup": () => socketOnly("system.restoreBackup"),
     "system.dismissRestoreOffer": () => socketOnly("system.dismissRestoreOffer"),
+    "system.importLegacy": () => socketOnly("system.importLegacy"),
     "window.toggle": () => {
       this.visible = !this.visible;
       this.emit(this.visible ? rpc.Event.WindowDidShow : rpc.Event.WindowDidHide, {});
