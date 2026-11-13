@@ -1,4 +1,8 @@
-# Overnote
+<p align="center">
+  <img src="media/logo.png" width="128" height="128" alt="Overnote logo" />
+</p>
+
+<h1 align="center">Overnote</h1>
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/WesleyBLDC/overnote)](https://github.com/WesleyBLDC/overnote/releases)
