@@ -145,8 +145,11 @@ If you see one, even outside your change, please fix it or open an issue.
 ## Style
 
 - Formatting and linting follow `npm run lint` (`ray lint`: Raycast's manifest checks, ESLint, and Prettier) for the extension in `src/`.
-- The editor and `@overnote/core` use the same Prettier config and the root `eslint.config.js`, with typescript-eslint and the React hooks rules: `npx eslint editor packages/core` and `npx prettier --check editor packages/core`.
-- Markdown files are not formatted by Prettier (`.prettierignore`), and the serialization fixtures are never reformatted.
+- The editor and `@overnote/core` use the root `eslint.config.js`, with typescript-eslint and the React hooks rules: `npx eslint editor packages/core`.
+- Prettier formats the whole repository with one config: `npx prettier --check .` (verify runs it), and `npx prettier --write .` to fix.
+- `.editorconfig` mirrors those settings for editors, and Swift keeps a four space indent.
+- Claude Code sessions opened in this repo format every file they edit with Prettier, through the hook in `.claude/settings.json`.
+- Markdown files are not formatted by Prettier (`.prettierignore`), and the serialization fixtures and benchmark results are never reformatted.
 - In Markdown docs, put each sentence on its own line, and do not use dashes as punctuation (hyphens in compound words are fine).
 
 ## Commit conventions

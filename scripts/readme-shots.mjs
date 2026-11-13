@@ -113,13 +113,16 @@ async function shot(name, prepare, { scheme = "dark" } = {}) {
   await page.evaluate((s) => document.documentElement.setAttribute("data-scheme", s), scheme);
   await page.addStyleTag({ content: STAGE_CSS });
   await page.evaluate(() => document.fonts.ready);
-  await page.evaluate((titles) => {
-    const mock = window.__overnoteMock;
-    for (const title of titles) {
-      const note = [...mock.store.notes.values()].find((n) => n.title === title);
-      if (note) mock.store.dispatch("notes.pin", { id: note.id });
-    }
-  }, ["Groceries", "Reading list"]);
+  await page.evaluate(
+    (titles) => {
+      const mock = window.__overnoteMock;
+      for (const title of titles) {
+        const note = [...mock.store.notes.values()].find((n) => n.title === title);
+        if (note) mock.store.dispatch("notes.pin", { id: note.id });
+      }
+    },
+    ["Groceries", "Reading list"],
+  );
   await page.evaluate(() => {
     const mock = window.__overnoteMock;
     const minute = 60 * 1000;
