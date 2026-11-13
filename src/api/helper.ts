@@ -1,7 +1,7 @@
 import { environment } from "@raycast/api";
 
 import { HelperLauncher, type EnsureOptions, type EnsureResult } from "../domain/launcher";
-import { developmentAssetsPath, resolvePaths, type HelperPaths } from "../domain/paths";
+import { developmentAssetsPath, resolvePaths, sharedSupportDir, type HelperPaths } from "../domain/paths";
 import type { RpcMethod, RpcParams, RpcResult } from "../domain/types";
 
 let launcher: HelperLauncher | null = null;
@@ -11,8 +11,17 @@ function devAssetsPath(): string | null {
   return environment.isDevelopment ? developmentAssetsPath(environment.assetsPath) : null;
 }
 
+/**
+ * The notes live in the folder Overnote.app shares (docs/architecture.md section 1). Raycast's own
+ * support folder, where earlier releases kept them, goes to the helper as the legacy folder
+ * it copies from once.
+ */
 export function helperPaths(): HelperPaths {
-  return resolvePaths({ supportPath: environment.supportPath, assetsPath: devAssetsPath() ?? environment.assetsPath });
+  return resolvePaths({
+    supportPath: sharedSupportDir(),
+    legacySupportPath: environment.supportPath,
+    assetsPath: devAssetsPath() ?? environment.assetsPath,
+  });
 }
 
 export function getLauncher(): HelperLauncher {

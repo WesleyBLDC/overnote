@@ -2,6 +2,7 @@ import { closeMainWindow } from "@raycast/api";
 
 import { normalizeFilter, titleMatchesFirst } from "../domain/fold";
 import { summaryTitle } from "../domain/format";
+import { readableDatabase } from "../domain/paths";
 import { ReadOnlyNotesDb } from "../domain/readonly-db";
 import type {
   DeletedNoteSummary,
@@ -24,7 +25,7 @@ const LIST_LIMIT = 100;
  */
 async function read<T>(viaHelper: () => Promise<T>, viaDb: (db: ReadOnlyNotesDb) => T, empty: T): Promise<T> {
   if (await getLauncher().ping(300)) return viaHelper();
-  const db = ReadOnlyNotesDb.open(helperPaths().database);
+  const db = ReadOnlyNotesDb.open(readableDatabase(helperPaths()));
   if (!db) return empty;
   try {
     return viaDb(db);
