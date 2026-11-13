@@ -87,6 +87,7 @@ ALL_STEPS=(
   "Lint: Prettier"
   "Build: editor"
   "Build: helper"
+  "Build: app bundle"
   "Unit: extension and helper socket"
   "Unit: core"
   "Unit: editor"
@@ -125,6 +126,7 @@ step_body() {
     "Lint: Prettier") npx prettier --check src editor packages/core ;;
     "Build: editor") npm run build:editor ;;
     "Build: helper") bash scripts/build-helper.sh ;;
+    "Build: app bundle") bash scripts/build-app.sh --no-prepare --check ;;
     "Unit: extension and helper socket") npm test ;;
     "Unit: core") npm test -w packages/core ;;
     "Unit: editor") npm test -w editor ;;

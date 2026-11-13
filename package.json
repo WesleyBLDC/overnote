@@ -146,6 +146,8 @@
     "dev": "bash scripts/dev.sh",
     "build:editor": "npm run build -w editor",
     "build:helper": "bash scripts/build-helper.sh",
+    "build:app": "bash scripts/build-app.sh",
+    "app:install": "bash scripts/build-app.sh --install",
     "lint": "ray lint",
     "fix-lint": "ray lint --fix",
     "typecheck": "tsc --noEmit",

@@ -40,7 +40,7 @@ Press it again and it is gone.
 <!-- store:remove -->
 ## Install
 
-Raycast extension only (not a standalone app, not in the Store yet).
+Overnote is a Raycast extension (not in the Store yet), and can also be built as a local menu bar app, `Overnote.app`; both are named Overnote and share the same notes.
 Needs an Apple silicon Mac, macOS 14+, [Raycast](https://www.raycast.com) signed in, and [Node.js](https://nodejs.org) 22+.
 
 1. Download `overnote-<version>.zip` from the latest [release](https://github.com/WesleyBLDC/overnote/releases), unzip, and move the folder to e.g. `~/Applications/Overnote`.
@@ -48,6 +48,11 @@ Needs an Apple silicon Mac, macOS 14+, [Raycast](https://www.raycast.com) signed
 3. In Raycast Settings → Extensions, bind a hotkey to **Toggle Overnote**.
 
 Update with `npm run update-extension` in the same folder.
+
+**Local app (no Raycast needed to run it).**
+From a source checkout, `npm run app:install` builds `Overnote.app`, signed for your Mac only, and copies it to `/Applications`.
+It lives in the menu bar and toggles the panel with ⌃⌥N; while it runs, the extension's commands use its panel.
+
 Full guide: [`docs/install.md`](docs/install.md).
 From source: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 <!-- /store:remove -->
@@ -113,8 +118,7 @@ Writing tips: [`docs/writing-notes.md`](docs/writing-notes.md).
 
 ## Your data
 
-Notes stay in the extension's Raycast support folder.
-Backups live in `~/Library/Application Support/Overnote/backups`.
+Notes live in `~/Library/Application Support/Overnote`, with backups in its `backups` folder.
 No account, no analytics; the panel cannot make network connections.
 Check for Updates is the only network call (GitHub releases). <!-- store:remove-line -->
 Backup and restore actions are in Search Notes and the menu bar; see [`docs/install.md`](docs/install.md).
