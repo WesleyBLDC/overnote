@@ -149,7 +149,8 @@ final class PanelBodyView: NSView {
 
     private func updateRim() {
         let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        rim.borderColor = (dark ? NSColor.white.withAlphaComponent(0.12) : NSColor.black.withAlphaComponent(0.10)).cgColor
+        // The editor theme's --border-strong, the Graphite "panel edge" color, in both modes.
+        rim.borderColor = (dark ? NSColor.white : NSColor.black).withAlphaComponent(0.14).cgColor
     }
 }
 

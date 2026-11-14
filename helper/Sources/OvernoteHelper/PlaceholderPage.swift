@@ -10,7 +10,9 @@ enum PlaceholderPage {
         <title>Overnote</title>
         <style>
           :root { color-scheme: light dark; }
-          html, body { margin: 0; background: transparent; font: 14px -apple-system, system-ui, sans-serif; }
+          /* The editor theme's --bg-panel (Graphite), so the stand in matches the real editor. */
+          html, body { margin: 0; background: #fbfbfc; font: 14px -apple-system, system-ui, sans-serif; }
+          @media (prefers-color-scheme: dark) { html, body { background: #18181a; } }
           #wrap { padding: 18px 18px 12px; }
           textarea { width: 100%; box-sizing: border-box; min-height: 60px; border: 0; outline: none; resize: none;
                      background: transparent; color: inherit; font: inherit; line-height: 1.5; overflow: hidden; }

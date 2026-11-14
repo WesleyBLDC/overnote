@@ -28,7 +28,7 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
     .evaluate((el) => el.closest(".app")!.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom);
   expect(footerGap).toBeLessThanOrEqual(1);
 
-  // Each new line adds one line pitch (16.8 px at 1.65, plus the block gap).
+  // Each new line adds one line pitch (24 px, 15 px text at 1.6, plus the block gap).
   for (let i = 0; i < 5; i++) await page.keyboard.press("Enter");
   await expect.poll(async () => (await last())?.contentHeight ?? 0).toBeGreaterThan(start + 5 * 27);
   const tall = (await last())?.contentHeight ?? 0;
@@ -120,20 +120,20 @@ test("the minimum size is the bars plus one line at the current zoom, never belo
     };
     const title = app.querySelector<HTMLElement>("[data-testid=title]")!;
     const formatBar = app.querySelector("[data-testid=format-bar]")!.getBoundingClientRect();
-    const toggle = app.querySelector("[data-testid=format-toggle]")!.getBoundingClientRect();
+    const counter = app.querySelector("[data-testid=counter]")!.getBoundingClientRect();
     return {
       actions: inside(app.querySelector(".toolbar-actions")),
       formatBar: inside(app.querySelector("[data-testid=format-bar]")),
-      clearOfToggle: formatBar.right <= toggle.left + 0.5,
+      clearOfCounter: formatBar.right <= counter.left + 0.5,
       // A short title shows in full; the room kept for it is 6rem.
       titleShown: title.scrollWidth <= title.clientWidth && title.clientWidth > 0,
     };
   });
-  expect(fits).toEqual({ actions: true, formatBar: true, clearOfToggle: true, titleShown: true });
+  expect(fits).toEqual({ actions: true, formatBar: true, clearOfCounter: true, titleShown: true });
 });
 
-test("note text is 120% of the UI base and zoom scales it", async ({ page }) => {
-  await openHarness(page, ["Title\n\nBody with `code`\n\n- item"]);
+test("note text follows the type scale and zoom scales it", async ({ page }) => {
+  await openHarness(page, ["Title\n\nBody with `code`\n\n- item\n\n# Big\n\n## Small\n\n```\nblock\n```"]);
   const sizes = () =>
     page.evaluate(() => {
       const px = (selector: string) => parseFloat(getComputedStyle(document.querySelector(selector)!).fontSize);
@@ -142,30 +142,37 @@ test("note text is 120% of the UI base and zoom scales it", async ({ page }) => 
         body: px(".note-editor > p:nth-child(2)"),
         code: px(".note-editor code"),
         item: px(".note-editor [data-list-kind] p"),
+        block: px(".note-editor pre"),
+        h1: px(".note-editor h1"),
+        h2: px(".note-editor h2"),
       };
     });
   const base = await sizes();
-  // The UI base is 14 px; the note is 120% of it, 16.8 px at 100%, with a 1.65 line pitch.
+  // At 100% every size is the guide's: a 14 px UI base, 15 px body at 1.6, 13 px code, a 23 px title, an 18 px heading.
   expect(base.root).toBe(14);
-  expect(base.body).toBeCloseTo(16.8, 2);
-  expect(base.item).toBeCloseTo(16.8, 2);
-  expect(base.code).toBeCloseTo(16.8 * 0.88, 1);
+  expect(base.body).toBeCloseTo(15, 2);
+  expect(base.item).toBeCloseTo(15, 2);
+  expect(base.code).toBeCloseTo(13, 1);
+  expect(base.block).toBeCloseTo(13, 1);
+  expect(base.h1).toBeCloseTo(23, 1);
+  expect(base.h2).toBeCloseTo(18, 1);
   const pitch = await page.evaluate(() =>
     parseFloat(getComputedStyle(document.querySelector(".note-editor > p:nth-child(2)")!).lineHeight),
   );
-  expect(pitch).toBeCloseTo(16.8 * 1.65, 1);
-  // The task checkbox and the list gutter follow the note text.
-  await page.keyboard.press("Meta+ArrowDown");
+  expect(pitch).toBeCloseTo(24, 1);
+  // The task box is 16 px at 100% and follows the note text.
+  await editor(page).locator("[data-list-kind=bullet] p").click();
+  await page.keyboard.press("End");
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
   await page.keyboard.type("[] task");
   const box = await editor(page)
     .locator("[data-list-kind=task] input")
     .evaluate((el) => el.getBoundingClientRect().width);
-  expect(box).toBeCloseTo(16.8 * 0.88, 0);
+  expect(box).toBeCloseTo(16, 0);
   await page.keyboard.press("Meta+Equal");
   await page.keyboard.press("Meta+Equal");
-  await expect.poll(async () => (await sizes()).body).toBeCloseTo(16.8 * 1.1, 1);
+  await expect.poll(async () => (await sizes()).body).toBeCloseTo(15 * 1.1, 1);
   const zoomed = await sizes();
   expect(zoomed.code / zoomed.body).toBeCloseTo(base.code / base.body, 3);
 });
@@ -188,9 +195,9 @@ test("blocks keep one balanced gap while list items stay tight", async ({ page }
   });
   const gap = (from: string, to: string) =>
     layout.gaps.find((g) => g.from.startsWith(from) && g.to.startsWith(to))?.gap;
-  // 120% note text is 16.8 px: blocks are 0.6em apart (10.08 px), list items 0.2em (3.36 px), headings get 1.15em above.
-  const block = 16.8 * 0.6;
-  const item = 16.8 * 0.2;
+  // 15 px note text: blocks are 14 px apart, list items 0.2em (3 px), headings get 1.15em above.
+  const block = 14;
+  const item = 15 * 0.2;
   for (const [from, to] of [
     ["Intro", "one"],
     ["two", "Between"],
@@ -206,7 +213,7 @@ test("blocks keep one balanced gap while list items stay tight", async ({ page }
   expect(gap("one", "two")).toBeCloseTo(item, 0);
   expect(gap("task", "done")).toBeCloseTo(item, 0);
   expect(layout.nested).toBeCloseTo(item, 0);
-  expect(gap("Next", "Heading")).toBeCloseTo(16.8 * 1.15, 0);
+  expect(gap("Next", "Heading")).toBeCloseTo(15 * 1.15, 0);
 
   // The rhythm scales with zoom.
   await page.keyboard.press("Meta+Equal");
@@ -566,59 +573,95 @@ test("select all paints the list gutter like the rest of the selection", async (
   await expect(editor(page).locator(".in-selection")).toHaveCount(0);
 });
 
-test("Close, title, and icons share one line; icons are about a third larger", async ({ page }) => {
+test("the top bar follows the editor board: a 46 point bar, the Close dot, and 30 point buttons", async ({ page }) => {
   await openHarness(page, ["Hello\n\nbody"]);
   await page.mouse.move(320, 200);
   const m = await page.evaluate(() => {
     const box = (el: Element) => el.getBoundingClientRect();
     const app = box(document.querySelector("[data-testid=app]")!);
-    const close = box(document.querySelector("[data-testid=close]")!);
+    const toolbar = box(document.querySelector("[data-testid=toolbar]")!);
+    const dot = box(document.querySelector("[data-testid=close-dot]")!);
     const title = box(document.querySelector("[data-testid=title]")!);
     const range = document.createRange();
     range.selectNodeContents(document.querySelector(".note-editor > p")!);
     const text = range.getBoundingClientRect();
-    const actions = [...document.querySelectorAll(".toolbar-actions .icon-button")].map(box);
+    const actions = [...document.querySelectorAll(".toolbar-actions .icon-button")];
     const icon = box(document.querySelector(".toolbar-actions .icon")!);
     return {
-      closeLeft: close.left - app.left,
+      height: toolbar.height,
+      dot: [dot.left - app.left, dot.width],
       textLeft: text.left - app.left,
-      closeMid: close.top + close.height / 2,
+      dotMid: dot.top + dot.height / 2,
       titleMid: title.top + title.height / 2,
-      actionMids: actions.map((a) => a.top + a.height / 2),
-      hit: actions.map((a) => [a.width, a.height]),
+      actionMids: actions.map((a) => box(a).top + box(a).height / 2),
+      hit: actions.map((a) => [box(a).width, box(a).height]),
+      labels: actions.map((a) => a.getAttribute("aria-label")),
       icon: [icon.width, icon.height],
+      strokeWidth: getComputedStyle(document.querySelector(".toolbar-actions .icon")!).strokeWidth,
     };
   });
-  expect(Math.abs(m.closeLeft - m.textLeft)).toBeLessThanOrEqual(1);
-  expect(Math.abs(m.closeMid - m.titleMid)).toBeLessThanOrEqual(1);
+  expect(m.height).toBeCloseTo(46, 1);
+  expect(m.dot).toEqual([16, 12]);
+  expect(m.textLeft).toBeCloseTo(28, 0);
+  expect(Math.abs(m.dotMid - m.titleMid)).toBeLessThanOrEqual(1);
   for (const mid of m.actionMids) expect(Math.abs(mid - m.titleMid)).toBeLessThanOrEqual(1);
-  expect(m.icon[0]).toBeCloseTo(18.48, 1);
+  expect(m.labels).toEqual(["Terminal", "Notes", "Actions", "New Note"]);
+  expect(m.icon).toEqual([17, 17]);
+  expect(parseFloat(m.strokeWidth)).toBeCloseTo(1.6, 1);
   for (const [w, h] of m.hit) {
-    expect(w).toBeCloseTo(31.5, 1);
-    expect(h).toBeCloseTo(31.5, 1);
+    expect(w).toBeCloseTo(30, 1);
+    expect(h).toBeCloseTo(30, 1);
   }
   // Controls stay clear of the helper's resize zones: 10 points along edges, 24 point squares at corners.
+  // Close is measured by its visible dot, which sits on the corner square's lower edge (within a point);
+  // its hit area keeps the 28 point floor and only stays out of the edge zone.
   const clearance = await page.evaluate(() => {
     const app = document.querySelector("[data-testid=app]")!.getBoundingClientRect();
-    return [...document.querySelectorAll("[data-testid=toolbar] button, [data-testid=footer] button")].map((el) => {
-      const r = el.getBoundingClientRect();
-      const left = r.left - app.left;
-      const top = r.top - app.top;
-      const right = app.right - r.right;
-      const bottom = app.bottom - r.bottom;
-      const inCorner = Math.min(left, right) < 24 && Math.min(top, bottom) < 24;
-      return {
-        name: el.getAttribute("aria-label") ?? el.textContent,
-        edge: Math.min(left, top, right, bottom),
-        inCorner,
-      };
-    });
+    const targets = [
+      ...document.querySelectorAll(
+        "[data-testid=toolbar] button:not([data-testid=close]), [data-testid=footer] button",
+      ),
+    ];
+    const close = document.querySelector("[data-testid=close]")!;
+    const closeBox = close.getBoundingClientRect();
+    const dot = document.querySelector("[data-testid=close-dot]")!.getBoundingClientRect();
+    return [
+      {
+        name: "Close",
+        edge: Math.min(closeBox.left - app.left, closeBox.top - app.top),
+        inCorner: dot.top - app.top < 23,
+      },
+      ...targets.map((el) => {
+        const r = el.getBoundingClientRect();
+        const left = r.left - app.left;
+        const top = r.top - app.top;
+        const right = app.right - r.right;
+        const bottom = app.bottom - r.bottom;
+        const inCorner = Math.min(left, right) < 24 && Math.min(top, bottom) < 24;
+        return {
+          name: el.getAttribute("aria-label") ?? el.textContent,
+          edge: Math.min(left, top, right, bottom),
+          inCorner,
+        };
+      }),
+    ];
   });
   for (const c of clearance) {
     expect(c.edge, String(c.name)).toBeGreaterThanOrEqual(10);
     expect(c.inCorner, String(c.name)).toBe(false);
   }
-  expect(m.closeLeft).toBeGreaterThanOrEqual(24);
+
+  // Hovering a button shows its tooltip pill with the name and the shortcut; Terminal does nothing yet.
+  const actions = page.locator("[data-anchor=actions]");
+  await actions.hover();
+  await expect(actions.getByRole("tooltip")).toHaveText("Actions ⌘K");
+  await expect(actions.getByRole("tooltip")).toHaveCSS("opacity", "1");
+  const before = (await calls(page)).length;
+  await page.getByTestId("terminal").click();
+  await expect(page.getByTestId("terminal").getByRole("tooltip")).toHaveText("Terminal ⌃`");
+  await settle(page);
+  expect((await calls(page)).length).toBe(before);
+  await expect(page.getByTestId("command-panel")).toHaveCount(0);
 
   await page.keyboard.press("Alt+Meta+Comma");
   const formatIcon = await page
@@ -682,7 +725,7 @@ test("toolbar drag regions cover the empty toolbar and exclude every button", as
     });
     const inside = (r: Rect, x: number, y: number, pad = 0) =>
       x >= r.x - pad && x <= r.x + r.width + pad && y >= r.y - pad && y <= r.y + r.height + pad;
-    expect(layout.buttons).toHaveLength(4);
+    expect(layout.buttons).toHaveLength(5);
     // No region overlaps a button.
     for (const b of layout.buttons) {
       for (const r of rects) {
@@ -747,18 +790,34 @@ test("hover chrome and the Close control", async ({ page }) => {
   await expect.poll(async () => (await calls(page, "window.hide")).length).toBe(1);
 });
 
-test("counter switches between characters and words; format bar replaces it", async ({ page }) => {
+test("the count pill: characters or words, selected of total, and the format island beside it", async ({ page }) => {
   await openHarness(page);
   await page.keyboard.type("Hello world");
-  await expect(page.getByTestId("counter")).toHaveText("11 characters");
-  await page.getByTestId("counter").click();
-  await expect(page.getByTestId("counter")).toHaveText("2 words");
+  const counter = page.getByTestId("counter");
+  await expect(counter).toHaveText("11");
+  await expect(counter).toHaveAccessibleName("11 characters");
+  await counter.click();
+  await expect(counter).toHaveText("2");
+  await expect(counter).toHaveAccessibleName("2 words");
   await expect.poll(async () => (await calls(page, "settings.set")).at(-1)?.params).toEqual({ countMode: "words" });
+  // With a selection the pill shows the selected count over the total.
+  await page.keyboard.press("Shift+Alt+ArrowLeft");
+  await expect(counter).toHaveText("1/2");
+  await expect(counter).toHaveAccessibleName("1 of 2 words selected");
+  await page.keyboard.press("ArrowRight");
+  await expect(counter).toHaveText("2");
+  // Bottom right, 24 points tall on screen, clear of the corner resize square.
+  const place = await counter.evaluate((el) => {
+    const app = el.closest(".app")!.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return { right: app.right - r.right, pill: parseFloat(getComputedStyle(el, "::before").height) };
+  });
+  expect(place).toEqual({ right: 24, pill: 24 });
 
   await page.keyboard.press("Alt+Meta+Comma");
   const bar = page.getByTestId("format-bar");
   await expect(bar).toBeVisible();
-  await expect(page.getByTestId("counter")).toHaveCount(0);
+  await expect(counter).toBeVisible();
   await page.keyboard.press("Meta+a");
   await bar.getByRole("button", { name: "Code (⌘E)" }).click();
   await expect(editor(page).locator("code")).toHaveText("Hello world");
@@ -766,8 +825,13 @@ test("counter switches between characters and words; format bar replaces it", as
   await bar.getByRole("button", { name: "List" }).click();
   await page.getByRole("menuitemcheckbox", { name: /Task List/ }).click();
   await expect(bar.getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
-  await page.keyboard.press("Alt+Meta+Comma");
-  await expect(page.getByTestId("counter")).toBeVisible();
+  // ⌘K keeps the toggle reachable now that the footer has no button for it.
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-panel")).toBeVisible();
+  await page.keyboard.type("Toggle Format Bar");
+  await expect(page.locator(".panel-row.is-selected")).toContainText("Toggle Format Bar");
+  await page.keyboard.press("Enter");
+  await expect(bar).toHaveCount(0);
 });
 
 test("slash menu and link popover", async ({ page }) => {

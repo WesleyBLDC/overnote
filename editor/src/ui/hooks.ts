@@ -177,9 +177,10 @@ function contentWidth(element: Element | null): number {
 }
 
 /**
- * The smallest panel that still shows every bar and one line of the note, in points (CSS px, which
- * already include zoom): the toolbar with its controls and some of the title, the bottom bar with the
- * counter or the format bar, and one line of note text between them.
+ * The smallest panel that still shows the toolbar and one line of the note, in points (CSS px, which
+ * already include zoom): the toolbar with its controls and some of the title, one line of note text with
+ * the content's padding (the bottom padding is the room for the overlaid count pill and format island),
+ * and, while it shows, the whole format island between its side margins.
  */
 export function measureMinimumSize(app: HTMLElement): { width: number; height: number } | null {
   const toolbar = app.querySelector<HTMLElement>(".toolbar");
@@ -199,18 +200,17 @@ export function measureMinimumSize(app: HTMLElement): { width: number; height: n
     2 * sides +
     2 * (parseFloat(bar.columnGap) || 0) +
     TITLE_MIN_REM * rem;
-  const bottom = getComputedStyle(footer);
-  const columns = bottom.gridTemplateColumns.split(" ").map(parseFloat);
-  const footerWidth =
-    parseFloat(bottom.paddingLeft) +
-    parseFloat(bottom.paddingRight) +
-    (columns[0] ?? 0) +
-    (columns.at(-1) ?? 0) +
-    contentWidth(footer.querySelector(".footer-center"));
+  const island = footer.querySelector<HTMLElement>(".footer-center");
+  const counter = footer.querySelector<HTMLElement>(".counter");
+  const footerBox = footer.getBoundingClientRect();
+  const footerWidth = island
+    ? contentWidth(island.querySelector(".format-bar") ?? island) + 2 * (parseFloat(getComputedStyle(island).left) || 0)
+    : counter
+      ? 2 * (footerBox.right - counter.getBoundingClientRect().left)
+      : 0;
   const inner = getComputedStyle(content);
   const height =
     toolbar.getBoundingClientRect().height +
-    footer.getBoundingClientRect().height +
     parseFloat(inner.paddingTop) +
     parseFloat(inner.paddingBottom) +
     parseFloat(getComputedStyle(note).lineHeight);
@@ -221,7 +221,7 @@ export function measureMinimumSize(app: HTMLElement): { width: number; height: n
 /**
  * Tells the helper the smallest the panel may be (window.setMinimumSize): the bars plus one line at
  * the current zoom. It reports again whenever a bar changes size, for example on a zoom change or when
- * the format bar replaces the counter; the helper keeps at least 405 x 197 and grows a smaller panel.
+ * the format island shows; the helper keeps at least 405 x 197 and grows a smaller panel.
  */
 export function useMinimumSizeReporter(app: HTMLElement | null, api: Api) {
   useEffect(() => {
@@ -245,7 +245,9 @@ export function useMinimumSizeReporter(app: HTMLElement | null, api: Api) {
     const resizes = new ResizeObserver(schedule);
     const observeBars = () => {
       resizes.disconnect();
-      for (const bar of Array.from(app.querySelectorAll(".toolbar, .toolbar-actions, .footer, .footer-center > *"))) {
+      for (const bar of Array.from(
+        app.querySelectorAll(".toolbar, .toolbar-actions, .footer, .counter, .footer-center > *"),
+      )) {
         resizes.observe(bar);
       }
     };
@@ -381,7 +383,8 @@ export function useDragRegions(app: HTMLElement | null, api: Api, zoom: number) 
 
 /**
  * Marks the app with data-scroll="top" and or "bottom" while the note has content above or below
- * the visible area, for the scroll fades and the toolbar hairline. It writes the attribute directly
+ * the visible area, for the scroll fades and the toolbar hairline, and with "title" once the note's
+ * first line has scrolled out of view, so the toolbar fades the title in. It writes the attribute directly
  * (no React render) and only when the value changes.
  */
 export function useScrollEdges(app: HTMLElement | null) {
@@ -391,7 +394,9 @@ export function useScrollEdges(app: HTMLElement | null) {
     const update = () => {
       const top = content.scrollTop > 1;
       const bottom = content.scrollTop + content.clientHeight < content.scrollHeight - 1;
-      const value = [top ? "top" : "", bottom ? "bottom" : ""].filter(Boolean).join(" ");
+      const first = content.querySelector(".note-editor > :first-child");
+      const title = top && !!first && first.getBoundingClientRect().bottom <= content.getBoundingClientRect().top + 1;
+      const value = [top ? "top" : "", bottom ? "bottom" : "", title ? "title" : ""].filter(Boolean).join(" ");
       if ((app.getAttribute("data-scroll") ?? "") === value) return;
       if (value) app.setAttribute("data-scroll", value);
       else app.removeAttribute("data-scroll");

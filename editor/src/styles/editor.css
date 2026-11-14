@@ -1,14 +1,14 @@
 /* Note content: typography, lists (prosemirror-flat-list markup), tasks, code, find highlights. */
-/* Note text is --note-scale times the UI base; every size below is in em, so it all grows together. */
+/* Note text is the body size of the type scale (15 px at 100%); sizes below are in em, so they all grow together. */
 .note-editor {
-  --line-height: var(--note-line-height);
   /*
    * Vertical rhythm in units of the note text size (rem based, so zoom scales it and headings do not
    * inflate it): one gap between any two top-level blocks, a larger one above headings, a tight one
    * between the items of a list.
    */
-  --note-em: calc(1rem * var(--note-scale));
-  --block-gap: calc(0.6 * var(--note-em));
+  --note-em: var(--type-body);
+  /* 14 pt between blocks at 100%, as on the editor board. */
+  --block-gap: calc(14 / 15 * var(--note-em));
   --heading-gap: calc(1.15 * var(--note-em));
   --inner-gap: calc(0.35 * var(--note-em));
   --item-gap: calc(0.2 * var(--note-em));
@@ -18,7 +18,7 @@
   line-height: var(--line-height);
   white-space: pre-wrap;
   word-wrap: break-word;
-  caret-color: var(--accent);
+  caret-color: var(--cursor);
   -webkit-font-variant-ligatures: none;
   font-variant-ligatures: none;
 }
@@ -57,47 +57,61 @@
   margin-top: var(--heading-gap);
 }
 
+/* Headings follow the type scale: title (23 px), heading (18 px), and a 16 px step between heading and body. */
 .note-editor h1 {
-  font-size: 1.6em;
-  line-height: 1.3;
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-size: var(--type-title);
+  line-height: 1.6;
+  font-weight: var(--weight-heading);
+  letter-spacing: var(--tracking-title);
 }
 
 .note-editor h2 {
-  font-size: 1.3em;
-  line-height: 1.35;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-size: var(--type-heading);
+  line-height: 1.4;
+  font-weight: var(--weight-heading);
 }
 
 .note-editor h3 {
-  font-size: 1.1em;
-  line-height: 1.45;
-  font-weight: 650;
+  font-size: var(--type-subheading);
+  line-height: 1.5;
+  font-weight: var(--weight-heading);
 }
 
 .note-editor a {
   color: var(--accent-strong);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent-strong) 55%, transparent);
+  text-decoration-color: var(--link-underline);
   text-decoration-thickness: 0.06em;
   text-underline-offset: 0.18em;
   cursor: pointer;
 }
 
+/* The code chip: 13 px in 15 px body text, in em so code in a heading grows with it; 1 by 5 pt padding, 5 pt corners. */
 .note-editor code {
-  padding: 0.12em 0.32em;
-  border-radius: var(--radius-s);
-  background: var(--surface-code);
+  padding: calc(1em / 13) calc(5em / 13);
+  border-radius: calc(5em / 13);
+  background: var(--bg-code);
   font-family: var(--font-mono);
-  font-size: 0.88em;
+  font-size: calc(13em / 15);
+  line-height: 1.6;
 }
 
+/* Quotes: no box, a 3 pt rounded bar, then 14 pt of room before the text. */
 .note-editor blockquote {
-  padding-left: 0.85em;
-  border-left: 0.18em solid var(--quote-border);
-  color: var(--text-secondary);
+  position: relative;
+  padding-left: calc(17em / 15);
+  color: var(--text-quote);
+}
+
+.note-editor blockquote::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: calc(3em / 15);
+  border-radius: calc(2em / 15);
+  background: var(--quote-bar);
 }
 
 .note-editor hr {
@@ -116,7 +130,7 @@
   content: attr(data-placeholder);
   float: left;
   height: 0;
-  color: var(--text-essential);
+  color: var(--text-tertiary);
   pointer-events: none;
 }
 
@@ -188,14 +202,23 @@
   right: calc(100% - var(--list-gutter) + 0.35em);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
   color: var(--accent);
 }
 
 /*
- * Tasks: a rounded square outlined in the secondary text color; checking fills it with the accent
- * and draws a check mark. The check animates once, only when the user checks it (just-checked),
- * so a freshly loaded note never replays it.
+ * Tasks, as on the editor board: a 16 pt box with 4 pt corners and a 10 pt gap before the text. Unchecked,
+ * the box is a 1.5 pt ring; checked, it fills with the accent and shows the check. The check animates once,
+ * only when the user checks it (just-checked), so a freshly loaded note never replays it.
  */
+.note-editor .prosemirror-flat-list[data-list-kind="task"] {
+  --list-gutter: calc(26em / 15);
+}
+
+.note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker {
+  justify-content: flex-start;
+}
+
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker label {
   display: flex;
   cursor: pointer;
@@ -206,16 +229,17 @@
   appearance: none;
   position: relative;
   font-size: inherit;
-  width: 0.88em;
-  height: 0.88em;
+  width: calc(16em / 15);
+  height: calc(16em / 15);
   margin: 0;
-  border: 0.085em solid var(--text-secondary);
-  border-radius: 0.26em;
+  border: 0;
+  border-radius: calc(4em / 15);
   background: transparent;
+  box-shadow: inset 0 0 0 calc(1.5em / 15) var(--checkbox-ring);
   cursor: pointer;
   transition:
     background-color var(--motion) var(--ease-out),
-    border-color var(--motion) var(--ease-out),
+    box-shadow var(--motion) var(--ease-out),
     transform var(--motion-fast) var(--ease-out);
 }
 
@@ -223,31 +247,31 @@
   transform: scale(0.92);
 }
 
+/* The board's check, drawn on a 24 pt grid with a 3.2 pt stroke, painted in --on-accent through a mask. */
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input::after {
   content: "";
   position: absolute;
-  left: 0.27em;
-  top: 0.1em;
-  width: 0.2em;
-  height: 0.42em;
-  border: solid var(--on-accent);
-  border-width: 0 0.09em 0.09em 0;
+  inset: 0;
+  background: var(--on-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 100% no-repeat;
   opacity: 0;
-  transform: rotate(45deg) scale(0.4);
-  transform-origin: 60% 60%;
+  transform: scale(0.4);
   transition:
     opacity var(--motion-fast) var(--ease-out),
     transform var(--motion-slow) var(--ease-out);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input:checked {
-  border-color: var(--accent);
   background: var(--accent);
+  box-shadow: none;
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input:checked::after {
   opacity: 1;
-  transform: rotate(45deg) scale(1);
+  transform: scale(1);
 }
 
 /* The moment of checking (just-checked, see taskCheckPlugin): the box pops and the mark draws in. */
@@ -273,7 +297,7 @@
 @keyframes check-in {
   from {
     opacity: 0;
-    transform: rotate(45deg) scale(0.4);
+    transform: scale(0.4);
   }
 }
 
@@ -291,12 +315,10 @@
     color var(--motion) var(--ease-out);
 }
 
-.note-editor .prosemirror-flat-list[data-list-kind="task"][data-list-checked] > .list-marker {
-  opacity: 0.55;
-}
-
+/* Done: tertiary text, struck through. */
 .note-editor .prosemirror-flat-list[data-list-kind="task"][data-list-checked] > .list-content > :is(p, h1, h2, h3) {
-  color: var(--text-essential);
+  color: var(--text-tertiary);
+  text-decoration: line-through;
   opacity: 1;
 }
 
@@ -329,7 +351,7 @@
 .note-editor .code-block {
   position: relative;
   border-radius: var(--radius-m);
-  background: var(--surface-code);
+  background: var(--bg-sunken);
   box-shadow: inset 0 0 0 var(--hairline) var(--border);
 }
 
@@ -338,8 +360,8 @@
   padding: 0.8em 0.95em;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 0.86em;
-  line-height: 1.55;
+  font-size: var(--type-code);
+  line-height: var(--line-height-code);
   tab-size: 4;
 }
 
@@ -373,17 +395,19 @@
   padding: 0 0.45em;
   border: 0;
   border-radius: var(--radius-s);
-  background: var(--surface-raised);
+  background: var(--bg-raised);
   box-shadow: var(--shadow-small);
   color: var(--text-secondary);
   font: inherit;
-  font-size: 0.76em;
+  font-size: var(--type-small);
+  font-weight: var(--weight-secondary);
 }
 
 .note-editor .code-block-label {
   display: none;
-  font-size: 0.76em;
-  color: var(--text-essential);
+  font-size: var(--type-small);
+  font-weight: var(--weight-secondary);
+  color: var(--text-secondary);
 }
 
 .note-editor .code-block.is-readonly .code-block-language {
@@ -448,7 +472,7 @@
 }
 
 .drop-cursor {
-  background: var(--accent);
+  background: var(--cursor);
 }
 
 .note-editor .ProseMirror-gapcursor {
