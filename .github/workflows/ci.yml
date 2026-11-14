@@ -1,0 +1,50 @@
+# The fast checks on every pull request and every push to main.
+#
+# This runs `npm run verify:fast`: the typechecks, ESLint, Prettier, the core fixtures, and
+# the editor and helper unit tests. It does not replace `npm run verify`, which stays the
+# full local gate (the builds, Playwright, the helper and update end to end suites, and the
+# Raycast build). The panel window check never runs here, since it needs a logged in GUI.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push cancels the older run of the same pull request or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NPM_VERSION: 11.19.0
+  npm_config_strict_allow_scripts: "true"
+
+jobs:
+  fast-checks:
+    name: Fast checks (macOS, Apple silicon)
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Pin npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run the fast checks
+        run: npm run verify:fast

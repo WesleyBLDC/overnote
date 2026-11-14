@@ -1,0 +1,62 @@
+name: Bug
+description: Something in Overnote does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+        Remove anything private from note text, logs, and screenshots before you post.
+        Report security problems privately instead, as SECURITY.md describes.
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the panel with the hotkey.
+        2. Type a task and press ⌘↩.
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: packaging
+    attributes:
+      label: How do you run Overnote?
+      options:
+        - Raycast extension from a release zip
+        - Raycast extension from a source checkout (npm run dev)
+        - Overnote.app (the local menu bar app)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Overnote version
+      description: The release you installed (Check for Updates shows it), or the commit of a source checkout.
+      placeholder: e.g. 0.5.0
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and Mac
+      placeholder: e.g. macOS 15.5 on an M2 MacBook Air
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Optional. Paste text, or drag in a screenshot.
