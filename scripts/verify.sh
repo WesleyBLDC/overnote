@@ -123,7 +123,7 @@ step_body() {
     "Typecheck: core") npx tsc --noEmit -p packages/core ;;
     "Lint: Raycast lint, extension") npx ray lint ;;
     "Lint: ESLint, editor and core") npx eslint --max-warnings 0 editor packages/core ;;
-    "Lint: Prettier") npx prettier --check src editor packages/core ;;
+    "Lint: Prettier") npx prettier --check . ;;
     "Build: editor") npm run build:editor ;;
     "Build: helper") bash scripts/build-helper.sh ;;
     "Build: app bundle") bash scripts/build-app.sh --no-prepare --check ;;

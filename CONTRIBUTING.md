@@ -62,10 +62,10 @@ Add `?seed=empty` to the URL to start with no notes.
 | `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository; the same binary runs as `Overnote.app` in app mode (`AppMode.swift`, plus `GlobalHotkey.swift`, `StatusMenu.swift`, and `LoginItem.swift`) |
 | `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
 | `dist-app/` | `Overnote.app`, built by `scripts/build-app.sh` (`npm run build:app`); generated, not committed |
-| `scripts/` | Helper build, the app bundle build (`build-app.sh`, also behind `npm run app:install`), the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, `check-release.sh`, and `make-icon.swift` (draws `assets/extension-icon.png`: `swift scripts/make-icon.swift assets/extension-icon.png`) |
+| `scripts/` | Helper build, the app bundle build (`build-app.sh`, also behind `npm run app:install`), the menu bar template (`make-menubar-icon.swift`), the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, and `check-release.sh` |
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
 | `metadata/` | Raycast Store screenshots, used by `scripts/prepare-store.sh` |
-| `assets/` | The icon, drawn by `scripts/make-icon.swift`; the editor and helper builds are generated, not committed |
+| `assets/` | The extension icon (`extension-icon.png`, 512 px), the logo master (`brand/overnote-logo-1024.png`), and the menu bar template (`brand/menubar/`); the editor and helper builds are generated, not committed |
 | `media/` | README product shots (`npm run shots:readme`; see Screenshots below) |
 | `scripts/readme-shots.mjs` | Regenerates `media/*.png` from the editor harness at 2× |
 
@@ -150,8 +150,11 @@ If you see one, even outside your change, please fix it or open an issue.
 ## Style
 
 - Formatting and linting follow `npm run lint` (`ray lint`: Raycast's manifest checks, ESLint, and Prettier) for the extension in `src/`.
-- The editor and `@overnote/core` use the same Prettier config and the root `eslint.config.js`, with typescript-eslint and the React hooks rules: `npx eslint editor packages/core` and `npx prettier --check editor packages/core`.
-- Markdown files are not formatted by Prettier (`.prettierignore`), and the serialization fixtures are never reformatted.
+- The editor and `@overnote/core` use the root `eslint.config.js`, with typescript-eslint and the React hooks rules: `npx eslint editor packages/core`.
+- Prettier formats the whole repository with one config: `npx prettier --check .` (verify runs it), and `npx prettier --write .` to fix.
+- `.editorconfig` mirrors those settings for editors, and Swift keeps a four space indent.
+- Claude Code sessions opened in this repo format every file they edit with Prettier, through the hook in `.claude/settings.json`.
+- Markdown files are not formatted by Prettier (`.prettierignore`), and the serialization fixtures and benchmark results are never reformatted.
 - In Markdown docs, put each sentence on its own line, and do not use dashes as punctuation (hyphens in compound words are fine).
 
 ## Commit conventions
