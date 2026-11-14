@@ -28,7 +28,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         super.init()
 
         if let button = statusItem.button {
-            let image = NSImage(systemSymbolName: "note.text", accessibilityDescription: "Overnote")
+            // The logo template from the app bundle (assets/brand/menubar); a system symbol when run outside it.
+            let image =
+                Bundle.main.image(forResource: "OvernoteStatusTemplate")
+                ?? NSImage(systemSymbolName: "note.text", accessibilityDescription: "Overnote")
+            image?.size = NSSize(width: 18, height: 18)
+            image?.accessibilityDescription = "Overnote"
             image?.isTemplate = true
             button.image = image
             button.toolTip = "Overnote"

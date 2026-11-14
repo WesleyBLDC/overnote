@@ -86,6 +86,8 @@ for size in 16 32 128 256 512; do
   fi
 done
 iconutil -c icns "$ICONSET" -o "$STAGE/Contents/Resources/Overnote.icns"
+# Menu bar template (one colour, alpha only), made from the master by scripts/make-menubar-icon.swift.
+cp assets/brand/menubar/OvernoteStatusTemplate.png assets/brand/menubar/OvernoteStatusTemplate@2x.png "$STAGE/Contents/Resources/"
 
 cat >"$STAGE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
