@@ -17,6 +17,7 @@
 #      a pre-update backup is written, the helper is stopped, the files are replaced (node_modules
 #      kept, stale files gone), and the notes are intact under the new version.
 #   4. Already up to date; a rollback below the database schema is refused and changes nothing.
+#      With an `--app` helper running (Overnote.app), an update backs up through it and leaves it running.
 #   5. A rollback to N with no helper running (the script starts one headless to back up), then
 #      a reinstall whose helper cannot start (the sqlite3 .backup fallback).
 #   6. A daily backup appears when the helper starts with notes and no recent backup.
@@ -56,6 +57,7 @@ mkdir -m 700 "$RUNTIME"
 
 # Everything below, the update script included, uses only these folders.
 export OVERNOTE_SUPPORT_DIR="$SUPPORT"
+export OVERNOTE_LEGACY_SUPPORT_DIR="$FAKE_HOME/legacy-support"
 export OVERNOTE_RUNTIME_DIR="$RUNTIME"
 export OVERNOTE_BACKUP_DIR="$BACKUPS"
 npm_config_cache="$(npm config get cache)"
@@ -105,9 +107,10 @@ rpc() {
 field() { node -e 'const r = JSON.parse(process.argv[1]); const v = eval(process.argv[2]); console.log(typeof v === "object" ? JSON.stringify(v) : v);' "$1" "$2"; }
 json_field() { node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]]' "$1" "$2"; }
 
+# start_helper [extra helper arguments, such as --app]
 start_helper() {
   "$APP/assets/bin/OvernoteHelper" --support-dir "$SUPPORT" --socket "$SOCKET" --pid-file "$PIDFILE" \
-    --editor-dir "$APP/assets/editor" --headless --test-hooks >>"$LOGS/helper-stdout.log" 2>&1 &
+    --editor-dir "$APP/assets/editor" --headless --test-hooks "$@" >>"$LOGS/helper-stdout.log" 2>&1 &
   HELPER_PID=$!
   for _ in $(seq 1 300); do
     rpc system.ping 2>/dev/null | grep -q "\"pid\":$HELPER_PID" && return 0
@@ -264,6 +267,17 @@ grep -q "Refusing to install $OLD" "$LOGS/rollback-refused.log" || { cat "$LOGS/
 rpc system.ping | grep -q "\"pid\":$HELPER_PID" || fail "the refused rollback stopped the helper"
 ok "rollback to $OLD (schema 0) refused below the database's schema 1; install and helper untouched"
 
+# ---------------------------------------------------------------- 4b. Overnote.app keeps running
+stop_helper
+start_helper --app
+in_app npm run update-extension -- --force --no-register >"$LOGS/update-app.log" 2>&1 || { cat "$LOGS/update-app.log" >&2; fail "the update with Overnote.app running"; }
+grep -q "Overnote.app is running (pid $HELPER_PID); leaving it running" "$LOGS/update-app.log" || { cat "$LOGS/update-app.log" >&2; fail "the update did not leave Overnote.app alone"; }
+app_ping="$(rpc system.ping)"
+[[ "$(field "$app_ping" 'r.result.pid + " " + r.result.host')" == "$HELPER_PID app" ]] || fail "the update stopped Overnote.app: $app_ping"
+pre_update=("$BACKUPS"/notes-*-v"$N"-pre-update.sqlite)
+((${#pre_update[@]} == 2)) || fail "Overnote.app wrote no pre-update backup"
+ok "an update backs up through a running Overnote.app and never stops it"
+
 # ---------------------------------------------------------------- 5. rollback with no helper, then the sqlite3 fallback
 stop_helper
 in_app npm run update-extension -- --version "v$N" --no-register >"$LOGS/rollback.log" 2>&1 || { cat "$LOGS/rollback.log" >&2; fail "the rollback to $N"; }
@@ -273,14 +287,14 @@ grep -q "Updated Overnote from $NEXT to $N" "$LOGS/rollback.log" || fail "the ro
 [[ ! -e "$APP/NEXT_RELEASE" ]] || fail "the rollback kept a file of $NEXT"
 # Helper backups carry the helper's version, which the fake releases share with N.
 pre_update=("$BACKUPS"/notes-*-v"$N"-pre-update.sqlite)
-((${#pre_update[@]} == 2)) || fail "the rollback wrote no pre-update backup"
+((${#pre_update[@]} == 3)) || fail "the rollback wrote no pre-update backup"
 ok "rollback to $N with no helper running: started headless, backed up, stopped again"
 
 echo "0000000000000000000000000000000000000000000000000000000000000000  OvernoteHelper" >"$APP/assets/bin/OvernoteHelper.sha256"
 in_app npm run update-extension -- --version "v$N" --force --no-register >"$LOGS/fallback.log" 2>&1 || { cat "$LOGS/fallback.log" >&2; fail "the reinstall with a helper that cannot start"; }
 grep -q "copying the database with sqlite3" "$LOGS/fallback.log" || { cat "$LOGS/fallback.log" >&2; fail "the sqlite3 fallback did not run"; }
 fallback=("$BACKUPS"/notes-*-v"$N"-pre-update.sqlite)
-((${#fallback[@]} == 3)) || fail "the sqlite3 fallback wrote no backup"
+((${#fallback[@]} == 4)) || fail "the sqlite3 fallback wrote no backup"
 newest="$(printf '%s\n' "$BACKUPS"/notes-*-v"$N"-pre-update.sqlite | sort | tail -n 1)"
 [[ "$(stat -f %Lp "$newest")" == "600" && "$(sqlite3 -readonly "$newest" 'SELECT count(*) FROM notes')" == "3" ]] || fail "the sqlite3 backup is wrong"
 [[ "$(shasum -a 256 "$APP/assets/bin/OvernoteHelper" | cut -d' ' -f1)" == "$(cut -d' ' -f1 "$APP/assets/bin/OvernoteHelper.sha256")" ]] || fail "the reinstall did not restore the checksum"

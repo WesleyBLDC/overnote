@@ -1093,3 +1093,78 @@ struct BackupTests {
         #expect(!FileManager.default.fileExists(atPath: oldest.path))
     }
 }
+
+@Suite("App mode")
+struct AppModeTests {
+    private let bundle = LaunchContext(
+        bundleIdentifier: AppMode.bundleIdentifier, resourcePath: "/Applications/Overnote.app/Contents/Resources",
+        home: "/Users/someone", uid: 501)
+    private let bare = LaunchContext(bundleIdentifier: nil, resourcePath: nil, home: "/Users/someone", uid: 501)
+
+    @Test func theAppBundleDefaultsEveryPathAndFlagsStillWin() throws {
+        let app = try HelperArguments.parse([], context: bundle)
+        #expect(app.app && app.hostKind == .app)
+        #expect(app.supportDir == "/Users/someone/Library/Application Support/Overnote")
+        #expect(app.legacySupportDir == nil)
+        #expect(app.socketPath == "/tmp/overnote-501/helper.sock")
+        #expect(app.pidFile == "/tmp/overnote-501/helper.pid")
+        #expect(app.editorDir == "/Applications/Overnote.app/Contents/Resources/editor")
+
+        let flagged = try HelperArguments.parse(
+            ["--app", "--support-dir", "/s", "--socket", "/r/h.sock", "--pid-file", "/r/h.pid", "--legacy-support-dir", "/l"],
+            context: bare)
+        #expect(flagged.app && flagged.supportDir == "/s" && flagged.legacySupportDir == "/l")
+        #expect(flagged.socketPath == "/r/h.sock" && flagged.pidFile == "/r/h.pid" && flagged.editorDir == nil)
+
+        // Extension mode is unchanged: a bare binary still needs --support-dir.
+        #expect(throws: HelperArguments.ParseError.self) { try HelperArguments.parse([], context: bare) }
+        let plain = try HelperArguments.parse(["--support-dir", "/s"], context: bare)
+        #expect(!plain.app && plain.hostKind == .extension && plain.legacySupportDir == nil)
+    }
+
+    @Test func theLegacyDatabaseMovesOnlyIntoASharedDatabaseWithNoNoteAtAll() throws {
+        // holdsNotes: nil means the database cannot be read.
+        func decide(shared: Bool?, legacy: Bool?, legacyDir: String? = "/legacy") -> LegacyMigration.Decision {
+            var files: Set<String> = []
+            if shared != nil { files.insert("/shared/notes.sqlite") }
+            if legacy != nil { files.insert("/legacy/notes.sqlite") }
+            let notes: [String: Bool?] = ["/shared/notes.sqlite": shared, "/legacy/notes.sqlite": legacy]
+            return LegacyMigration.decide(
+                supportDir: "/shared", legacySupportDir: legacyDir, fileExists: files.contains,
+                holdsNotes: { notes[$0] ?? nil })
+        }
+        // No shared database yet: the file is copied before the database opens.
+        #expect(decide(shared: nil, legacy: true) == .copy(from: "/legacy/notes.sqlite"))
+        #expect(decide(shared: nil, legacy: nil) == .nothingToCopy)
+        // An empty shared database (Overnote.app started first) takes a legacy one with notes.
+        #expect(decide(shared: false, legacy: true) == .importInto(from: "/legacy/notes.sqlite"))
+        #expect(decide(shared: false, legacy: false) == .nothingToCopy)
+        #expect(decide(shared: false, legacy: nil) == .nothingToCopy)
+        // A shared database with any note, or one that cannot be read, is never touched.
+        #expect(decide(shared: true, legacy: true) == .alreadyMigrated)
+        let unreadable = LegacyMigration.decide(
+            supportDir: "/shared", legacySupportDir: "/legacy", fileExists: { _ in true },
+            holdsNotes: { $0.hasPrefix("/legacy") ? true : nil })
+        #expect(unreadable == .alreadyMigrated)
+        #expect(decide(shared: false, legacy: true, legacyDir: nil) == .noLegacyFolder)
+        #expect(decide(shared: false, legacy: true, legacyDir: "/shared/") == .noLegacyFolder)
+
+        // The copy carries the notes, and the legacy file is byte for byte unchanged.
+        let directory = try TempDirectory()
+        let legacyDir = directory.file("legacy")
+        let sharedDir = directory.file("shared")
+        try FileManager.default.createDirectory(atPath: legacyDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: sharedDir, withIntermediateDirectories: true)
+        let legacyPath = legacyDir + "/notes.sqlite"
+        let legacy = try NotesRepository(path: legacyPath)
+        _ = try legacy.create(Fixture.content("Carried over"), makeCurrent: false)
+        legacy.close()
+        let before = try Data(contentsOf: URL(fileURLWithPath: legacyPath))
+        try LegacyMigration.copy(from: legacyPath, toSupportDir: sharedDir)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: legacyPath)) == before)
+        let shared = try NotesRepository(path: sharedDir + "/notes.sqlite")
+        #expect(try shared.count() == 1)
+        shared.close()
+        #expect(try FileManager.default.contentsOfDirectory(atPath: sharedDir).allSatisfy { !$0.hasPrefix(".") })
+    }
+}

@@ -32,6 +32,9 @@ The panel works on your real notes, as in any install.
 Stop with ⌃C: Raycast keeps the extension, still running this checkout's last build.
 To go back to a release, run `npm run install-extension` in the release folder.
 
+To try the standalone app instead, `npm run build:app` assembles `dist-app/Overnote.app` from the same editor and helper builds, and `npm run app:install` copies it to `/Applications` ([docs/install.md](docs/install.md#the-local-app-overnoteapp)).
+The build takes about a second once the helper and editor are built, and `npm run verify` runs it with a headless check.
+
 For editor work you often do not need Raycast at all:
 
 ```sh
@@ -56,12 +59,13 @@ Add `?seed=empty` to the URL to start with no notes.
 | `src/api/`, `src/hooks/`, `src/components/` | Calls into the helper, React hooks, and shared list and detail views |
 | `packages/core/` | `@overnote/core`: the ProseMirror schema, Markdown, HTML, and text serializers, and title rules, shared by the editor and the extension |
 | `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/` |
-| `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository |
+| `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository; the same binary runs as `Overnote.app` in app mode (`AppMode.swift`, plus `GlobalHotkey.swift`, `StatusMenu.swift`, and `LoginItem.swift`) |
 | `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
-| `scripts/` | Helper build, the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, and `check-release.sh` |
+| `dist-app/` | `Overnote.app`, built by `scripts/build-app.sh` (`npm run build:app`); generated, not committed |
+| `scripts/` | Helper build, the app bundle build (`build-app.sh`, also behind `npm run app:install`), the menu bar template (`make-menubar-icon.swift`), the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, and `check-release.sh` |
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
 | `metadata/` | Raycast Store screenshots, used by `scripts/prepare-store.sh` |
-| `assets/` | The extension icon (`extension-icon.png`, 512 px) and the logo master (`brand/overnote-logo-1024.png`); the editor and helper builds are generated, not committed |
+| `assets/` | The extension icon (`extension-icon.png`, 512 px), the logo master (`brand/overnote-logo-1024.png`), and the menu bar template (`brand/menubar/`); the editor and helper builds are generated, not committed |
 | `media/` | README product shots (`npm run shots:readme`; see Screenshots below) |
 | `scripts/readme-shots.mjs` | Regenerates `media/*.png` from the editor harness at 2× |
 
@@ -132,11 +136,12 @@ npm test -w packages/core        # serialization fixtures and core essentials
 npm test -w editor               # editor unit tests
 npm run test:e2e -w editor       # editor end-to-end (WebKit, plus a Chromium build check)
 bash helper/test.sh              # helper unit tests
+bash scripts/build-app.sh --check  # build Overnote.app, check its signature, version, and app mode (headless)
 bash scripts/smoke-helper.sh     # helper end-to-end over its socket
 bash scripts/e2e-window.sh       # panel window behavior end-to-end
 bash scripts/e2e-update.sh       # install, update, backups, and restore end-to-end (headless)
 ```
-Every suite that starts the helper points `OVERNOTE_BACKUP_DIR` at a temporary folder, so tests never write into your real backups.
+Every suite that starts the helper points `OVERNOTE_BACKUP_DIR` at a temporary folder, so tests never write into your real backups, and the extension tests point `OVERNOTE_SUPPORT_DIR` at one too, so they never open your real notes.
 Keep it that way when you add one.
 
 Flaky tests count as failures.

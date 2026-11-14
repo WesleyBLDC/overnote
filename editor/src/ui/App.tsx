@@ -310,6 +310,8 @@ export function App({ api }: { api: Api }) {
       // Development only: a new editor build is ready. Save first, so no keystroke is lost; the
       // reloaded page opens the same note at the saved caret.
       api.on("editor.willReload", () => void session.flush().finally(() => window.location.reload())),
+      // The helper awaits this before it shuts down, so the last keystrokes are saved.
+      api.onFlush(() => session.flush()),
     ];
     const onHide = () => {
       if (document.visibilityState === "hidden") session.saveInBackground();

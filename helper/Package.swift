@@ -21,6 +21,9 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("WebKit"),
+                // App mode only: the global hotkey and Launch at Login.
+                .linkedFramework("Carbon"),
+                .linkedFramework("ServiceManagement"),
             ]
         ),
         // swift-testing suite. With only the Command Line Tools, run it through ./test.sh,

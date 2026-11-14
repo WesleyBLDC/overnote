@@ -63,7 +63,9 @@ interface ResponseLine {
 export const BACKUP_TIMEOUT_MS = 60000;
 
 export function defaultTimeoutFor(method: string): number {
-  if (method === "system.backup" || method === "system.restoreBackup") return BACKUP_TIMEOUT_MS;
+  if (method === "system.backup" || method === "system.restoreBackup" || method === "system.importLegacy") {
+    return BACKUP_TIMEOUT_MS;
+  }
   return method === "system.shutdown" ? SHUTDOWN_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
 }
 

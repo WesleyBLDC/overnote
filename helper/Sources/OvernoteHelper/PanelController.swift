@@ -780,4 +780,9 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     func requestShutdown() async {
         onShutdown()
     }
+
+    func flushEditor(timeout: TimeInterval) async -> Bool {
+        guard let bridge else { return true }
+        return await bridge.flush(timeout: timeout)
+    }
 }

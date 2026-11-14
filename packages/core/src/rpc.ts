@@ -38,6 +38,7 @@ export const Method = {
   SystemListBackups: "system.listBackups",
   SystemRestoreBackup: "system.restoreBackup",
   SystemDismissRestoreOffer: "system.dismissRestoreOffer",
+  SystemImportLegacy: "system.importLegacy",
   WindowToggle: "window.toggle",
   WindowShow: "window.show",
   WindowHide: "window.hide",
@@ -95,13 +96,14 @@ export const SOCKET_ONLY_METHODS = [
   Method.SystemListBackups,
   Method.SystemRestoreBackup,
   Method.SystemDismissRestoreOffer,
+  Method.SystemImportLegacy,
 ] as const satisfies readonly MethodName[];
 export type SocketOnlyMethod = (typeof SOCKET_ONLY_METHODS)[number];
 
 type Empty = Record<string, never>;
 
 /** Why a backup was written; the last part of its file name. */
-export type BackupReason = "manual" | "daily" | "pre-migration" | "pre-update" | "pre-restore";
+export type BackupReason = "manual" | "daily" | "pre-migration" | "pre-update" | "pre-restore" | "pre-import";
 
 /** One file in the backups folder: `notes-<UTC timestamp>-v<version>-<reason>.sqlite`. */
 export interface BackupInfo {
@@ -132,6 +134,15 @@ export interface RestoreResult {
   restored: BackupInfo;
   /** The backup of the database as it was just before the restore. */
   preRestoreBackup: BackupInfo;
+  noteCount: number;
+}
+
+export interface ImportLegacyResult {
+  /** True when the legacy notes replaced an empty shared database. */
+  imported: boolean;
+  /** The backup of the shared database written just before the import, or null when none was needed. */
+  preImportBackup: BackupInfo | null;
+  /** Live notes after the call. */
   noteCount: number;
 }
 
@@ -171,7 +182,7 @@ export interface DragRect {
 
 /** Params and result for every method, keyed by method name. */
 export interface Methods {
-  "system.ping": { params: Empty; result: { version: string; pid: number } };
+  "system.ping": { params: Empty; result: { version: string; pid: number; host?: "app" | "extension" } };
   "system.shutdown": { params: Empty; result: Empty };
   "system.ready": { params: Empty; result: { settings: Settings; windowData: WindowData } };
   "system.status": { params: Empty; result: SystemStatus };
@@ -179,6 +190,7 @@ export interface Methods {
   "system.listBackups": { params: Empty; result: { directory: string; items: BackupInfo[] } };
   "system.restoreBackup": { params: { path: string }; result: RestoreResult };
   "system.dismissRestoreOffer": { params: Empty; result: Empty };
+  "system.importLegacy": { params: { dir: string }; result: ImportLegacyResult };
   "window.toggle": { params: Empty; result: { visible: boolean } };
   "window.show": { params: { noteId?: NoteId }; result: { visible: true } };
   "window.hide": { params: Empty; result: { visible: false } };
