@@ -46,6 +46,10 @@ export const Method = {
   WindowSetMinimumSize: "window.setMinimumSize",
   WindowResignFocus: "window.resignFocus",
   WindowSetDragRegions: "window.setDragRegions",
+  WindowSetDrawer: "window.setDrawer",
+  TermOpen: "term.open",
+  TermResize: "term.resize",
+  TermClose: "term.close",
   ClipboardCopy: "clipboard.copy",
   FileSaveAs: "file.saveAs",
   AppOpenURL: "app.openURL",
@@ -82,6 +86,10 @@ export const BRIDGE_ONLY_METHODS = [
   Method.WindowSetMinimumSize,
   Method.WindowResignFocus,
   Method.WindowSetDragRegions,
+  Method.WindowSetDrawer,
+  Method.TermOpen,
+  Method.TermResize,
+  Method.TermClose,
   Method.ClipboardCopy,
   Method.FileSaveAs,
   Method.AppOpenURL,
@@ -169,6 +177,23 @@ export interface DragRect {
   height: number;
 }
 
+/** The drawer terminal's grid in character cells. */
+export interface TermSize {
+  cols: number;
+  rows: number;
+}
+
+/** What runs in the drawer: a kept Herdr terminal, or a plain login shell when Herdr is missing. */
+export type TerminalBackend = "herdr" | "shell";
+
+/**
+ * The terminal fast lane (docs/architecture.md section 3): keystrokes and acks go to their own
+ * `window.webkit.messageHandlers.overnoteTerm`, fire and forget, never queued behind note saves.
+ * `data` is base64 of the bytes; `bytes` counts output bytes the page has drawn.
+ */
+export const TERMINAL_HANDLER = "overnoteTerm";
+export type TermFastMessage = { type: "write"; data: string } | { type: "ack"; bytes: number };
+
 /** Params and result for every method, keyed by method name. */
 export interface Methods {
   "system.ping": { params: Empty; result: { version: string; pid: number } };
@@ -189,6 +214,13 @@ export interface Methods {
   "window.setMinimumSize": { params: { width: number; height: number }; result: Empty };
   "window.resignFocus": { params: Empty; result: Empty };
   "window.setDragRegions": { params: { rects: DragRect[] }; result: Empty };
+  /** The terminal drawer's height in points (0 when closed), added below the note and kept out of the saved frame. */
+  "window.setDrawer": { params: { height: number }; result: Empty };
+  /** Starts the drawer's terminal, or resizes the one already running. */
+  "term.open": { params: TermSize; result: { backend: TerminalBackend } };
+  "term.resize": { params: TermSize; result: Empty };
+  /** Ends the drawer's attach; a Herdr terminal keeps running. */
+  "term.close": { params: Empty; result: Empty };
   "clipboard.copy": { params: { text: string; html?: string }; result: Empty };
   "app.openURL": { params: { url: string }; result: Empty };
   "file.saveAs": { params: { suggestedName: string; content: string }; result: { saved: boolean; path?: string } };
@@ -240,6 +272,8 @@ export const Event = {
   NotesChanged: "notes.changed",
   SettingsChanged: "settings.changed",
   EditorWillReload: "editor.willReload",
+  TermData: "term.data",
+  TermExit: "term.exit",
 } as const;
 export type EventName = (typeof Event)[keyof typeof Event];
 
@@ -254,4 +288,8 @@ export interface Events {
   "settings.changed": Settings;
   /** Development only (`--watch-editor`): the editor build changed; save, then reload the page. */
   "editor.willReload": Empty;
+  /** Terminal output, base64 of the bytes. */
+  "term.data": { data: string };
+  /** The drawer's attach or shell ended. */
+  "term.exit": { code: number };
 }

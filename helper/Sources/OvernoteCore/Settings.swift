@@ -124,6 +124,8 @@ public struct Settings: Equatable, Sendable {
     /// Off by default: the first open uses a roomy fixed size instead.
     public var windowAutoSize = false
     public var panelFrame: PanelFrame?
+    /// Whether the terminal drawer is open (`terminal: { open }`), so it reopens after a restart.
+    public var terminalOpen = false
 
     public static let zoomRange = 0.75...2.0
     public static let zoomStep = 0.05
@@ -134,6 +136,7 @@ public struct Settings: Equatable, Sendable {
     /// Every key, in the order used for storage and JSON.
     public static let keys = [
         "escapeLosesFocus", "hideWhileScreenSharing", "zoom", "showFormatBar", "countMode", "windowAutoSize", "panelFrame",
+        "terminal",
     ]
 
     public var json: JSONValue {
@@ -149,6 +152,7 @@ public struct Settings: Equatable, Sendable {
         case "countMode": return .string(countMode.rawValue)
         case "windowAutoSize": return .bool(windowAutoSize)
         case "panelFrame": return .optional(panelFrame) { $0.json }
+        case "terminal": return ["open": .bool(terminalOpen)]
         default: return .null
         }
     }
@@ -182,6 +186,11 @@ public struct Settings: Equatable, Sendable {
             countMode = mode
         case "panelFrame":
             panelFrame = value.isNull ? nil : try PanelFrame(json: value)
+        case "terminal":
+            guard let object = value.objectValue, object.count == 1, let open = object["open"]?.boolValue else {
+                throw RPCError.badParams("terminal must be { open: boolean }")
+            }
+            terminalOpen = open
         default:
             throw RPCError.badParams("Unknown setting: \(key)")
         }

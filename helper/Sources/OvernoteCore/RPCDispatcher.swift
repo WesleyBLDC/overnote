@@ -27,6 +27,8 @@ public final class RPCDispatcher: Sendable {
     /// Methods only the editor may call.
     public static let bridgeOnlyMethods: Set<String> = [
         "system.ready", "window.resize", "window.setMinimumSize", "window.setDragRegions", "window.resignFocus", "app.openURL", "clipboard.copy", "file.saveAs",
+        // The terminal: socket clients must never type into or resize the drawer's shell.
+        "window.setDrawer", "term.open", "term.resize", "term.close",
     ]
 
     public init(
@@ -155,6 +157,25 @@ public final class RPCDispatcher: Sendable {
             return [:]
         case "window.resignFocus":
             await host.resignFocus()
+            return [:]
+        case "window.setDrawer":
+            let height = try p.double("height")
+            guard height >= 0, height <= Self.maxDrawerHeight else {
+                throw RPCError.badParams("height must be from 0 to \(Int(Self.maxDrawerHeight))")
+            }
+            await host.setDrawer(height: height)
+            return [:]
+
+        // MARK: terminal
+        case "term.open":
+            let size = try Self.termSize(p)
+            return ["backend": .string(try await host.terminalOpen(cols: size.cols, rows: size.rows))]
+        case "term.resize":
+            let size = try Self.termSize(p)
+            await host.terminalResize(cols: size.cols, rows: size.rows)
+            return [:]
+        case "term.close":
+            await host.terminalClose()
             return [:]
 
         // MARK: native services
@@ -307,6 +328,19 @@ public final class RPCDispatcher: Sendable {
             markdown: try p.optionalString("markdown") ?? "",
             text: try p.optionalString("text") ?? "",
             title: try p.optionalString("title") ?? "")
+    }
+
+    /// The tallest drawer `window.setDrawer` accepts, in points (the editor sends 260).
+    static let maxDrawerHeight = 1000.0
+
+    /// Validates `{ cols, rows }`: whole numbers from 1 to 1000.
+    private static func termSize(_ p: Params) throws -> (cols: Int, rows: Int) {
+        guard let cols = try p.optionalInt("cols"), let rows = try p.optionalInt("rows"),
+            (1...1000).contains(cols), (1...1000).contains(rows)
+        else {
+            throw RPCError.badParams("cols and rows must be whole numbers from 1 to 1000")
+        }
+        return (Int(cols), Int(rows))
     }
 
     /// At most this many drag rects; the editor sends a handful at most.

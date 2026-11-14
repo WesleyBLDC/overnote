@@ -14,6 +14,32 @@ public enum PanelPlacement: String, Sendable, CaseIterable {
 /// tested. Rects are AppKit screen rects (points, origin at the bottom left of the primary
 /// display, y up); a stored `PanelFrame` keeps the **top** edge in `y`.
 public enum PanelGeometry {
+    // MARK: - The terminal drawer
+
+    /// The terminal drawer hangs below the note (`window.setDrawer`). Everything the helper
+    /// remembers and computes (the saved frame, auto-sizing, the 860 pt cap, placements) is about
+    /// the note alone; the window is the note plus the drawer under it.
+    public static func window(note: CGRect, drawer: CGFloat) -> CGRect {
+        guard drawer > 0 else { return note }
+        return CGRect(x: note.minX, y: note.minY - drawer, width: note.width, height: note.height + drawer)
+    }
+
+    /// The note part of a window frame: the window without the drawer at its bottom.
+    public static func note(window: CGRect, drawer: CGFloat) -> CGRect {
+        guard drawer > 0 else { return window }
+        let height = max(window.height - drawer, 0)
+        return CGRect(x: window.minX, y: window.maxY - height, width: window.width, height: height)
+    }
+
+    /// The part of a display's visible area the note may use: the drawer takes its bottom, so a
+    /// note kept inside it always leaves room for the drawer on screen, and Fill, Left, and Right
+    /// take the drawer's space from the note.
+    public static func noteArea(visible: CGRect, drawer: CGFloat) -> CGRect {
+        guard drawer > 0 else { return visible }
+        let height = max(visible.height - drawer, 0)
+        return CGRect(x: visible.minX, y: visible.maxY - height, width: visible.width, height: height)
+    }
+
     /// Grows the frame to the minimum size (`PanelSizing`), clamps it to the display, and
     /// nudges it fully onto its visible area, keeping the top edge where it was whenever the
     /// frame fits. A frame already inside the visible area and at least the minimum (a tiled
