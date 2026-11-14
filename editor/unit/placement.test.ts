@@ -7,15 +7,7 @@ const bounds = { top: 16, bottom: 187, left: 10, right: 395 };
 const below = { prefer: "below", gap: 4, align: "start" } as const;
 
 describe("placeDropdown", () => {
-  it("drops below the anchor when it fits, and flips above when only that side fits", () => {
-    expect(
-      placeDropdown({ top: 40, bottom: 60, left: 30, right: 30 }, { width: 200, height: 100 }, bounds, below),
-    ).toMatchObject({ side: "below", top: 64, left: 30, maxHeight: 123 });
-    expect(
-      placeDropdown({ top: 150, bottom: 170, left: 30, right: 30 }, { width: 200, height: 100 }, bounds, below),
-    ).toMatchObject({ side: "above", top: 46, maxHeight: 130 });
-  });
-
+  // Fitting below, and flipping above near the bottom, run end to end in editor/tests/dropdowns.spec.ts.
   it("takes the roomier side when neither fits, capped to that room so it scrolls inside", () => {
     const tall = { width: 200, height: 400 };
     const low = placeDropdown({ top: 120, bottom: 140, left: 30, right: 30 }, tall, bounds, below);

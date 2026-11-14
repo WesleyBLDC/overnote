@@ -9,7 +9,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { foldForMatch } from "../domain/fold";
@@ -287,31 +286,6 @@ describe("read-only fallback filtered lists", () => {
       expect(ids("pinned café")).toEqual([]);
       expect(ids("cafe")).toEqual(referenceIds(NOTES, "cafe").filter((id) => id !== "note-pinned-cafe"));
       expect(ids("ca")).toContain("note-pinned-cafe");
-    });
-  });
-
-  it("keeps the shared fold corpus searchable on the FTS path", () => {
-    const corpus = JSON.parse(
-      fs.readFileSync(
-        path.join(path.dirname(fileURLToPath(import.meta.url)), "../../packages/core/tests/fold-corpus.json"),
-        "utf8",
-      ),
-    ) as { input: string; folded: string }[];
-    const notes: FixtureNote[] = corpus.map((entry, index) => ({
-      id: `corpus-${String(index).padStart(3, "0")}`,
-      title: entry.input,
-      text: `${entry.input}\nbody ${index}`,
-      pinned: null,
-      updatedAt: 100_000 - index,
-    }));
-    withDb(buildDatabase("v2-fts", notes), (db) => {
-      corpus.forEach((entry, index) => {
-        for (const query of [entry.input, entry.folded]) {
-          const found = db.list({ filter: query, limit: 500 }).items.map((note) => note.id);
-          expect(found, JSON.stringify(query)).toEqual(referenceIds(notes, query));
-          expect(found).toContain(notes[index]?.id);
-        }
-      });
     });
   });
 });

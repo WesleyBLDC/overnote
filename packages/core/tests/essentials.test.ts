@@ -89,65 +89,39 @@ describe("merging an outside change into unsaved edits", () => {
     return { ...result, markdown: docToMarkdown(result.doc) };
   };
 
-  it("applies changes to different blocks from both sides", () => {
-    expect(merged("A\n\nB\n\nC", "A mine\n\nB\n\nC", "A\n\nB\n\nC\n\nD")).toEqual({
-      doc: md("A mine\n\nB\n\nC\n\nD"),
-      markdown: "A mine\n\nB\n\nC\n\nD",
-      conflicted: false,
-      matchesRemote: false,
-    });
-    // Adjacent blocks, list items, and an insertion before a changed block are independent too.
-    expect(merged("- a\n- b\n- c", "- a\n- b mine\n- c", "- a\n- b\n- c theirs").markdown).toBe(
-      "- a\n- b mine\n- c theirs",
-    );
-    expect(merged("A\n\nB", "New\n\nA\n\nB", "A theirs\n\nB")).toMatchObject({
-      markdown: "New\n\nA theirs\n\nB",
-      conflicted: false,
-    });
-  });
-
-  it("keeps both versions when both sides changed the same block, local first", () => {
-    expect(merged("Draft", "Draft mine", "From outside")).toMatchObject({
-      markdown: "Draft mine\n\nFrom outside",
-      conflicted: true,
-    });
-    // Two insertions at the same place keep both.
-    expect(merged("A", "A\n\nmine", "A\n\ntheirs")).toMatchObject({
-      markdown: "A\n\nmine\n\ntheirs",
-      conflicted: true,
-    });
-    // A local join of two blocks against a remote edit of one of them keeps both versions.
-    expect(merged("A\n\nB", "AB", "A\n\nB theirs")).toMatchObject({
-      markdown: "AB\n\nA\n\nB theirs",
-      conflicted: true,
-    });
-  });
-
-  it("keeps an edit over a delete without calling it a conflict, whichever side deleted", () => {
-    expect(merged("A\n\nB", "A\n\nB mine", "A")).toMatchObject({ markdown: "A\n\nB mine", conflicted: false });
-    expect(merged("A\n\nB", "A", "A\n\nB theirs")).toMatchObject({ markdown: "A\n\nB theirs", conflicted: false });
-    // An insertion inside a range the other side deleted brings the deleted base blocks back around it.
-    expect(merged("A\n\nB\n\nC\n\nD", "A\n\nD", "A\n\nB\n\nX\n\nC\n\nD")).toMatchObject({
-      markdown: "A\n\nB\n\nX\n\nC\n\nD",
-      conflicted: false,
-      matchesRemote: true,
-    });
-    expect(merged("A\n\nB\n\nC\n\nD", "A\n\nB\n\nX\n\nC\n\nD", "A\n\nD")).toMatchObject({
-      markdown: "A\n\nB\n\nX\n\nC\n\nD",
-      conflicted: false,
-      matchesRemote: false,
-    });
-  });
-
-  it("lines up duplicate identical blocks so each side's change lands once", () => {
-    expect(merged("X\n\nX\n\nX", "X\n\nX mine\n\nX", "X\n\nX\n\nX\n\nY")).toMatchObject({
-      markdown: "X\n\nX mine\n\nX\n\nY",
-      conflicted: false,
-    });
-    expect(merged("X\n\nY\n\nX", "X mine\n\nY\n\nX", "X\n\nY\n\nX theirs")).toMatchObject({
-      markdown: "X mine\n\nY\n\nX theirs",
-      conflicted: false,
-    });
+  // The simple cases (blocks apart, the same block, an outside delete, no local change) run end to
+  // end in editor/tests/autosave.spec.ts; these are the alignment rules behind them.
+  it("keeps every change from both sides, local first where they collide", () => {
+    // [base, local, remote, merged markdown, conflicted]
+    const cases: [string, string, string, string, boolean][] = [
+      // Adjacent list items, and an insertion before a changed block, are independent.
+      ["- a\n- b\n- c", "- a\n- b mine\n- c", "- a\n- b\n- c theirs", "- a\n- b mine\n- c theirs", false],
+      ["A\n\nB", "New\n\nA\n\nB", "A theirs\n\nB", "New\n\nA theirs\n\nB", false],
+      // Two insertions at the same place keep both.
+      ["A", "A\n\nmine", "A\n\ntheirs", "A\n\nmine\n\ntheirs", true],
+      // A local join of two blocks against a remote edit of one of them keeps both versions.
+      ["A\n\nB", "AB", "A\n\nB theirs", "AB\n\nA\n\nB theirs", true],
+      // An edit wins over a local delete, without a conflict.
+      ["A\n\nB", "A", "A\n\nB theirs", "A\n\nB theirs", false],
+      // An insertion inside a range the other side deleted brings the deleted blocks back around it.
+      ["A\n\nB\n\nC\n\nD", "A\n\nD", "A\n\nB\n\nX\n\nC\n\nD", "A\n\nB\n\nX\n\nC\n\nD", false],
+      ["A\n\nB\n\nC\n\nD", "A\n\nB\n\nX\n\nC\n\nD", "A\n\nD", "A\n\nB\n\nX\n\nC\n\nD", false],
+      // Duplicate identical blocks line up so each side's change lands once.
+      ["X\n\nX\n\nX", "X\n\nX mine\n\nX", "X\n\nX\n\nX\n\nY", "X\n\nX mine\n\nX\n\nY", false],
+      ["X\n\nY\n\nX", "X mine\n\nY\n\nX", "X\n\nY\n\nX theirs", "X mine\n\nY\n\nX theirs", false],
+      // The same change on both sides is no conflict.
+      ["A", "A same", "A same", "A same", false],
+    ];
+    for (const [base, local, remote, markdown, conflicted] of cases) {
+      expect(merged(base, local, remote), JSON.stringify([base, local, remote])).toMatchObject({
+        markdown,
+        conflicted,
+      });
+    }
+    // matchesRemote tells the editor it can take the remote version as is.
+    expect(merged("A\n\nB\n\nC\n\nD", "A\n\nD", "A\n\nB\n\nX\n\nC\n\nD").matchesRemote).toBe(true);
+    expect(merged("A", "A same", "A same").matchesRemote).toBe(true);
+    expect(merged("A\n\nB\n\nC\n\nD", "A\n\nB\n\nX\n\nC\n\nD", "A\n\nD").matchesRemote).toBe(false);
   });
 
   it("treats a changed middle too large to compare as one replaced range, still losing nothing", () => {
@@ -162,12 +136,6 @@ describe("merging an outside change into unsaved edits", () => {
     const edited = mergeDocs(md(base.join("\n\n")), md(local.join("\n\n")), md(remote.join("\n\n")));
     expect(edited.conflicted).toBe(true);
     expect(docToMarkdown(edited.doc)).toBe([...local, ...remote].join("\n\n"));
-  });
-
-  it("takes the remote version when the local side changed nothing or the same thing", () => {
-    expect(merged("A\n\nB", "A\n\nB", "A\n\nB\n\nC")).toMatchObject({ conflicted: false, matchesRemote: true });
-    expect(merged("A", "A same", "A same")).toMatchObject({ conflicted: false, matchesRemote: true });
-    expect(merged("A", "", "")).toMatchObject({ doc: md(""), matchesRemote: true });
   });
 });
 
