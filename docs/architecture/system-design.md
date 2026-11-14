@@ -69,7 +69,7 @@ Details are in "App mode and handover" in [`../architecture.md`](../architecture
    Anything that can reach the socket is the same user, so the socket has no authentication beyond file permissions.
 2. **Editor page to helper.**
    `WebBridge` accepts script messages only from the main frame of the `overnote://` scheme, which `EditorSchemeHandler` serves from `--editor-dir`.
-   Socket-only methods (`system.status`, backups, restore) are refused on the bridge, and bridge-only methods (`system.ready`, window sizing, clipboard, save panel, `app.openURL`) are refused on the socket.
+   Socket-only methods (`system.status`, backups, restore) are refused on the bridge, and bridge-only methods (`system.ready`, window sizing, the terminal drawer, clipboard, save panel, `app.openURL`) are refused on the socket.
    The production editor HTML carries a strict Content Security Policy with `connect-src 'none'` (`editor/vite.config.ts`), navigation away from `overnote://` is cancelled, and links open in the default browser through `NSWorkspace` after `LinkPolicy` checks the scheme.
 3. **Release download to installed binary.**
    The helper is ad-hoc signed, not notarized.
@@ -97,6 +97,7 @@ Details are in "App mode and handover" in [`../architecture.md`](../architecture
 1. Tiptap reports a document change and `App.tsx` calls `NoteSession.contentChanged`.
 2. After a 300 ms debounce (or on switch, hide, or blur) `saveContent` builds `NoteContent` with core's `buildNoteContent` and calls `notes.update` with `expectedUpdatedAt` set to the version it last synced.
 3. `BridgeClient` posts the request to `window.webkit.messageHandlers.overnote`; `WebBridge` queues it behind the previous message so saves land in order, and hands it to `RPCDispatcher` with source `.bridge`.
+   The terminal drawer's keystrokes and acks skip this queue: they go to their own `overnoteTerm` handler (`TerminalBridge`), which owns the drawer's pseudo terminal and sends its output back as `term.data` events.
 4. `NotesRepository.update` writes the content and folded copies in one transaction on the single writer connection, or returns `conflict` with the stored note when `expectedUpdatedAt` is stale.
 5. On `conflict` the session merges the stored note into its edits with `mergeDocs` and retries, up to 3 attempts.
 6. A write that came through the socket instead makes the dispatcher emit `notes.changed`, and the session reloads or merges that note in place.
@@ -137,7 +138,7 @@ Details are in sections 6 and 9 of [`../architecture.md`](../architecture.md).
 
 ## 5. Protocol versioning
 
-The protocol has a document version (v3.4 at the time of writing) at the top of [`../architecture.md`](../architecture.md), bumped in the same pull request as any change to a method, event, type, the schema, or the core API.
+The protocol has a document version (v3.5 at the time of writing) at the top of [`../architecture.md`](../architecture.md), bumped in the same pull request as any change to a method, event, type, the schema, or the core API.
 The version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`, compiled into `HelperVersion.current`) through `system.ping`, and the launcher restarts any helper whose version or binary checksum differs from the bundled one, so the extension, helper, and editor of one release always speak the same protocol.
 External clients such as overnote-axi read `system.ping` or `system.status` to learn which behavior they can expect, and overnote-axi checks database columns rather than an exact schema version.

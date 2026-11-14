@@ -32,6 +32,7 @@ Press it again and it is gone.
 - Tasks (⌘↩), nested lists, syntax-highlighted code, find and replace (⌘F)
 - Pins (⇧⌘P, ⌘1–⌘9), browse (⌘P), history (⌘[ / ⌘])
 - Window placement: Fill Left / Right / Screen / Centre (⌃⌥ arrows, ⌘K, or the menu bar)
+- Terminal drawer under the note (⌃` or the toolbar), backed by a kept Herdr terminal when `hc` is installed, else your login shell
 - Export and copy as Markdown, HTML, or plain text; Recently Deleted for 60 days
 - Raycast commands: Search Notes, Create Note, Open Overnote, Recently Deleted, optional menu bar
 - Deeplinks and quicklinks to open a specific note
@@ -84,6 +85,7 @@ Everything saves automatically.
 | ⌘, | Settings |
 | ⌃⌥← → ↑ ↓ | Fill left / right / screen / centre |
 | ⌘= / ⌘- / ⌘0 | Zoom |
+| ⌃` | Open or close the terminal drawer |
 | ⎋ or ⌘W | Hide |
 
 </details>

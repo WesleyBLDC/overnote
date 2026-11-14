@@ -168,6 +168,16 @@
   --code-title: #1f5bb5;
   --code-attr: #7a5800;
 
+  /* The terminal drawer: a sunken well under the note, Graphite text, cursor, and selection. ANSI colors map to the
+     syntax and status colors in terminal/theme.ts, so they keep their contrast on the well in both modes. */
+  --terminal-bg: var(--bg-sunken);
+  --terminal-text: var(--text);
+  --terminal-cursor: var(--cursor);
+  --terminal-selection: var(--selection);
+  --terminal-divider: var(--border-strong);
+  /* Fixed in points, not zoomed: the drawer is 260 pt tall at every zoom, and its text follows the zoom. */
+  --terminal-height: 260px;
+
   /* ---- window layout ---- */
   --drag-strip: 12px;
   /* The helper's resize zones: 10 pt along edges, 24 pt squares at corners; controls stay outside. */

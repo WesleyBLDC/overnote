@@ -11,6 +11,7 @@ import { App } from "./ui/App";
 import "./styles/theme.css";
 import "./styles/app.css";
 import "./styles/editor.css";
+import "./styles/terminal.css";
 
 /**
  * Loads the bundled faces before the first render, so the note is measured and painted in Geist from the

@@ -27,10 +27,36 @@ export interface MockControl {
   seedMarkdown(markdowns: string[]): Note[];
   /** Resizes the harness panel, as a person dragging the native panel's edges would. */
   setPanelSize(width: number, height: number): void;
+  /** The drawer's fake terminal: a line-discipline echo, so typing shows up as it would in a shell. */
+  terminal: MockTerminal;
 }
 
+export interface MockTerminal {
+  /** A term.open is in effect (no term.close since). */
+  live: boolean;
+  opens: number;
+  /** Every keystroke the page sent on the fast lane, decoded. */
+  written: string;
+  /** Output bytes sent to the page, and bytes it acked after drawing them. */
+  sent: number;
+  acked: number;
+  size: { cols: number; rows: number } | null;
+  /** The drawer height from window.setDrawer. */
+  drawer: number;
+  /** Ends the fake program, as a detach or `exit` would. */
+  exit(code: number): void;
+}
+
+/** The fake shell's prompt. */
+const PROMPT = "overnote-mock $ ";
+
 interface MockWindow {
-  webkit?: { messageHandlers?: { overnote?: { postMessage(message: OutgoingMessage): void } } };
+  webkit?: {
+    messageHandlers?: {
+      overnote?: { postMessage(message: OutgoingMessage): void };
+      overnoteTerm?: { postMessage(message: rpc.TermFastMessage): void };
+    };
+  };
   overnoteBridge?: BridgeReceiver;
   __overnoteMock?: MockControl;
 }
@@ -42,6 +68,14 @@ const FLOOR = { width: 405, height: 197 };
 
 function seedFromUrl(control: MockControl, search: string): void {
   const params = new URLSearchParams(search);
+  const settings = params.get("settings");
+  if (settings) {
+    try {
+      control.store.settings = { ...control.store.settings, ...(JSON.parse(settings) as object) };
+    } catch {
+      // ignore a malformed value
+    }
+  }
   const seed = params.get("seed");
   if (seed === "empty") return;
   if (seed) {
@@ -84,12 +118,12 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
     const zoom = control.store.settings.zoom;
     const clamp = (value: number) => Math.min(Math.max(860 * zoom, minimum.height), Math.max(minimum.height, value));
     if (temporary) {
-      const current = root.getBoundingClientRect().height;
-      if (current < contentHeight) root.style.height = `${clamp(contentHeight)}px`;
+      const current = root.getBoundingClientRect().height - control.terminal.drawer;
+      if (current < contentHeight) root.style.height = `${clamp(contentHeight) + control.terminal.drawer}px`;
       return;
     }
     if (control.store.settings.windowAutoSize || restingHeight === null) restingHeight = clamp(contentHeight);
-    root.style.height = `${restingHeight}px`;
+    root.style.height = `${restingHeight + control.terminal.drawer}px`;
   };
   const receiver = (): BridgeReceiver | undefined => target.overnoteBridge;
   const control: MockControl = {
@@ -112,8 +146,60 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
       restingHeight = Math.max(height, minimum.height);
       root.style.maxWidth = "none";
       root.style.width = `${Math.max(width, minimum.width)}px`;
-      root.style.height = `${restingHeight}px`;
+      root.style.height = `${restingHeight + control.terminal.drawer}px`;
     },
+    terminal: {
+      live: false,
+      opens: 0,
+      written: "",
+      sent: 0,
+      acked: 0,
+      size: null,
+      drawer: 0,
+      exit: (code) => {
+        control.terminal.live = false;
+        receiver()?.emit("term.exit", { code });
+      },
+    },
+  };
+  /** Sends fake program output to the page, as the helper's term.data events. */
+  const output = (text: string) => {
+    const bytes = new TextEncoder().encode(text);
+    control.terminal.sent += bytes.length;
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    setTimeout(() => receiver()?.emit("term.data", { data: btoa(binary) }), 1);
+  };
+  /** The bridge-only terminal methods the store does not know; undefined for every other method. */
+  const terminalMethod = (method: string, params: unknown): object | undefined => {
+    const t = control.terminal;
+    switch (method) {
+      case "window.setDrawer": {
+        const { height } = params as { height: number };
+        const root = target.document.getElementById("root");
+        if (root && height !== t.drawer) {
+          root.style.height = `${root.getBoundingClientRect().height - t.drawer + height}px`;
+        }
+        t.drawer = height;
+        return {};
+      }
+      case "term.open":
+        t.size = params as { cols: number; rows: number };
+        if (!t.live) {
+          t.live = true;
+          t.opens += 1;
+          output(PROMPT);
+        }
+        return { backend: "shell" };
+      case "term.resize":
+        t.size = params as { cols: number; rows: number };
+        return {};
+      case "term.close":
+        t.live = false;
+        return {};
+      default:
+        return undefined;
+    }
   };
 
   target.webkit = {
@@ -138,7 +224,7 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
                 // The page stands in for the display and the root element for the panel.
                 const box = panelRoot.getBoundingClientRect();
                 control.store.harness = {
-                  visible: { width: target.innerWidth, height: target.innerHeight },
+                  visible: { width: target.innerWidth, height: target.innerHeight - control.terminal.drawer },
                   current: { width: box.width, height: box.height },
                   minimum: { ...minimum },
                 };
@@ -151,16 +237,16 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
                 };
                 const root = target.document.getElementById("root");
                 const box = root?.getBoundingClientRect();
-                if (root && box && box.height < minimum.height) {
+                if (root && box && box.height - control.terminal.drawer < minimum.height) {
                   restingHeight = Math.max(restingHeight ?? 0, minimum.height);
-                  root.style.height = `${minimum.height}px`;
+                  root.style.height = `${minimum.height + control.terminal.drawer}px`;
                 }
                 if (root && box && box.width < minimum.width) {
                   root.style.maxWidth = "none";
                   root.style.width = `${minimum.width}px`;
                 }
               }
-              const result = control.store.dispatch(message.method, params);
+              const result = terminalMethod(message.method, params) ?? control.store.dispatch(message.method, params);
               if (message.method === "window.place") {
                 const { frame } = result as rpc.Result<"window.place">;
                 control.setPanelSize(frame.width, frame.height);
@@ -181,6 +267,26 @@ export function installMockBridge(target: MockWindow & Window): MockControl {
           }, control.latency);
         },
       },
+    },
+  };
+  target.webkit.messageHandlers!.overnoteTerm = {
+    postMessage(message: rpc.TermFastMessage) {
+      const t = control.terminal;
+      if (message.type === "ack") {
+        t.acked += message.bytes;
+        return;
+      }
+      if (!t.live || t.drawer === 0) return;
+      const text = new TextDecoder().decode(Uint8Array.from(atob(message.data), (c) => c.charCodeAt(0)));
+      t.written += text;
+      // A terminal's line discipline: Enter echoes a new line (and a fresh prompt), Delete rubs out.
+      let echo = "";
+      for (const char of text) {
+        if (char === "\r") echo += `\r\n${PROMPT}`;
+        else if (char === "\x7f") echo += "\b \b";
+        else if (char >= " ") echo += char;
+      }
+      if (echo) output(echo);
     },
   };
   target.__overnoteMock = control;

@@ -362,7 +362,7 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   const defaults = await call("settings.get");
   assert.deepEqual(defaults, {
     escapeLosesFocus: false, hideWhileScreenSharing: false, zoom: 1, showFormatBar: false,
-    countMode: "characters", windowAutoSize: false, panelFrame: null,
+    countMode: "characters", windowAutoSize: false, panelFrame: null, terminal: { open: false },
   });
   let settings = await call("settings.set", { zoom: 1.13, countMode: "words" });
   assert.equal(settings.zoom, 1.15);
@@ -373,7 +373,7 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   assert.deepEqual(settings.panelFrame, frame);
   assert.deepEqual((await call("settings.set", { panelFrame: { x: 1, y: 2, width: 300 } })).panelFrame, { x: 1, y: 2, width: 300 });
   for (const bad of [{ zoom: "big" }, { countMode: "lines" }, { unknown: true }, { currentNoteId: "x" },
-    { panelFrame: { x: 1 } }, { showFormatBar: true, escapeLosesFocus: 1 }]) {
+    { panelFrame: { x: 1 } }, { showFormatBar: true, escapeLosesFocus: 1 }, { terminal: true }, { terminal: { open: 1 } }]) {
     await expectError(-32602, "settings.set", bad);
   }
   assert.equal((await call("settings.get")).showFormatBar, false);
@@ -406,7 +406,7 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   await expectError(-32601, "notes.search", { query: "x" });
   await expectError(-32601, "notes.navigate", { direction: "back" });
   for (const method of ["system.ready", "window.resize", "window.setMinimumSize", "window.setDragRegions", "window.resignFocus", "app.openURL",
-    "clipboard.copy", "file.saveAs"]) {
+    "clipboard.copy", "file.saveAs", "window.setDrawer", "term.open", "term.resize", "term.close"]) {
     await expectError(-32601, method, {});
   }
   for (const [method, params] of [["notes.get", {}], ["notes.get", { id: 5 }], ["notes.get", { id: "" }],

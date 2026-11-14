@@ -8,6 +8,9 @@ interface ToolbarProps {
   onActions: () => void;
   onBrowse: () => void;
   onNew: () => void;
+  /** The terminal drawer is open: the Terminal button shows as active. */
+  terminalOpen?: boolean;
+  onTerminal: () => void;
 }
 
 interface ToolbarButtonProps {
@@ -17,16 +20,18 @@ interface ToolbarButtonProps {
   onClick: () => void;
   anchor?: string;
   testId?: string;
+  active?: boolean;
 }
 
 const keep = (event: React.MouseEvent) => event.preventDefault();
 
 /** An icon button with a tooltip pill that names it and its shortcut. */
-function ToolbarButton({ icon, label, shortcut, onClick, anchor, testId }: ToolbarButtonProps) {
+function ToolbarButton({ icon, label, shortcut, onClick, anchor, testId, active }: ToolbarButtonProps) {
   return (
     <button
       type="button"
-      className="icon-button toolbar-button"
+      className={`icon-button toolbar-button${active ? " is-active" : ""}`}
+      aria-pressed={active}
       aria-label={label}
       data-anchor={anchor}
       data-testid={testId}
@@ -46,7 +51,16 @@ function ToolbarButton({ icon, label, shortcut, onClick, anchor, testId }: Toolb
  * Top bar: Close on the left, an empty middle that drags the window, and the icon buttons on the right.
  * The title fades into the middle only once the note's first line has scrolled away (useScrollEdges).
  */
-export function Toolbar({ title, untitled, onClose, onActions, onBrowse, onNew }: ToolbarProps) {
+export function Toolbar({
+  title,
+  untitled,
+  onClose,
+  onActions,
+  onBrowse,
+  onNew,
+  terminalOpen,
+  onTerminal,
+}: ToolbarProps) {
   return (
     <header className="toolbar" data-testid="toolbar">
       <div className="toolbar-leading">
@@ -69,8 +83,14 @@ export function Toolbar({ title, untitled, onClose, onActions, onBrowse, onNew }
         {title}
       </h1>
       <div className="toolbar-actions chrome">
-        {/* The terminal drawer is not built yet: the button is in place and does nothing for now. */}
-        <ToolbarButton icon="terminal" label="Terminal" shortcut="⌃`" testId="terminal" onClick={() => undefined} />
+        <ToolbarButton
+          icon="terminal"
+          label="Terminal"
+          shortcut="⌃`"
+          testId="terminal"
+          active={terminalOpen ?? false}
+          onClick={onTerminal}
+        />
         <ToolbarButton icon="notes" label="Notes" shortcut="⌘P" anchor="browse" onClick={onBrowse} />
         <ToolbarButton icon="actions" label="Actions" shortcut="⌘K" anchor="actions" onClick={onActions} />
         <ToolbarButton icon="newNote" label="New Note" shortcut="⌘N" testId="new-note" onClick={onNew} />

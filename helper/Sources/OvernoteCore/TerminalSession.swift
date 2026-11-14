@@ -32,6 +32,8 @@ public final class TerminalSession: @unchecked Sendable {
     /// Reading pauses while this many output bytes wait for the page's ack.
     public static let highWater = 256 * 1024
     static let readSize = 64 * 1024
+    /// `FIONREAD` (`_IOR('f', 127, int)`), which Swift does not import.
+    static let fionread: UInt = 0x4004_667F
 
     public let pid: pid_t
     private let master: Int32
@@ -60,10 +62,10 @@ public final class TerminalSession: @unchecked Sendable {
         let argv = Self.cStrings([(command.executable as NSString).lastPathComponent] + command.arguments)
         let envp = Self.cStrings(command.environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" })
         defer {
-            free(path)
-            free(directory)
-            Self.free(argv)
-            Self.free(envp)
+            Darwin.free(path)
+            Darwin.free(directory)
+            Self.freeArray(argv)
+            Self.freeArray(envp)
         }
         var size = winsize(ws_row: Self.clamp(rows), ws_col: Self.clamp(cols), ws_xpixel: 0, ws_ypixel: 0)
         var master: Int32 = -1
@@ -222,7 +224,7 @@ public final class TerminalSession: @unchecked Sendable {
         guard reaped == pid else { return }
         // Drain whatever the terminal still holds, so the last lines are never lost.
         var available: Int32 = 0
-        while ioctl(master, FIONREAD, &available) == 0, available > 0 {
+        while ioctl(master, Self.fionread, &available) == 0, available > 0 {
             if readAvailable(limit: Int(available)) == 0 { break }
         }
         lock.lock()
@@ -256,7 +258,7 @@ public final class TerminalSession: @unchecked Sendable {
         return array
     }
 
-    private static func free(_ array: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) {
+    private static func freeArray(_ array: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) {
         var index = 0
         while let pointer = array[index] {
             Darwin.free(pointer)
