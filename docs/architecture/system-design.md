@@ -12,6 +12,7 @@ The agent CLI described here lives in the sibling repository [WesleyBLDC/overnot
 
 Overnote is a floating Markdown notepad that a person opens from Raycast with one hotkey.
 It ships as a Raycast extension, but the panel, the editor, and the data all live in a separate native process, `OvernoteHelper`.
+The same helper binary also ships as `Overnote.app`, a menu bar app with its own hotkey, so Overnote works without Raycast too.
 
 | Part | Where | Runtime | Lifetime |
 |---|---|---|---|
@@ -19,6 +20,7 @@ It ships as a Raycast extension, but the panel, the editor, and the data all liv
 | OvernoteHelper | `helper/Sources/OvernoteHelper` and `helper/Sources/OvernoteCore` | Swift, AppKit, WebKit | Long lived, one per user |
 | Editor | `editor/src`, built to `assets/editor/` | React and Tiptap in a `WKWebView` | As long as the helper's panel |
 | `@overnote/core` | `packages/core/src` | TypeScript, browser and Node with no DOM | A library, bundled into the editor, the extension, and overnote-axi |
+| Overnote.app | `scripts/build-app.sh` wraps the helper binary, editor, and icons into `dist-app/Overnote.app` | Swift, AppKit, WebKit (the helper in app mode) | Long lived, starts at login if enabled |
 | Database | `<support dir>/notes.sqlite` | SQLite in WAL mode | Persistent |
 | overnote-axi | sibling repo `WesleyBLDC/overnote-axi` | Node 22.16 CLI | One short process per agent call |
 
@@ -32,6 +34,15 @@ So the work is split.
 The helper is a small accessory app (`NSApplication` with the `.accessory` activation policy in `main.swift`) that owns everything long lived: the `NSPanel` subclass `NotesPanel`, the `WKWebView` that hosts the editor, the single writer connection to SQLite, the Unix socket server, backups, and the trash purge.
 The extension commands become thin clients: they make sure the right helper is running (`HelperLauncher` in `src/domain/launcher.ts`), send one or two socket requests, and exit.
 The panel is prewarmed hidden at startup (`PanelController.prewarm`), so a toggle only orders it in.
+
+### One helper, two hosts
+
+`Overnote.app` and the extension run the same helper and share one data folder, `~/Library/Application Support/Overnote`, so they always edit the same notes.
+Only one helper runs at a time, because the socket and the single writer allow one.
+App mode (bundle id `com.wesleybldc.overnote` or `--app`) adds a global hotkey (default ⌃⌥N), a menu bar item, and Launch at Login.
+`system.ping` reports `host: "app"` or `"extension"`: the extension reuses an app host and never stops it, while the app shuts down an extension helper and takes over.
+Every shutdown first flushes the editor's pending edits, so a handover never loses typing.
+Details are in "App mode and handover" in [`../architecture.md`](../architecture.md).
 
 ### Separation of responsibilities
 
@@ -126,7 +137,7 @@ Details are in sections 6 and 9 of [`../architecture.md`](../architecture.md).
 
 ## 5. Protocol versioning
 
-The protocol has a document version (v3.3 at the time of writing) at the top of [`../architecture.md`](../architecture.md), bumped in the same pull request as any change to a method, event, type, the schema, or the core API.
+The protocol has a document version (v3.4 at the time of writing) at the top of [`../architecture.md`](../architecture.md), bumped in the same pull request as any change to a method, event, type, the schema, or the core API.
 The version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`, compiled into `HelperVersion.current`) through `system.ping`, and the launcher restarts any helper whose version or binary checksum differs from the bundled one, so the extension, helper, and editor of one release always speak the same protocol.
 External clients such as overnote-axi read `system.ping` or `system.status` to learn which behavior they can expect, and overnote-axi checks database columns rather than an exact schema version.
@@ -138,6 +149,7 @@ External clients such as overnote-axi read `system.ping` or `system.status` to l
 - `npm run update-extension` (`scripts/update-extension.sh`) downloads and checks the new zip, refuses a rollback to an older schema, backs up with reason `pre-update`, stops the helper, replaces files with `rsync`, and reinstalls.
   The next Raycast command starts the new helper.
 - Check for Updates only copies the update command to the clipboard; it never runs it.
+- `npm run app:install` builds `Overnote.app`, ad hoc signed for this Mac, and copies it to `/Applications`; notarized distribution comes later.
 
 The steps are in [`../install.md`](../install.md) and section 9 of [`../architecture.md`](../architecture.md).
 
