@@ -69,8 +69,8 @@ Add `?seed=empty` to the URL to start with no notes.
 | `src/domain/` | Helper launcher, socket client, read-only database queries, and other logic with no Raycast imports |
 | `src/api/`, `src/hooks/`, `src/components/` | Calls into the helper, React hooks, and shared list and detail views |
 | `packages/core/` | `@overnote/core`: the ProseMirror schema, Markdown, HTML, and text serializers, and title rules, shared by the editor and the extension |
-| `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/` |
-| `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository; the same binary runs as `Overnote.app` in app mode (`AppMode.swift`, plus `GlobalHotkey.swift`, `StatusMenu.swift`, and `LoginItem.swift`) |
+| `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/`; the terminal drawer (xterm.js) is in `editor/src/terminal/` |
+| `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository; the same binary runs as `Overnote.app` in app mode (`AppMode.swift`, plus `GlobalHotkey.swift`, `StatusMenu.swift`, and `LoginItem.swift`); the terminal drawer's pseudo terminal is `TerminalBridge.swift`, with `TerminalSession` and `TerminalLauncher` in `OvernoteCore` |
 | `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
 | `dist-app/` | `Overnote.app`, built by `scripts/build-app.sh` (`npm run build:app`); generated, not committed |
 | `scripts/` | Helper build, the app bundle build (`build-app.sh`, also behind `npm run app:install`), the menu bar template (`make-menubar-icon.swift`), the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, and `check-release.sh` |
