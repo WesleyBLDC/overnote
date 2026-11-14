@@ -58,10 +58,10 @@ Add `?seed=empty` to the URL to start with no notes.
 | `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/` |
 | `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository |
 | `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
-| `scripts/` | Helper build, the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, `check-release.sh`, and `make-icon.swift` (draws `assets/extension-icon.png`: `swift scripts/make-icon.swift assets/extension-icon.png`) |
+| `scripts/` | Helper build, the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, and `check-release.sh` |
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
 | `metadata/` | Raycast Store screenshots, used by `scripts/prepare-store.sh` |
-| `assets/` | The icon, drawn by `scripts/make-icon.swift`; the editor and helper builds are generated, not committed |
+| `assets/` | The extension icon (`extension-icon.png`, 512 px) and the logo master (`brand/overnote-logo-1024.png`); the editor and helper builds are generated, not committed |
 | `media/` | README product shots (`npm run shots:readme`; see Screenshots below) |
 | `scripts/readme-shots.mjs` | Regenerates `media/*.png` from the editor harness at 2× |
 
