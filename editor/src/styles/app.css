@@ -20,7 +20,7 @@
 
 html {
   font-size: calc(var(--font-size) * var(--zoom));
-  background: var(--surface);
+  background: transparent;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -36,7 +36,7 @@ body {
   padding: 0;
   overflow: hidden;
   color: var(--text);
-  font-family: var(--font-ui);
+  font-family: var(--font-sans);
   line-height: var(--line-height);
   -webkit-font-smoothing: antialiased;
 }
@@ -52,11 +52,11 @@ html[data-harness] #root {
   max-width: 640px;
   height: 9.65rem;
   margin: 0 auto;
-  border-radius: var(--radius-l);
+  border-radius: var(--radius-panel);
   background: var(--harness-material);
   -webkit-backdrop-filter: blur(30px) saturate(1.4);
   backdrop-filter: blur(30px) saturate(1.4);
-  box-shadow: var(--shadow);
+  box-shadow: var(--panel-shadow);
   overflow: hidden;
 }
 
@@ -77,13 +77,14 @@ button:focus-visible,
 .emoji-cell:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 var(--focus-gap-width) var(--focus-gap),
+    0 0 0 var(--focus-gap-width) var(--bg-raised),
     0 0 0 calc(var(--focus-gap-width) + var(--focus-ring-width)) var(--focus-ring);
 }
 
 kbd {
-  font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  font-size: var(--type-small);
+  font-weight: var(--weight-secondary);
   color: var(--text-tertiary);
 }
 
@@ -106,9 +107,9 @@ kbd {
   background: var(--keycap-bg);
   box-shadow: inset 0 0 0 var(--hairline) var(--keycap-border);
   color: var(--keycap-text);
-  font-family: var(--font-ui);
-  font-size: 0.74rem;
-  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: var(--type-label);
+  font-weight: var(--weight-secondary);
   line-height: 1;
   transition: color var(--motion-fast) var(--ease-out);
 }
@@ -137,7 +138,7 @@ kbd {
   height: 100%;
   /* Its size is the panel's, never its content's: dropdowns follow it (@container panel). */
   container: panel / size;
-  background: var(--body-tint);
+  background: var(--bg-panel);
 }
 
 /* Chrome shows only while the pointer is over the panel. Opacity only, so nothing shifts. */
@@ -150,7 +151,6 @@ kbd {
   pointer-events: none;
 }
 
-.app:not(:hover) .toolbar-title,
 .app:not(:hover) .format-bar {
   opacity: 0.3;
 }
@@ -160,16 +160,25 @@ kbd {
   transition: opacity var(--motion) var(--ease-out);
 }
 
+/*
+ * Close: a 12 pt dot on the toolbar's 16 pt left inset, on the toolbar's centre line. The button around it
+ * meets the hit floor but never reaches into the helper's 10 pt edge zone: --close-pull is how far it
+ * reaches left of the dot. The dot sits on the lower edge of the 24 pt corner square; the top left of the hit
+ * area overlaps that square, where the helper takes the pointer for resizing.
+ */
 .close-button {
+  --close-box: max(var(--close-dot), var(--hit-floor));
+  --close-pull: min(
+    calc((var(--close-box) - var(--close-dot)) / 2),
+    calc(var(--toolbar-inset-left) - var(--edge-zone))
+  );
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: max(var(--close-size), var(--hit-floor));
-  height: max(var(--close-size), var(--hit-floor));
+  display: block;
+  width: var(--close-box);
+  height: var(--close-box);
+  margin-left: calc(-1 * var(--close-pull));
   padding: 0;
   border: 0;
-  border-radius: 50%;
   background: transparent;
   color: transparent;
   transition:
@@ -177,20 +186,22 @@ kbd {
     color var(--motion-fast) var(--ease-out);
 }
 
-/* The visible dot stays at --close-size while the button itself meets the hit floor. */
-.close-button::before {
-  content: "";
+.close-dot {
   position: absolute;
-  width: var(--close-size);
-  height: var(--close-size);
+  left: var(--close-pull);
+  top: calc((var(--close-box) - var(--close-dot)) / 2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--close-dot);
+  height: var(--close-dot);
   border-radius: 50%;
   background: var(--close);
 }
 
-.close-button .icon {
-  position: relative;
-  width: 0.66rem;
-  height: 0.66rem;
+.close-dot .icon {
+  width: calc(var(--close-dot) * 0.6);
+  height: calc(var(--close-dot) * 0.6);
   stroke-width: 0.11rem;
 }
 
@@ -200,8 +211,7 @@ kbd {
 
 /*
  * The helper's invisible drag strip covers the top 12 points; keep it free of controls.
- * Close, title, and the right group share one row, centered on the same line. The Close control
- * starts on the text column's left edge and the last icon glyph ends on its right edge.
+ * Close, the title, and the buttons share one row, centred in the 34 points under the strip.
  * Everything in the toolbar that is not a control drags the window (window.setDragRegions).
  */
 .toolbar {
@@ -213,7 +223,7 @@ kbd {
   align-items: center;
   gap: var(--space-2);
   min-height: var(--toolbar-height);
-  padding: var(--drag-strip) var(--toolbar-inset-right) 0 max(var(--corner-clearance), var(--content-x));
+  padding: var(--drag-strip) var(--toolbar-inset-right) 0 var(--toolbar-inset-left);
   -webkit-user-select: none;
   user-select: none;
 }
@@ -236,45 +246,91 @@ kbd {
   opacity: 1;
 }
 
-.toolbar-title.is-untitled {
-  color: var(--text-tertiary);
-}
-
+/* No repeated title while the note shows its own first line; it fades in once that line scrolls away. */
 .toolbar-title {
   margin: 0;
-  font-size: 1.07rem;
-  font-weight: 600;
-  line-height: var(--chrome-hit);
+  font-size: var(--type-secondary);
+  font-weight: var(--weight-heading);
+  line-height: var(--toolbar-button);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+  opacity: 0;
+}
+
+.app[data-scroll~="title"] .toolbar-title {
+  opacity: 1;
+}
+
+.toolbar-title.is-untitled {
+  color: var(--text-tertiary);
 }
 
 .toolbar-leading {
   display: flex;
   align-items: center;
-  height: var(--chrome-hit);
+  height: var(--toolbar-button);
 }
 
 .toolbar-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.1rem;
+  gap: var(--space-0);
 }
 
 .toolbar-actions .icon-button {
-  width: max(var(--chrome-hit), var(--hit-floor));
-  min-width: max(var(--chrome-hit), var(--hit-floor));
-  height: max(var(--chrome-hit), var(--hit-floor));
+  position: relative;
+  width: max(var(--toolbar-button), var(--hit-floor));
+  min-width: max(var(--toolbar-button), var(--hit-floor));
+  height: max(var(--toolbar-button), var(--hit-floor));
   padding: 0;
+  border-radius: var(--toolbar-button-radius);
 }
 
 .toolbar-actions .icon-button .icon {
-  width: var(--chrome-icon);
-  height: var(--chrome-icon);
+  width: var(--toolbar-icon);
+  height: var(--toolbar-icon);
+  stroke-width: var(--toolbar-stroke);
+}
+
+/* The tooltip pill: the button's name and its shortcut, shown after a short hover. */
+.tooltip {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 30;
+  padding: calc(4rem / 14) calc(8rem / 14);
+  border-radius: var(--radius-pill);
+  background: var(--tooltip-bg);
+  box-shadow:
+    0 0 0 0.5px var(--tooltip-ring),
+    var(--shadow-small);
+  color: var(--text);
+  font-size: var(--type-small);
+  font-weight: var(--weight-secondary);
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+
+.tooltip kbd {
+  margin-left: var(--space-0);
+  color: var(--tooltip-key);
+}
+
+.toolbar-button:hover .tooltip {
+  opacity: 1;
+  transition-delay: 400ms;
+}
+
+/* An open panel or dialog covers the area under the buttons, so no tooltip shows over it. */
+.app:has(.panel, .dialog-backdrop) .tooltip {
+  display: none;
 }
 
 .icon-button {
@@ -296,26 +352,23 @@ kbd {
 }
 
 .icon-button:hover:not(:disabled) {
-  background: var(--surface-hover);
+  background: var(--accent-soft-hover);
   color: var(--text);
 }
 
 .icon-button:active:not(:disabled) {
-  background: var(--surface-selected);
+  background: var(--accent-soft);
 }
 
 .icon-button:disabled {
   opacity: 0.4;
 }
 
-.icon-button.round {
-  width: max(var(--button-size-round), var(--hit-floor));
-  height: max(var(--button-size-round), var(--hit-floor));
-  border-radius: var(--radius-full);
-}
-
-.icon-button.is-active {
-  color: var(--accent);
+/* Active: the soft fill with the strong icon. */
+.icon-button.is-active,
+.icon-button.is-active:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .text-button {
@@ -323,14 +376,15 @@ kbd {
   padding: 0 var(--space-3);
   border: 0;
   border-radius: var(--radius-s);
-  background: var(--surface-hover);
+  background: var(--accent-soft-hover);
   box-shadow: inset 0 0 0 var(--hairline) var(--border);
-  font-size: 0.86rem;
+  font-size: var(--type-secondary);
+  font-weight: var(--weight-secondary);
   transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .text-button:hover:not(:disabled) {
-  background: var(--surface-selected);
+  background: var(--accent-soft);
 }
 
 .text-button:disabled {
@@ -351,15 +405,15 @@ kbd {
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--fade-top),
-    #000 calc(100% - var(--fade-bottom)),
+    black var(--fade-top),
+    black calc(100% - var(--fade-bottom)),
     transparent 100%
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--fade-top),
-    #000 calc(100% - var(--fade-bottom)),
+    black var(--fade-top),
+    black calc(100% - var(--fade-bottom)),
     transparent 100%
   );
   transition:
@@ -380,46 +434,84 @@ kbd {
   visibility: hidden;
 }
 
+/*
+ * The bottom of the panel is an overlay that takes no height: the content's bottom padding keeps the
+ * room. The count pill sits in the bottom right corner (clear of the 24 pt corner square), and the format
+ * island, when it is on, floats centred between --count-room on either side.
+ */
 .footer {
-  flex: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 5;
-  display: grid;
-  grid-template-columns: var(--button-size-round) 1fr var(--button-size-round);
-  align-items: center;
-  min-height: var(--footer-height);
-  /* The toggle stays clear of the helper's 24 pt corner resize square: inset from the side by the
-     square's width, it sits above the 10 pt bottom edge zone without needing the full height. */
-  padding: 0 max(var(--corner-clearance), calc(var(--content-x) - 0.65rem)) 16px;
+  height: var(--content-bottom);
+  pointer-events: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
 .footer-center {
+  position: absolute;
+  left: var(--count-room);
+  right: var(--count-room);
+  bottom: max(var(--edge-zone), var(--footer-inset));
   display: flex;
   justify-content: center;
-  min-width: 0;
 }
 
+.footer-center > * {
+  min-width: 0;
+  pointer-events: auto;
+}
+
+/* The word count pill: 24 points tall on screen, inside a button that meets the hit floor. */
 .counter {
+  --count-box: max(var(--count-height), var(--hit-floor));
+  position: absolute;
+  right: max(var(--corner-clearance), var(--footer-inset));
+  bottom: max(var(--edge-zone), calc(var(--footer-inset) - (var(--count-box) - var(--count-height)) / 2));
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
-  min-height: var(--hit-floor);
+  gap: var(--space-1);
+  height: var(--count-box);
+  padding: 0 calc(8rem / 14);
   border: 0;
   background: transparent;
-  padding: 0.1rem var(--space-2);
-  border-radius: var(--radius-s);
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
+  color: var(--count-text);
+  font-size: var(--type-small);
+  font-weight: var(--weight-secondary);
   font-variant-numeric: tabular-nums;
-  transition:
-    color var(--motion-fast) var(--ease-out),
-    background-color var(--motion-fast) var(--ease-out);
+  pointer-events: auto;
+  transition: color var(--motion-fast) var(--ease-out);
   animation: fade-in var(--motion) var(--ease-out);
+}
+
+/* The pill itself: the panel colour, so note text scrolling under it never shows through. */
+.counter::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  top: calc((var(--count-box) - var(--count-height)) / 2);
+  height: var(--count-height);
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+.counter .icon {
+  stroke-width: calc(1.5rem / 14);
 }
 
 .counter:hover {
   color: var(--text-secondary);
-  background: var(--surface-hover);
+}
+
+.counter:hover::before {
+  background: linear-gradient(var(--accent-soft-hover), var(--accent-soft-hover)), var(--bg-panel);
 }
 
 /* The counter never shows a focus ring: focus stays in the editor. */
@@ -427,11 +519,18 @@ kbd {
   box-shadow: none;
 }
 
+/* The format island: a translucent, blurred pill that floats over the note. */
 .format-bar {
   display: flex;
   align-items: center;
   gap: 0.1rem;
   flex-wrap: nowrap;
+  padding: var(--space-0);
+  border-radius: var(--radius-m);
+  background: var(--island);
+  -webkit-backdrop-filter: blur(var(--island-blur));
+  backdrop-filter: blur(var(--island-blur));
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
   animation: rise-in var(--motion-slow) var(--ease-out);
 }
 
@@ -441,13 +540,9 @@ html[data-high-zoom="true"] .format-bar {
   overflow-y: hidden;
 }
 
-/* Nothing in the scrolling bar shrinks, so the minimum size counts the bar at its full width. */
-html[data-high-zoom="true"] .format-bar > * {
+/* Nothing in the island shrinks, so the minimum size counts the bar at its full width (at high zoom it scrolls). */
+.format-bar > * {
   flex: none;
-}
-
-html[data-high-zoom="true"] .footer-center {
-  overflow: hidden;
 }
 
 .format-group {
@@ -483,12 +578,12 @@ html[data-high-zoom="true"] .footer-center {
 }
 
 .format-button:hover {
-  background: var(--surface-hover);
+  background: var(--accent-soft-hover);
   color: var(--text);
 }
 
 .format-button.is-active {
-  color: var(--accent);
+  color: var(--accent-strong);
   background: var(--accent-soft);
 }
 
@@ -557,7 +652,7 @@ html[data-high-zoom="true"] .footer-center {
 .popover,
 .menu,
 .dialog {
-  background: var(--surface-raised);
+  background: var(--bg-raised);
   -webkit-backdrop-filter: blur(24px) saturate(1.6);
   backdrop-filter: blur(24px) saturate(1.6);
   border-radius: var(--radius-l);
@@ -610,18 +705,19 @@ html[data-high-zoom="true"] .footer-center {
   border-radius: var(--radius-s);
   background: transparent;
   text-align: left;
-  font-size: 0.9rem;
+  font-size: var(--type-secondary);
+  font-weight: var(--weight-secondary);
   transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .menu-item.is-selected {
-  background: var(--surface-selected);
+  background: var(--accent-soft);
 }
 
 .menu-check {
   display: inline-flex;
   width: 1rem;
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .menu-title {
@@ -633,9 +729,10 @@ html[data-high-zoom="true"] .footer-center {
 
 .menu-section {
   padding: var(--space-2) var(--space-2) var(--space-1);
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-size: var(--type-label);
+  font-weight: var(--weight-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
   color: var(--text-tertiary);
 }
 
@@ -681,12 +778,12 @@ html[data-high-zoom="true"] .footer-center {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 0.86rem;
+  font-size: var(--type-secondary);
   transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .link-url:hover {
-  background: var(--surface-hover);
+  background: var(--accent-soft-hover);
 }
 
 .link-edit input,
@@ -698,11 +795,11 @@ html[data-high-zoom="true"] .footer-center {
   padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-s);
-  background: var(--surface-hover);
+  background: var(--bg-sunken);
   box-shadow: inset 0 0 0 var(--hairline) var(--border);
   color: var(--text);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--type-secondary);
   outline: none;
   transition: box-shadow var(--motion-fast) var(--ease-out);
 }
@@ -710,7 +807,7 @@ html[data-high-zoom="true"] .footer-center {
 .link-edit input::placeholder,
 .find-row input::placeholder,
 .panel-search::placeholder {
-  color: var(--placeholder);
+  color: var(--text-tertiary);
 }
 
 .link-edit input:focus,
@@ -718,7 +815,7 @@ html[data-high-zoom="true"] .footer-center {
 .panel-search:focus {
   box-shadow:
     inset 0 0 0 var(--hairline) var(--border-strong),
-    0 0 0 var(--focus-gap-width) var(--focus-gap),
+    0 0 0 var(--focus-gap-width) var(--bg-raised),
     0 0 0 calc(var(--focus-gap-width) + var(--focus-ring-width)) var(--focus-ring);
 }
 
@@ -737,7 +834,7 @@ html[data-high-zoom="true"] .find-bar {
   margin: 0 var(--space-3) var(--space-1);
   padding: var(--space-1);
   border-radius: var(--radius-l);
-  background: var(--surface-raised);
+  background: var(--bg-raised);
   box-shadow: var(--shadow);
   transform-origin: top center;
   animation: pop-in var(--motion-slow) var(--ease-out);
@@ -752,7 +849,8 @@ html[data-high-zoom="true"] .find-bar {
 .find-count {
   min-width: 4.2rem;
   white-space: nowrap;
-  font-size: 0.8rem;
+  font-size: var(--type-small);
+  font-weight: var(--weight-secondary);
   color: var(--text-tertiary);
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -794,13 +892,16 @@ html[data-high-zoom="true"] .find-bar {
  */
 .panel {
   --panel-gap: 0.6rem;
-  top: calc(var(--drag-strip) + var(--chrome-hit) + var(--panel-gap));
+  top: calc(var(--drag-strip) + var(--toolbar-button) + var(--panel-gap));
   right: var(--toolbar-inset-right);
   display: flex;
   flex-direction: column;
   width: min(var(--panel-width), calc(100% - 2 * var(--toolbar-inset-right)));
   /* Inside the panel, whatever its size: the list scrolls when the panel is short. */
-  max-height: min(30rem, calc(100% - var(--drag-strip) - var(--chrome-hit) - var(--panel-gap) - var(--dropdown-inset)));
+  max-height: min(
+    30rem,
+    calc(100% - var(--drag-strip) - var(--toolbar-button) - var(--panel-gap) - var(--dropdown-inset))
+  );
   padding: 0 var(--space-2) var(--space-2);
   overflow: hidden;
   transform-origin: var(--origin-x, calc(100% - 3rem)) 0;
@@ -833,7 +934,7 @@ html[data-high-zoom="true"] .find-bar {
   border-radius: 0;
   background: transparent;
   box-shadow: inset 0 calc(-1 * var(--hairline)) 0 var(--border);
-  font-size: 0.95rem;
+  font-size: var(--type-body);
 }
 
 /* Section titles and the banner start on the same line as the row titles. */
@@ -859,7 +960,8 @@ html[data-high-zoom="true"] .find-bar {
   border-radius: var(--radius-m);
   background: transparent;
   text-align: left;
-  font-size: 0.9rem;
+  font-size: var(--type-secondary);
+  font-weight: var(--weight-secondary);
   transition: background-color var(--motion-fast) var(--ease-out);
 }
 
@@ -868,7 +970,7 @@ html[data-high-zoom="true"] .find-bar {
 }
 
 .panel-row.is-selected {
-  background: var(--surface-selected);
+  background: var(--accent-soft);
 }
 
 .panel-row.is-selected > .icon {
@@ -902,8 +1004,13 @@ html[data-high-zoom="true"] .find-bar {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 0.78rem;
+  font-size: var(--type-small);
   color: var(--text-tertiary);
+}
+
+/* On the soft fill of a selected row, tertiary text would fall under 4.5:1, so the subtitle steps up. */
+.panel-row.is-selected .panel-row-subtitle {
+  color: var(--text);
 }
 
 /* At high zoom titles and subtitles wrap to two lines instead of being cut off. */
@@ -946,14 +1053,14 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 }
 
 .panel-empty-title {
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: var(--type-secondary);
+  font-weight: var(--weight-secondary);
   color: var(--text-secondary);
 }
 
 .panel-empty-hint {
   max-width: 16rem;
-  font-size: 0.8rem;
+  font-size: var(--type-small);
   color: var(--text-tertiary);
 }
 
@@ -1004,7 +1111,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   height: 0.7em;
   vertical-align: middle;
   border-radius: var(--radius-full);
-  background: var(--surface-hover);
+  background: var(--accent-soft-hover);
 }
 
 .panel-row-title > .skeleton-line {
@@ -1047,8 +1154,8 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  background: var(--switch-knob);
+  box-shadow: var(--switch-knob-shadow);
   transition:
     transform var(--motion-slow) var(--ease-out),
     background-color var(--motion) var(--ease-out);
@@ -1068,7 +1175,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   flex: none;
   padding: var(--space-0);
   border-radius: var(--radius-s);
-  background: var(--surface-hover);
+  background: var(--bg-sunken);
 }
 
 .segmented button {
@@ -1078,14 +1185,14 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   border-radius: calc(var(--radius-s) - var(--space-0));
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: var(--type-small);
   transition:
     background-color var(--motion-fast) var(--ease-out),
     color var(--motion-fast) var(--ease-out);
 }
 
 .segmented button.is-on {
-  background: var(--surface-raised);
+  background: var(--bg-raised);
   color: var(--text);
   box-shadow: var(--shadow-small);
 }
@@ -1099,7 +1206,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 
 .stepper-value {
   min-width: 2.9rem;
-  font-size: 0.86rem;
+  font-size: var(--type-secondary);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -1107,7 +1214,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 .stepper-reset {
   margin-left: var(--space-1);
   height: max(1.6rem, var(--hit-floor));
-  font-size: 0.8rem;
+  font-size: var(--type-small);
 }
 
 /* The Reset All Settings row: the whole row is the button, the label only shows what it does. */
@@ -1115,18 +1222,18 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   display: inline-flex;
   align-items: center;
   height: max(1.6rem, var(--hit-floor));
-  font-size: 0.8rem;
+  font-size: var(--type-small);
   color: var(--text-secondary);
 }
 
 .setting-row.is-selected .setting-action {
-  background: var(--surface-selected);
+  background: var(--accent-soft);
   color: var(--text);
 }
 
 .panel-banner {
   margin: var(--space-1) var(--space-3) var(--space-2);
-  font-size: 0.8rem;
+  font-size: var(--type-small);
   color: var(--text-tertiary);
 }
 
@@ -1148,12 +1255,12 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 
 .dialog h2 {
   margin: 0 0 var(--space-1);
-  font-size: 1rem;
+  font-size: var(--type-body);
 }
 
 .dialog p {
   margin: 0 0 var(--space-4);
-  font-size: 0.9rem;
+  font-size: var(--type-secondary);
   color: var(--text-secondary);
 }
 
@@ -1168,7 +1275,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   padding: 0 var(--space-4);
   border: 0;
   border-radius: var(--radius-s);
-  background: var(--surface-hover);
+  background: var(--accent-soft-hover);
   box-shadow: inset 0 0 0 var(--hairline) var(--border);
   transition:
     background-color var(--motion-fast) var(--ease-out),
@@ -1176,7 +1283,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 }
 
 .dialog-buttons button:hover {
-  background: var(--surface-selected);
+  background: var(--accent-soft);
 }
 
 .dialog-buttons .is-destructive,
@@ -1200,8 +1307,8 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 .notices {
   position: absolute;
   left: 50%;
-  /* Above the footer, so a notice never covers the counter or the format bar. */
-  bottom: calc(var(--footer-height) + var(--space-1));
+  /* Above the count pill and the format island, so a notice never covers them. */
+  bottom: var(--content-bottom);
   z-index: 50;
   display: flex;
   flex-direction: column;
@@ -1223,9 +1330,9 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 .notice {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
-  background: var(--surface-raised);
+  background: var(--bg-raised);
   box-shadow: var(--shadow);
-  font-size: 0.85rem;
+  font-size: var(--type-secondary);
   white-space: nowrap;
   animation: rise-in var(--motion-slow) var(--ease-out);
   transition:
@@ -1285,8 +1392,10 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 .emoji-section {
   grid-column: 1 / -1;
   padding: var(--space-1) 0.2rem 0.15rem;
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: var(--type-label);
+  font-weight: var(--weight-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
   color: var(--text-tertiary);
 }
 
@@ -1303,7 +1412,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 
 .emoji-cell.is-selected,
 .emoji-open.is-selected {
-  background: var(--surface-selected);
+  background: var(--accent-soft);
 }
 
 .emoji-open {
@@ -1312,14 +1421,14 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   padding: 0 var(--space-3);
   border: 0;
   border-radius: var(--radius-s);
-  background: var(--surface-hover);
-  font-size: 0.82rem;
+  background: var(--accent-soft-hover);
+  font-size: var(--type-secondary);
   white-space: nowrap;
 }
 
 .emoji-name {
   padding: var(--space-1) 0.2rem 0;
-  font-size: 0.78rem;
+  font-size: var(--type-small);
   color: var(--text-secondary);
   border-top: var(--hairline) solid var(--border);
   margin-top: var(--space-1);
@@ -1341,12 +1450,12 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   border-radius: var(--radius-s);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--type-small);
   transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .emoji-category:hover {
-  background: var(--surface-hover);
+  background: var(--accent-soft-hover);
 }
 
 .preview-banner {
@@ -1358,7 +1467,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
   border-radius: var(--radius-l);
   background: var(--accent-soft);
-  font-size: 0.85rem;
+  font-size: var(--type-secondary);
   color: var(--text-secondary);
   animation: rise-in var(--motion-slow) var(--ease-out);
 }
@@ -1462,7 +1571,7 @@ html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrol
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  font-size: 0.85rem;
+  font-size: var(--type-secondary);
   color: var(--text-tertiary);
   pointer-events: none;
   user-select: none;
@@ -1479,7 +1588,7 @@ html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrol
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
+  font-size: var(--type-secondary);
   color: var(--text-tertiary);
   pointer-events: none;
 }
@@ -1507,5 +1616,5 @@ html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrol
 }
 
 .notice-dismiss:hover {
-  background: var(--surface-hover, rgba(127, 127, 127, 0.15));
+  background: var(--accent-soft-hover);
 }

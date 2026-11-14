@@ -94,8 +94,9 @@ test("four ways to toggle tasks", async ({ page }) => {
   const parent = editor(page).locator(".prosemirror-flat-list[data-list-kind=task]").first();
   await boxes.nth(0).click();
   await expect(parent).toHaveAttribute("data-list-checked", "");
+  // A done task's text is struck through, as on the editor board.
   const paragraph = parent.locator("> .list-content > p");
-  await expect(paragraph).not.toHaveCSS("text-decoration-line", "line-through");
+  await expect(paragraph).toHaveCSS("text-decoration-line", "line-through");
 });
 
 test("list toggles keep attributes and move items", async ({ page }) => {

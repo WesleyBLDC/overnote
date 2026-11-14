@@ -4,10 +4,9 @@ import type { ReactElement } from "react";
 const paths: Record<string, ReactElement> = {
   plus: <path d="M8 3v10M3 8h10" />,
   minus: <path d="M3 8h10" />,
-  command: (
-    <path d="M6 6V4.5A1.5 1.5 0 1 0 4.5 6H6Zm0 0h4M6 6v4m4-4V4.5A1.5 1.5 0 1 1 11.5 6H10Zm0 0v4m0 0v1.5a1.5 1.5 0 1 0 1.5-1.5H10Zm0 0H6m0 0v1.5A1.5 1.5 0 1 1 4.5 10H6Z" />
-  ),
   browse: <path d="M3 4h10M3 8h10M3 12h6" />,
+  /* The word count glyph from the editor board (16 point grid, 1.5 point stroke). */
+  words: <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7" />,
   format: <path d="M4 12 7.5 3h1L12 12M5.3 9h5.4" />,
   heading: <path d="M4 3v10M12 3v10M4 8h8" />,
   link: (
@@ -44,13 +43,36 @@ const paths: Record<string, ReactElement> = {
   expand: <path d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3" />,
 };
 
-export type IconName = keyof typeof paths;
+/** Toolbar icons from the editor board: drawn on a 24 point grid, shown at 17 points with a 1.6 point stroke. */
+const toolbarPaths: Record<string, ReactElement> = {
+  terminal: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="3" />
+      <path d="M7.5 9.5l2.8 2.5-2.8 2.5M12.5 15h4" />
+    </>
+  ),
+  notes: (
+    <>
+      <rect x="3.5" y="7.5" width="17" height="13" rx="3" />
+      <path d="M6.5 4h11M7.5 12h9M7.5 16h5.5" />
+    </>
+  ),
+  actions: (
+    <path d="M9 9V6.8A2.3 2.3 0 1 0 6.8 9H9Zm0 0h6m-6 0v6m6-6V6.8A2.3 2.3 0 1 1 17.2 9H15Zm0 0v6m0 0v2.2a2.3 2.3 0 1 0 2.2-2.2H15Zm0 0H9m0 0v2.2A2.3 2.3 0 1 1 6.8 15H9Z" />
+  ),
+  newNote: (
+    <path d="M12 4.5H7a2.5 2.5 0 0 0-2.5 2.5v10A2.5 2.5 0 0 0 7 19.5h10a2.5 2.5 0 0 0 2.5-2.5v-5M17.4 3.6l3 3-7.2 7.2-3.6.6.6-3.6z" />
+  ),
+};
+
+export type IconName = keyof typeof paths | keyof typeof toolbarPaths;
 
 export function Icon({ name, label }: { name: IconName; label?: string }) {
+  const toolbar = name in toolbarPaths;
   return (
     <svg
-      className="icon"
-      viewBox="0 0 16 16"
+      className={toolbar ? "icon icon-toolbar" : "icon"}
+      viewBox={toolbar ? "0 0 24 24" : "0 0 16 16"}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.4"
@@ -60,7 +82,7 @@ export function Icon({ name, label }: { name: IconName; label?: string }) {
       aria-label={label}
       role={label ? "img" : undefined}
     >
-      {paths[name]}
+      {toolbar ? toolbarPaths[name] : paths[name]}
     </svg>
   );
 }

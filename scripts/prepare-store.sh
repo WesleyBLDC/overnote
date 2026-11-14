@@ -12,7 +12,7 @@
 #   - helper/ (the Swift sources) plus scripts/build-helper.sh and scripts/generate-helper-version.sh, so the binary can be rebuilt
 #   - assets/bin/OvernoteHelper with its .sha256, and the built editor in assets/editor/
 #   - assets/prebuilt.json, so the build never tries to rebuild those assets
-#   - README.md without its GitHub only parts, CHANGELOG.md, LICENSE, media/, and metadata/
+#   - README.md without its GitHub only parts, CHANGELOG.md, LICENSE, THIRD_PARTY_NOTICES.md, media/, and metadata/
 # It leaves out Check for Updates and the install and update scripts (the Store updates the
 # extension itself), tests, and anything ignored by git.
 #
@@ -88,7 +88,7 @@ copy() {
     --exclude '*.test.ts' --exclude '*.log' \
     "$@" "$COPY/"
 }
-copy package.json package-lock.json tsconfig.json eslint.config.js .prettierrc .prettierignore LICENSE CHANGELOG.md
+copy package.json package-lock.json tsconfig.json eslint.config.js .prettierrc .prettierignore LICENSE THIRD_PARTY_NOTICES.md CHANGELOG.md
 copy src packages/core/package.json packages/core/tsconfig.json packages/core/src
 copy editor/package.json editor/tsconfig.json editor/index.html editor/vite.config.ts editor/src
 copy helper/Package.swift helper/VERSION helper/Sources

@@ -348,6 +348,9 @@ export function App({ api }: { api: Api }) {
   const text = docToPlainText(doc);
   const liveTitle = deriveTitle(doc);
   const counts = { characters: countCharacters(text), words: countWords(text) };
+  const { from, to, empty } = editor.state.selection;
+  const selectedText = empty ? "" : editor.state.doc.textBetween(from, to, "\n", "\n");
+  const selected = empty ? null : { characters: countCharacters(selectedText), words: countWords(selectedText) };
   const title = displayTitle({ title: liveTitle, text });
   const blank = text.trim() === "";
   // Entirely empty: no preview and one empty paragraph. The hints overlay it and are never content.
@@ -968,10 +971,10 @@ export function App({ api }: { api: Api }) {
       <Footer
         editor={editor}
         counts={counts}
+        selected={selected}
         countMode={settings.countMode}
         showFormatBar={settings.showFormatBar && !preview}
         onToggleCount={() => updateSettings({ countMode: settings.countMode === "words" ? "characters" : "words" })}
-        onToggleFormatBar={() => updateSettings({ showFormatBar: !settings.showFormatBar })}
         openLink={openLink}
       />
       {slash && slashItems.length ? (

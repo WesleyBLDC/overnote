@@ -155,6 +155,7 @@ npm run verify           # full local gate
 ## License
 
 [MIT](LICENSE) © 2026 WesleyBLDC.
+The bundled Geist and Geist Mono fonts are under the SIL Open Font License ([`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)).
 
 Clean-room reimplementation of Raycast Notes behaviour ([`docs/clean-room.md`](docs/clean-room.md)).
 Not affiliated with or endorsed by Raycast.
