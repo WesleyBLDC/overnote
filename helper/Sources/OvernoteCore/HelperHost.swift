@@ -45,6 +45,10 @@ public protocol HelperHost: Sendable {
     func emit(_ event: String, _ payload: JSONValue) async
     /// Exits gracefully soon after the current reply has been written.
     func requestShutdown() async
+    /// Before a shutdown closes anything: asks a loaded editor to save its pending edits
+    /// (`window.overnoteBridge.flush()`) and waits for it, at most `timeout` seconds. Returns
+    /// false when the editor did not confirm in time. A host without an editor returns true.
+    func flushEditor(timeout: TimeInterval) async -> Bool
 }
 
 /// One `window.setDragRegions` rect: points, top left origin, relative to the web view.
@@ -77,9 +81,15 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
     private var recorded: [Call] = []
     private var visible = false
     private let onShutdown: @Sendable () -> Void
+    private let onFlush: @Sendable (TimeInterval) async -> Bool
 
-    public init(onShutdown: @escaping @Sendable () -> Void = {}) {
+    /// `onFlush` stands in for the editor's flush (the headless test hooks relay it to a page).
+    public init(
+        onShutdown: @escaping @Sendable () -> Void = {},
+        onFlush: @escaping @Sendable (TimeInterval) async -> Bool = { _ in true }
+    ) {
         self.onShutdown = onShutdown
+        self.onFlush = onFlush
     }
 
     public var calls: [Call] { lock.withLock { recorded } }
@@ -152,6 +162,10 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
 
     public func settingsDidChange(_ settings: Settings) async { record(.settingsChanged(settings)) }
     public func emit(_ event: String, _ payload: JSONValue) async { record(.emit(event, payload)) }
+
+    public func flushEditor(timeout: TimeInterval) async -> Bool {
+        await onFlush(timeout)
+    }
 
     public func requestShutdown() async {
         record(.shutdown)

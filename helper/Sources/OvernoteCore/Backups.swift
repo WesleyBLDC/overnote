@@ -8,6 +8,8 @@ public enum BackupReason: String, Sendable, CaseIterable {
     case preMigration = "pre-migration"
     case preUpdate = "pre-update"
     case preRestore = "pre-restore"
+    /// Before `system.importLegacy` replaces an empty shared database with the legacy one.
+    case preImport = "pre-import"
 
     /// Automatic backups skip a database that holds no notes.
     var skipsEmptyDatabase: Bool { self == .daily || self == .preMigration }

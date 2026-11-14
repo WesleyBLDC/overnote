@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let runtime: HelperRuntime
     private var panelController: PanelController?
     private var testHooks: TestHooks?
+    private var appFeatures: AppFeatures?
 
     init(runtime: HelperRuntime) {
         self.runtime = runtime
@@ -35,13 +36,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if runtime.arguments.watchEditor, let editorDir = runtime.arguments.editorDir {
             controller.watchEditorBuild(directory: editorDir)
         }
+        if runtime.arguments.app, let dispatcher = runtime.dispatcher {
+            appFeatures = AppFeatures(controller: controller, dispatcher: dispatcher, logger: runtime.logger)
+        }
         if runtime.arguments.show {
             controller.show()
         }
     }
 
+    /// Opening `Overnote.app` again while it runs shows the panel.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if let panelController {
+            Task { await panelController.showWindow() }
+        }
+        return false
+    }
+
+    /// Quitting saves the editor's pending edits first; the shutdown then exits the process.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        runtime.shutdown(reason: "terminate")
+        runtime.shutdownAfterFlush(reason: "terminate")
+        return .terminateLater
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -58,6 +72,7 @@ enum MainMenu {
 
         let appItem = NSMenuItem()
         // No Quit item: the extension owns the helper's lifetime, and a stray ⌘Q should not kill it.
+        // Overnote.app quits from its menu bar item instead.
         appItem.submenu = NSMenu()
         main.addItem(appItem)
 
@@ -88,4 +103,40 @@ enum MainMenu {
         main.addItem(editItem)
         return main
     }
+}
+
+/// App mode only: the global hotkey and the menu bar item, both acting through the dispatcher
+/// so they behave exactly like `window.toggle` and `notes.create { show: true }` on the socket.
+@MainActor
+final class AppFeatures {
+    private let hotkey: GlobalHotkey?
+    private let statusMenu: StatusMenu
+
+    init(controller: PanelController, dispatcher: RPCDispatcher, logger: FileLogger) {
+        let toggle: @MainActor () -> Void = {
+            Task { _ = try? await dispatcher.handle(method: "window.toggle", params: nil, source: .socket) }
+        }
+        let newNote: @MainActor () -> Void = {
+            Task {
+                do {
+                    _ = try await dispatcher.handle(method: "notes.create", params: AppFeatures.emptyNote, source: .socket)
+                } catch {
+                    logger.log("New Note from the menu bar failed: \(error)")
+                }
+            }
+        }
+        hotkey = GlobalHotkey(action: toggle)
+        if hotkey == nil {
+            logger.log("Could not register the hotkey \(GlobalHotkey.defaultShortcut.display); another app may own it")
+        }
+        statusMenu = StatusMenu(
+            hotkey: hotkey == nil ? nil : GlobalHotkey.defaultShortcut, logger: logger,
+            isPanelVisible: { controller.panel.isVisible }, toggle: toggle, newNote: newNote)
+    }
+
+    /// An empty note, as core's `contentFromMarkdown("")` builds it.
+    static let emptyNote: JSONValue = [
+        "rawContent": #"{"type":"doc","content":[{"type":"paragraph"}]}"#, "markdown": "", "text": "", "title": "",
+        "show": true,
+    ]
 }

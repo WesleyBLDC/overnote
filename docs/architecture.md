@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v3.3 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v3.4 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -10,6 +10,9 @@ Raycast extension (src/)  ──socket JSON-RPC──▶  OvernoteHelper (helper
 @overnote/core (packages/core/)  ◀── used by ──┴─ editor (editor/) running in WKWebView
 ```
 
+The helper ships in two packagings built from one binary: inside the Raycast extension (`assets/bin/OvernoteHelper`, started by the extension's launcher), and as `Overnote.app`, a menu bar app with its own hotkey (see [App mode and handover](#app-mode-and-handover)).
+Both are named Overnote, and both open the same database.
+
 ## 1. Files and paths
 
 | Thing | Path |
@@ -17,11 +20,13 @@ Raycast extension (src/)  ──socket JSON-RPC──▶  OvernoteHelper (helper
 | Extension root | repo root (`package.json` is the Raycast manifest) |
 | Helper binary (built) | `assets/bin/OvernoteHelper` (arm64, ad-hoc signed) plus `assets/bin/OvernoteHelper.sha256` |
 | Editor build | `assets/editor/` (`index.html` plus relative assets; Vite `base: "./"`) |
-| Data dir | `environment.supportPath` of the extension, passed to the helper as `--support-dir` |
+| Data dir | `~/Library/Application Support/Overnote/`, shared by the extension and `Overnote.app`; the extension passes it as `--support-dir`, and `OVERNOTE_SUPPORT_DIR` overrides it in the extension (`src/domain/paths.ts`) and in `scripts/update-extension.sh` |
+| Legacy data dir | `environment.supportPath` of the extension, where releases up to helper 0.5.0 kept the database; the extension passes it as `--legacy-support-dir`, and the helper only ever reads it (see [section 9](#9-backups-installs-and-updates)) |
+| App bundle | `dist-app/Overnote.app` from `scripts/build-app.sh`: `Contents/MacOS/Overnote` (the helper binary), `Contents/Resources/editor/` (the editor build), `Contents/Resources/Overnote.icns` (made from the 1024 px logo master `assets/brand/overnote-logo-1024.png`), the menu bar template `Contents/Resources/OvernoteStatusTemplate.png` and its `@2x` (made from the same master by `scripts/make-menubar-icon.swift`), and `Contents/Info.plist` with `CFBundleIdentifier` `com.wesleybldc.overnote`; `npm run app:install` copies it to `/Applications` |
 | Database | `<support-dir>/notes.sqlite` (WAL) |
 | Socket | `/tmp/overnote-<uid>/helper.sock`; the directory is created with mode 0700 by whoever starts first |
 | PID file | `/tmp/overnote-<uid>/helper.pid` |
-| Helper log | `<support-dir>/helper.log` (rotated at 1 MB) |
+| Helper log | `<support-dir>/helper.log` (rotated at 1 MB), so both packagings log to the shared folder |
 | Backups | `~/Library/Application Support/Overnote/backups/` (mode 0700), outside the extension; `OVERNOTE_BACKUP_DIR` overrides it (see [section 9](#9-backups-installs-and-updates)) |
 | Release marker | `assets/prebuilt.json` in a release install: `{ version, schemaVersion, commit, helperVersion, helperSha256 }` |
 | Install location | `assets/install-location.json`: `{ installDir }`, written by `scripts/install-extension.sh` for Check for Updates |
@@ -31,14 +36,56 @@ Raycast extension (src/)  ──socket JSON-RPC──▶  OvernoteHelper (helper
 Helper command line:
 
 ```
-OvernoteHelper --support-dir <dir> --socket <path> --pid-file <path> --editor-dir <assets/editor> [--show] [--watch-editor] [--version] [--schema-version]
+OvernoteHelper --support-dir <dir> [--legacy-support-dir <dir>] --socket <path> --pid-file <path> --editor-dir <assets/editor> [--app] [--show] [--watch-editor] [--version] [--schema-version]
 ```
+
+`--legacy-support-dir` names a folder whose `notes.sqlite` the helper moves into `--support-dir` once, when `--support-dir` has no database or one with no note at all (see [section 9](#9-backups-installs-and-updates)).
+`--app` turns on app mode, as running from `Overnote.app` does (see below); it exists for tests.
 
 `--version` prints the version string and exits.
 `--schema-version` prints the database schema version this helper writes (the latest migration) and exits.
 The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups folder; tests always set it to a temporary folder.
 `--show` shows the panel right after startup.
 `--watch-editor` (development only) checks `<editor-dir>/index.html` twice a second; when a new build has settled it emits `editor.willReload`, and reloads the page itself if the editor has not reloaded within 2 s.
+
+### App mode and handover
+
+App mode turns on when the process runs from a bundle whose `CFBundleIdentifier` is `com.wesleybldc.overnote` (`Bundle.main`), or with `--app`.
+Extension mode, the default, is everything else and behaves as before.
+
+In app mode every argument has a default, and explicit flags still win:
+
+| Argument | App mode default |
+|---|---|
+| `--support-dir` | `~/Library/Application Support/Overnote` |
+| `--socket` | `/tmp/overnote-<uid>/helper.sock`, the extension's socket |
+| `--pid-file` | `/tmp/overnote-<uid>/helper.pid`, the extension's pid file |
+| `--editor-dir` | `Contents/Resources/editor` inside the bundle |
+| `--legacy-support-dir` | none: the extension knows its old folder and hands it to a running app with `system.importLegacy` (see [section 9](#9-backups-installs-and-updates)) |
+
+App mode adds, only in the window build (never with `--headless`):
+- A global hotkey, ⌃⌥N, registered with Carbon's `RegisterEventHotKey` (no Accessibility permission), which toggles the panel exactly like `window.toggle`.
+  The editor binds ⌃⌥ only with the arrow keys; the shortcut is one constant in `GlobalHotkey.swift`, and customizing it is a later phase.
+- A menu bar item (`NSStatusItem`, SF Symbol `note.text` as a template image): Show or Hide Overnote, New Note (`notes.create` with an empty note and `show: true`), Launch at Login (a checkmark, through `SMAppService.mainApp`), About Overnote (the version, "Running as app"), and Quit Overnote.
+- No Dock icon: the activation policy stays `.accessory`, and the bundle sets `LSUIElement`.
+- Opening the app again while it runs shows the panel.
+
+Handover between the packagings, which share the socket, the pid file, and the instance lock:
+- `system.ping` reports `host`: `"app"` in app mode, `"extension"` otherwise; a helper that reports no `host` (0.5.0 and earlier) counts as `"extension"`.
+- The extension's launcher reuses a helper that reports `host: "app"` as it is, and never restarts, replaces, or stops it, even on a version or launch record mismatch.
+  Each time it reuses one, it sends `system.importLegacy { dir }` with its legacy folder, so an app that started first on an empty database still receives the old notes; an error (an older app without the method included) changes nothing.
+  While the pid file names a live `Overnote` process that does not answer yet, the launcher waits for it as it waits for its own helper, and never removes its files.
+- At app startup, when the instance lock is held: if the running helper reports `host: "app"`, the new process forwards `window.show` and exits; otherwise it sends `system.shutdown`, waits up to 5 s for the lock (with SIGTERM to the lock's pid halfway through), takes it, and starts.
+- `scripts/update-extension.sh` backs up through a running app host and never stops it.
+- When the app quits, the extension starts its own helper on its next command, with the same data folder.
+
+Shutdown, for `system.shutdown`, SIGTERM, SIGINT, SIGHUP, and Quit in app mode:
+1. The helper asks a loaded editor to save its pending edits (its saves are debounced by 300 ms) through `window.overnoteBridge.flush()` (see [section 3](#3-bridge-protocol-editor--helper)), and waits for the answer for at most 1.5 s.
+   The database and the socket stay open meanwhile, so the editor's save goes through the dispatcher as any other.
+   A host with no window, or a page with no editor loaded yet, has nothing to flush.
+2. Then it stops the socket server, the purge and backup schedules, closes the database, releases the instance lock, and exits with status 0.
+A second shutdown request while the first waits for the editor joins it.
+The takeover's 5 s wait and the launcher's 2 s grace before SIGTERM both leave room for the flush.
 
 ## 2. Wire protocol (socket)
 
@@ -50,13 +97,16 @@ The helper reads `OVERNOTE_BACKUP_DIR` from its environment for the backups fold
 - `touchAccessed` on a missing id is a silent no-op; `permanentlyDelete` on a missing id is 404; `window.show {noteId}` is 404 for a missing note and persists it as current.
 - `notes.update` sets `updatedAt` to max(now, old + 1) so same-millisecond edits still change it.
 - The helper also accepts `--headless` (no window) for smoke tests.
-- Clients must time out after 3 s (10 s for `system.shutdown`, 60 s for `system.backup` and `system.restoreBackup`, and 30 min for `file.saveAs`, which waits for the person in a save panel).
+- Clients must time out after 3 s (10 s for `system.shutdown`, 60 s for `system.backup`, `system.restoreBackup`, and `system.importLegacy`, and 30 min for `file.saveAs`, which waits for the person in a save panel).
 
 ## 3. Bridge protocol (editor ⇄ helper)
 
 - Web to native: `window.webkit.messageHandlers.overnote.postMessage({ id, method, params })`.
 - Native to web replies: the helper calls `window.overnoteBridge.resolve(id, result)` or `window.overnoteBridge.reject(id, { code, message })`.
 - Native to web events: `window.overnoteBridge.emit(event, payload)`.
+- Flush before shutdown: the helper runs `await window.overnoteBridge.flush()` with `callAsyncJavaScript` in the page's content world.
+  The editor saves its pending content and caret right away, without waiting for the autosave delay, and resolves `true` once the helper has answered that save (or when nothing was pending), `false` when the save failed.
+  The helper waits for it at most 1.5 s (see Shutdown in [section 1](#1-files-and-paths)).
 - The editor must define `window.overnoteBridge` before it sends anything.
   When it is ready it calls `system.ready`.
 - **The same method names and shapes as the socket**, served by one dispatcher in the helper.
@@ -136,20 +186,21 @@ The helper stores `NoteContent` verbatim.
 
 | Method | Params | Result | Notes |
 |---|---|---|---|
-| `system.ping` | `{}` | `{ version: string, pid: number }` | Health check; the launcher restarts the helper on a version mismatch, and when the launch record does not match the running pid, the binary's checksum, and the launch arguments |
+| `system.ping` | `{}` | `{ version: string, pid: number, host: "app" \| "extension" }` | Health check; the launcher restarts a helper it started (`host: "extension"`) on a version mismatch, and when the launch record does not match the running pid, the binary's checksum, and the launch arguments; it always reuses `host: "app"` as it is (see [App mode and handover](#app-mode-and-handover)) |
 | `system.shutdown` | `{}` | `{}` | Graceful exit |
 | `system.status` (socket) | `{}` | `SystemStatus` | Version, schema, note and backup counts, and the restore offer (section 9) |
 | `system.backup` (socket) | `{ reason?: BackupReason }` (default `"manual"`) | `BackupInfo` | Writes a backup now, even of an empty database, then prunes old ones |
 | `system.listBackups` (socket) | `{}` | `{ directory: string, items: BackupInfo[] }` | Newest first; other files in the folder are ignored |
 | `system.restoreBackup` (socket) | `{ path: string }` | `{ restored: BackupInfo, preRestoreBackup: BackupInfo, noteCount: number }` | Only a backup file directly inside the backups folder (symlinks and `..` resolved first), else `-32602`; `404` when missing. Backs up the current database (reason `pre-restore`), copies the backup into the live connection, migrates it if older, clears the restore offer, and emits `notes.changed` with every note id. A damaged backup is `-32602`, a newer schema `409` |
 | `system.dismissRestoreOffer` (socket) | `{}` | `{}` | Clears the restore offer |
+| `system.importLegacy` (socket) | `{ dir: string }` | `{ imported: boolean, preImportBackup: BackupInfo \| null, noteCount: number }` | `dir` is the extension's legacy folder, absolute, else `-32602`. Imports `<dir>/notes.sqlite` only when the shared database holds no note at all, live or deleted, and the legacy one holds at least one: backs up the shared database (reason `pre-import`), copies the legacy one into the live connection as a restore does, and emits `notes.changed` with every note id. Otherwise a no-op answering `imported: false`; it never overwrites a database that holds a note (see [section 9](#9-backups-installs-and-updates)) |
 | `system.ready` (bridge) | `{}` | `{ settings: Settings, windowData: WindowData }` | Editor finished loading; windowData is for the persisted current note |
 | `window.toggle` | `{}` | `{ visible: boolean }` | Show and focus, or hide |
 | `window.show` | `{ noteId?: NoteId }` | `{ visible: true }` | Shows the panel, optionally on a note (emits `note.open`) |
 | `window.hide` | `{}` | `{ visible: false }` | |
 | `window.place` | `{ placement: PanelPlacement }` | `{ placement: PanelPlacement, frame: { x, y, width, height } }` | Places the panel inside the visible frame of its display while it is visible, else of the display under the pointer. A hidden panel stays hidden, except a show that is waiting for its first height report, which this orders in at the placed frame (see below). `frame` is in points in the panelFrame convention: `x` is the left edge and `y` the top edge. Any other placement is `-32602` |
 | `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped from the minimum size (see `window.setMinimumSize`) to 860 pt times zoom. `temporary: true` (confirmation dialogs; panels and dropdowns stay inside the panel instead) applies even when windowAutoSize is off and is restored by the next non-temporary report |
-| `window.setMinimumSize` (bridge) | `{ width: number, height: number }` | `{}` | The smallest the panel may be, in points: the editor's toolbar (its controls plus 6rem for the title), its bottom bar (the counter or the format bar), and one line of note text, at the current zoom. The helper rounds up and never goes below 405 by 197 pt, applies it to user resizing, auto-sizing, temporary growth, and restored frames, and grows a smaller panel at once, keeping its top edge. `-32602` unless both are positive numbers |
+| `window.setMinimumSize` (bridge) | `{ width: number, height: number }` | `{}` | The smallest the panel may be, in points: the editor's toolbar (its controls plus 6rem for the title), one line of note text with the room kept below it for the overlaid count pill, and the format island with its side margins while it shows, at the current zoom. The helper rounds up and never goes below 405 by 197 pt, applies it to user resizing, auto-sizing, temporary growth, and restored frames, and grows a smaller panel at once, keeping its top edge. `-32602` unless both are positive numbers |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
 | `window.setDragRegions` (bridge) | `{ rects: { x: number, y: number, width: number, height: number }[] }` | `{}` | Points (CSS px times zoom), top-left origin, relative to the web view. A mouse down inside drags the window natively (title-bar behavior: it also works as the first click into an unfocused panel) |
 | `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
@@ -190,7 +241,7 @@ The editor's ⌘D sends only `id` and makes an exact copy, with no suffix.
 Apply the same fold to the query.
 Both implementations are checked against one shared golden corpus in `packages/core/tests/fold-corpus.json`, covering accents, case, compatibility characters, combining marks, and emoji.
 **charCount** is the number of Unicode code points in `text` (SQLite `length(text)`, Swift `unicodeScalars.count`).
-The editor footer counts grapheme clusters separately.
+The editor's count pill counts grapheme clusters separately.
 The helper stores folded copies (`title_fold`, `text_fold`) and matches with an escaped `LIKE`.
 Schema version 2 adds an FTS5 trigram index over the folded copies, kept in sync by triggers, plus virtual generated sort columns and paging indexes over them that match the list and browse paging order, so a keyset cursor seeks straight to its page.
 A filtered query whose folded term has at least three Unicode scalars uses the index only to narrow the candidate set, then applies the same escaped `LIKE` predicate to those candidates, so the results are exactly the folded substring results.
@@ -214,7 +265,7 @@ interface WindowData {
 ```
 
 ```ts
-type BackupReason = "manual" | "daily" | "pre-migration" | "pre-update" | "pre-restore";
+type BackupReason = "manual" | "daily" | "pre-migration" | "pre-update" | "pre-restore" | "pre-import";
 
 interface BackupInfo {
   path: string; name: string;          // notes-<UTC timestamp>-v<version>-<reason>.sqlite
@@ -262,12 +313,12 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   A placement clear that finds no display stays pending until a save that has one.
   The editor offers Fill Left, Fill Right, Fill Screen, and Centre in the command panel's window section, with ⌃⌥←, ⌃⌥→, ⌃⌥↑, and ⌃⌥↓, and the menu bar's Window section shows the panel first and then places it.
 - Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so a dialog never resizes a roomy window).
-- The editor owns the body tint (a darker, less transparent background for contrast); the helper keeps the vibrancy material underneath.
+- The editor owns the panel background: it paints the theme's solid `--bg-panel` over the whole panel, so text keeps its contrast whatever is behind the window; the helper keeps the vibrancy material underneath, and its 1 pt rim uses the theme's `--border-strong`.
 - One minimum size covers every way the panel's size is set: user resizing, auto-sizing, temporary growth, restored frames (a smaller saved frame grows to it), frames set from outside (tiling, window managers), and zoom.
   It is the editor's `window.setMinimumSize` report (the bars plus one line of the note at the current zoom), never below 405 by 197 pt, a floor that shows the toolbar and the first line or two at 100%.
-  At 100% the floor applies; the report passes its width at about 120% zoom (just above 100% with the format bar) and its height at about 140%, and at 200% it is about 669 by 278 pt (747 pt wide with the format bar).
+  At 100% the floor applies; the report passes its width at about 105% zoom (at 100% with the format island) and its height at about 145%, and at 200% it is about 753 by 272 pt (937 pt wide with the format island).
   Until the editor's first report the floor applies.
-- The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 143 pt, so with auto-sizing on it rests at the 197 pt minimum with the footer at the bottom.
+- The editor measures height directly in its ResizeObserver callback (not in requestAnimationFrame, which hidden WebKit windows pause), so the prewarmed panel is sized before it shows; a one-line note reports about 136 pt, so with auto-sizing on it rests at the 197 pt minimum with the count pill at the bottom.
 - With windowAutoSize on and no normal `window.resize` report yet (a cold start, for example `--show`), a show waits with the panel hidden for that first report, up to 3 s (a cold WebKit start on a slow machine takes about 1.5 s), and then orders the panel in at the reported height, so it never flashes the default height.
   A temporary report does not end the wait.
   While it waits, `window.toggle` cancels the show (result `visible: false`), `window.hide` cancels it too, `window.show { noteId }` still emits `note.open`, `window.place` orders the panel in at the placed frame and ends the wait, and turning windowAutoSize off shows the panel at once.
@@ -420,15 +471,29 @@ This lets deeplinks and quicklinks open a specific note or create one with text.
 
 ## 9. Backups, installs, and updates
 
-The database stays in the extension's support directory (`environment.supportPath`), as Raycast recommends.
-That folder is keyed by the extension name `overnote`, so it persists across `ray develop` reinstalls and updates; the name must never change.
-Removing the extension can remove that folder, so backups live outside it.
+The database lives in `~/Library/Application Support/Overnote/`, which the extension and `Overnote.app` share, next to the `backups/` folder.
+Removing the extension never removes it.
+
+**Moving from the legacy folder.**
+Releases up to helper 0.5.0 kept the database in the extension's support directory (`environment.supportPath`), which is keyed by the extension name `overnote`; the name must never change, since the extension still passes that folder as `--legacy-support-dir`.
+A shared database that holds no note at all, live or deleted, counts as not migrated: `Overnote.app` gets no legacy folder, so when it starts before the extension has run, it creates an empty one.
+At startup, after taking the instance lock and before opening the database, the helper copies `<legacy-support-dir>/notes.sqlite` into `<support-dir>` when `<support-dir>/notes.sqlite` does not exist and the legacy one does.
+The copy uses SQLite's online backup API from a read-only connection, writes a hidden `.notes.sqlite.migrating` file that is renamed into place, and is logged in `helper.log`.
+The legacy file is never deleted or modified, so a rollback to an older release still finds the notes as they were at the move.
+If the copy fails, the helper exits without creating an empty database, and the next start tries again.
+When `<support-dir>/notes.sqlite` exists but holds no note and the legacy one holds at least one, the helper opens the shared database and imports the legacy one into it the way `system.importLegacy` does; a failed import is logged, the start goes on, and the next start or command tries again.
+
+The import (`system.importLegacy`, and the startup case above) backs up the empty shared database first (reason `pre-import`), then copies the legacy database into the live connection with the online backup API, as `system.restoreBackup` does: it must pass `quick_check`, must not have a newer schema, and is migrated if older.
+It checks that the shared database holds no note again under the writer's lock, in the same step as the copy, so a note written meanwhile is never overwritten.
+An unreadable shared database counts as holding notes, and an unreadable legacy one as holding none.
+The extension sends `system.importLegacy` each time it reuses a running app (see App mode and handover in [section 1](#1-files-and-paths)), which also covers an app that started before the extension ever ran.
+Once the shared database holds a note, the legacy folder is never imported again; while no helper has made the copy, Search Notes reads the legacy database read-only (`readableDatabase` in `src/domain/paths.ts`).
 
 **Backups.**
 - Written by the helper with SQLite's online backup API (`sqlite3_backup_*`), so a copy is consistent while the database is in WAL mode, then switched to rollback journal mode so each backup is one self contained file.
 - Folder `~/Library/Application Support/Overnote/backups` (or `OVERNOTE_BACKUP_DIR`), mode 0700; files mode 0600, written to a hidden `.partial` file and renamed into place.
 - Name `notes-<UTC timestamp>-v<helper version>-<reason>.sqlite`, with the timestamp in ISO 8601 basic format with milliseconds (`20261015T093000.123Z`), so names sort by time.
-- Reasons: `manual` (`system.backup`), `daily`, `pre-migration`, `pre-update` (`scripts/update-extension.sh`), and `pre-restore`.
+- Reasons: `manual` (`system.backup`), `daily`, `pre-migration`, `pre-update` (`scripts/update-extension.sh`), `pre-restore`, and `pre-import` (before the legacy notes replace an empty shared database).
 - `daily`: half a second after startup and then every hour, the helper writes one when the newest backup of any reason is at least 24 h old.
   `daily` and `pre-migration` skip a database with no notes (live or trashed); the other reasons always write.
 - `pre-migration`: before applying any migration to a database that has notes; if that backup fails, the helper does not migrate and does not start.
@@ -450,8 +515,9 @@ On tag builds, `scripts/check-version.sh` checks that the tag is semver and that
 1. Reads the installed version from `assets/prebuilt.json` (it refuses a folder without one, or a git checkout).
 2. Resolves the target from `<api>/latest`, or `<api>/tags/vX.Y.Z` with `--version vX.Y.Z`, where `<api>` is `OVERNOTE_RELEASES_API` or `https://api.github.com/repos/WesleyBLDC/overnote/releases`; downloads `overnote-<version>.zip` and `SHA256SUMS` to a temporary folder and checks the zip.
 3. Rollback guard: refuses a target whose `schemaVersion` is lower than the database's `PRAGMA user_version`, read with `sqlite3 -readonly` from a copy, before changing anything.
-4. Backs up with `system.backup { reason: "pre-update" }`, starting the installed helper headless first when none answers; if the helper cannot start, it copies the database with `sqlite3 .backup` into the same folder under the same naming.
-5. Stops the helper with `system.shutdown`, then SIGTERM to the pid in the pid file.
+4. Backs up with `system.backup { reason: "pre-update" }`, starting the installed helper headless first when none answers (with the shared and the legacy folder, so it makes the move itself); if the helper cannot start, it copies the database with `sqlite3 .backup` into the same folder under the same naming.
+   The database it guards and copies is the shared one, or the legacy one while no helper has moved it.
+5. Stops the helper with `system.shutdown`, then SIGTERM to the pid in the pid file; a helper that reports `host: "app"` (Overnote.app) is left running.
 6. Replaces the folder's files with `rsync --checksum --delete`, excluding `node_modules`, and never touches the support folder or the backups folder (it refuses to run if either is inside the install folder); a changed lockfile forces `npm ci`.
    `assets/prebuilt.json` is copied last, so an interrupted update still reads as the old version and running it again finishes it.
    It then stops any helper Raycast started meanwhile, so the next command starts the new one.
@@ -459,15 +525,16 @@ On tag builds, `scripts/check-version.sh` checks that the tag is semver and that
 
 Only HTTPS is allowed for the API and the downloads (redirects included), unless `OVERNOTE_RELEASES_API` points at a test server.
 
-The support, runtime, and backups folders default to the real ones and can be overridden with `OVERNOTE_SUPPORT_DIR`, `OVERNOTE_RUNTIME_DIR`, and `OVERNOTE_BACKUP_DIR`, which `scripts/e2e-update.sh` points at temporary folders.
-The extension honors `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`), which the command end-to-end tests (`src/__tests__/commands.e2e.test.ts`) use so they can never reach a helper someone is running.
+The support, legacy, runtime, and backups folders default to the real ones and can be overridden with `OVERNOTE_SUPPORT_DIR`, `OVERNOTE_LEGACY_SUPPORT_DIR`, `OVERNOTE_RUNTIME_DIR`, and `OVERNOTE_BACKUP_DIR`, which `scripts/e2e-update.sh` points at temporary folders.
+The extension honors `OVERNOTE_SUPPORT_DIR` and `OVERNOTE_RUNTIME_DIR` too (`src/domain/paths.ts`); `vitest.config.mts` points the first at a temporary folder for every test, and the command end-to-end tests (`src/__tests__/commands.e2e.test.ts`) set both, so they can never reach the real notes or a helper someone is running.
 
 ## Protocol versioning
 
-The protocol described here is v3.3 (v3.3 added `window.place` on the socket and the bridge with the `PanelPlacement` type, and optional `width`, `height`, and `placement` on each `panelFrame.displays` point, which older points simply lack; v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v3.4 (v3.4 added `Overnote.app`, the app packaging of the helper with app mode, `--app`, its argument defaults, hotkey, and menu bar item, moved the data folder to `~/Library/Application Support/Overnote` with the one time copy from the extension's folder through the new `--legacy-support-dir`, added `host` to the `system.ping` result, defined the handover between the app and the extension, added the socket-only `system.importLegacy` with the `pre-import` backup reason so an empty shared database still receives the legacy notes, and added `window.overnoteBridge.flush()`, which the helper awaits before every shutdown; v3.3 added `window.place` on the socket and the bridge with the `PanelPlacement` type, and optional `width`, `height`, and `placement` on each `panelFrame.displays` point, which older points simply lack; v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.
 Helper 0.4.0 is the first release that speaks v2.14 and v2.15, so a socket client can tell from `system.ping` (or `system.status`) `version` whether the editor merges outside changes and whether a create or duplicate leaves the current note alone.
 Helper 0.5.0 is the first release that speaks v3.0 through v3.3 (and writes schema 2): `notes.duplicate` takes the copy's content and refuses `titleSuffix`, so a socket client that sent `titleSuffix` to 0.4.0 or earlier sends the content built with `duplicateContent` instead.
+Helper releases after 0.5.0 speak v3.4: they report `host` in `system.ping` and keep the database in the shared folder.
 Bump the version at the top of this document in the same pull request as the code change, and name the new version in the pull request description.

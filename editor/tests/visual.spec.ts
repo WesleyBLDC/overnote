@@ -1,9 +1,9 @@
-/** Theme and contrast: the iris violet accent, code blocks, and task states, in both color schemes. */
+/** Theme and contrast: the Graphite tokens, Geist type, code blocks, and task states, in both color schemes. */
 import { expect, test, type Page } from "@playwright/test";
 import { calls, editor, emit, openHarness, settle } from "./harness";
 
 const NOTE = [
-  "Hello\n\n1. one\n\n- [x] done [link](https://example.com) and `code`\n\n- [ ] todo\n\n[link](https://example.com)\n\n```js\n// a comment\nconst a = 1;\n```",
+  "Hello\n\n1. one\n\n- [x] done [link](https://example.com) and `code`\n\n- [ ] todo\n\n[link](https://example.com)\n\n> quoted\n\n```js\n// a comment\nconst a = 1;\n```",
 ];
 
 /** The computed color a token resolves to, read through a probe so every color syntax compares equal. */
@@ -27,9 +27,38 @@ const style = (page: Page, selector: string, prop: string, pseudo?: string) =>
     [selector, prop, pseudo ?? ""],
   );
 
+/** The branding guide's and the editor board's values for the tokens these tests check, as WebKit computes them. */
 const SCHEMES = {
-  light: { accent: "rgb(91, 75, 213)", strong: "rgb(71, 56, 176)", selection: "rgba(91, 75, 213, 0.16)" },
-  dark: { accent: "rgb(143, 128, 255)", strong: "rgb(184, 174, 255)", selection: "rgba(143, 128, 255, 0.24)" },
+  light: {
+    panel: "rgb(251, 251, 252)",
+    accent: "rgb(39, 39, 42)",
+    strong: "rgb(24, 24, 27)",
+    onAccent: "rgb(255, 255, 255)",
+    selection: "rgba(24, 24, 27, 0.14)",
+    underline: "rgba(24, 24, 27, 0.35)",
+    secondary: "rgb(95, 97, 104)",
+    tertiary: "rgb(107, 110, 117)",
+    sunken: "rgb(241, 241, 243)",
+    code: "rgb(237, 237, 240)",
+    quote: "rgb(58, 61, 67)",
+    quoteBar: "rgba(0, 0, 0, 0.18)",
+    ring: "rgb(180, 182, 187)",
+  },
+  dark: {
+    panel: "rgb(24, 24, 26)",
+    accent: "rgb(228, 228, 231)",
+    strong: "rgb(255, 255, 255)",
+    onAccent: "rgb(24, 24, 26)",
+    selection: "rgba(255, 255, 255, 0.18)",
+    underline: "rgba(255, 255, 255, 0.35)",
+    secondary: "rgb(161, 161, 168)",
+    tertiary: "rgb(142, 142, 149)",
+    sunken: "rgb(17, 17, 19)",
+    code: "rgb(38, 38, 42)",
+    quote: "rgb(212, 212, 216)",
+    quoteBar: "rgba(255, 255, 255, 0.22)",
+    ring: "rgb(90, 90, 96)",
+  },
 } as const;
 
 for (const scheme of ["light", "dark"] as const) {
@@ -39,48 +68,95 @@ for (const scheme of ["light", "dark"] as const) {
       await openHarness(page, NOTE);
     });
 
-    test("accent: links, ordered numbers, and the selection carry the iris violet", async ({ page }) => {
+    test("accent: the panel, links, ordered numbers, task boxes, quotes, and the selection use Graphite", async ({
+      page,
+    }) => {
       const want = SCHEMES[scheme];
+      expect(await style(page, "[data-testid=app]", "background-color")).toBe(want.panel);
       expect(await token(page, "--accent")).toBe(want.accent);
       expect(await token(page, "--accent-strong")).toBe(want.strong);
       expect(await token(page, "--selection", "background-color")).toBe(want.selection);
       expect(await style(page, ".note-editor > p a, .note-editor > .prosemirror-flat-list ~ p a", "color")).toBe(
         want.strong,
       );
-      expect(await style(page, ".note-editor [data-list-kind=ordered]", "color", "::before")).toBe(want.accent);
-      const underline = await style(page, ".note-editor p a", "text-decoration-color");
-      expect(underline).not.toBe(want.strong);
+      expect(await style(page, ".note-editor p a", "text-decoration-color")).toBe(want.underline);
       expect(await style(page, ".note-editor p a", "text-decoration-line")).toContain("underline");
+      const ordered = ".note-editor [data-list-kind=ordered]";
+      expect(await style(page, ordered, "color", "::before")).toBe(want.accent);
+      expect(await style(page, ordered, "font-weight", "::before")).toBe("600");
+      // Task boxes: a ring when open; the accent fill with the check in --on-accent when done.
+      const open = ".note-editor [data-list-kind=task]:not([data-list-checked]) input";
+      expect(await style(page, open, "box-shadow")).toContain(want.ring);
+      expect(await style(page, open, "width")).toBe("16px");
+      const done = ".note-editor [data-list-kind=task][data-list-checked] input";
+      expect(await style(page, done, "background-color")).toBe(want.accent);
+      expect(await style(page, done, "background-color", "::after")).toBe(want.onAccent);
+      // Quotes: a bar, no box, and the quote text color.
+      expect(await style(page, ".note-editor blockquote", "color")).toBe(want.quote);
+      expect(await style(page, ".note-editor blockquote", "border-left-width")).toBe("0px");
+      expect(await style(page, ".note-editor blockquote", "background-color", "::before")).toBe(want.quoteBar);
+      expect(await style(page, ".note-editor blockquote", "width", "::before")).toBe("3px");
     });
 
-    test("code and tasks: essential strength text, raised surfaces, ring", async ({ page }) => {
-      const essential = await token(page, "--text-essential");
-      expect(essential).toBe(scheme === "light" ? "rgba(12, 12, 14, 0.62)" : "rgba(255, 255, 255, 0.68)");
-      const surface = await token(page, "--surface-code", "background-color");
-      expect(surface).toBe(scheme === "light" ? "rgba(12, 12, 14, 0.07)" : "rgba(255, 255, 255, 0.09)");
-      expect(await style(page, ".note-editor .code-block", "background-color")).toBe(surface);
+    test("code and tasks: sunken blocks, code chips, secondary comments, and struck through done tasks", async ({
+      page,
+    }) => {
+      const want = SCHEMES[scheme];
+      expect(await style(page, ".note-editor .code-block", "background-color")).toBe(want.sunken);
       expect(await style(page, ".note-editor .code-block", "box-shadow")).toContain("inset");
-      expect(await token(page, "--code-comment")).toBe(essential);
+      expect(await style(page, ".note-editor p code", "background-color")).toBe(want.code);
+      expect(await style(page, ".note-editor .hljs-comment", "color")).toBe(want.secondary);
 
       const checked = ".note-editor [data-list-kind=task][data-list-checked] > .list-content > p";
-      expect(await style(page, checked, "color")).toBe(essential);
+      expect(await style(page, checked, "color")).toBe(want.tertiary);
+      expect(await style(page, checked, "text-decoration-line")).toBe("line-through");
       expect(await style(page, checked, "opacity")).toBe("1");
-      expect(await style(page, `${checked} a`, "color")).toBe(essential);
+      expect(await style(page, `${checked} a`, "color")).toBe(want.tertiary);
       expect(await style(page, `${checked} code`, "opacity")).toBe("1");
-      expect(await style(page, ".note-editor .hljs-comment", "color")).toBe(essential);
     });
 
-    test("normal state: placeholder at essential strength, snapshot", async ({ page }) => {
+    test("normal state: placeholder in tertiary text, snapshot", async ({ page }) => {
       await openHarness(page);
-      expect(await style(page, ".note-editor .is-empty", "color", "::before")).toBe(
-        await token(page, "--text-essential"),
-      );
+      expect(await style(page, ".note-editor .is-empty", "color", "::before")).toBe(SCHEMES[scheme].tertiary);
       await openHarness(page, NOTE);
       await page.mouse.move(5, 5);
       await expect(editor(page)).toHaveScreenshot(`note-${scheme}.png`, { maxDiffPixelRatio: 0.01 });
     });
   });
 }
+
+test("Geist and Geist Mono are bundled, loaded, and used for the note, the chrome, code, and keycaps", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  page.on("request", (request) => requests.push(request.url()));
+  await openHarness(page, NOTE);
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-panel")).toBeVisible();
+  const fonts = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const family = (selector: string) => getComputedStyle(document.querySelector(selector)!).fontFamily;
+    // Each face loads from the bundle (an empty result would mean no @font-face matched).
+    const loaded = async (font: string) => (await document.fonts.load(font)).some((face) => face.status === "loaded");
+    return {
+      sans: await loaded("15px Geist"),
+      sansItalic: await loaded("italic 15px Geist"),
+      mono: await loaded("13px 'Geist Mono'"),
+      note: family(".note-editor p"),
+      title: family("[data-testid=title]"),
+      code: family(".note-editor .code-block pre"),
+      chip: family(".note-editor p code"),
+      keycap: family(".keycap"),
+    };
+  });
+  expect(fonts.sans && fonts.sansItalic && fonts.mono).toBe(true);
+  for (const key of ["note", "title"] as const) expect(fonts[key]).toMatch(/^"?Geist"?,/);
+  for (const key of ["code", "chip", "keycap"] as const) expect(fonts[key]).toMatch(/^"?Geist Mono"?,/);
+  // The faces come from the editor's own origin, never from a font service.
+  const fontRequests = requests.filter((url) => url.includes(".woff2"));
+  expect(fontRequests.length).toBeGreaterThan(0);
+  for (const url of fontRequests) expect(new URL(url).origin).toBe(new URL(page.url()).origin);
+});
 
 /** Chrome sizing: the 28 point hit floor, the two part focus ring, and the high zoom layout. */
 const FLOOR = 28;
@@ -256,7 +332,7 @@ test.describe("chrome sizing", () => {
         .split(/,\s*(?=rgba?\()/)
         .filter((layer) => layer.includes("rgb") && !layer.includes("inset"))
         .map((layer) => rgb(layer.slice(layer.indexOf("rgb"))));
-    const gap = await token(page, "--focus-gap");
+    const gap = await token(page, "--bg-raised");
     const color = await token(page, "--focus-ring");
     const active = () =>
       page.evaluate(() => {

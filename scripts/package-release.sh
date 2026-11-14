@@ -56,7 +56,7 @@ copy() {
     "$@" "$PKG/"
 }
 
-copy package.json package-lock.json tsconfig.json eslint.config.js .prettierrc LICENSE README.md CHANGELOG.md
+copy package.json package-lock.json tsconfig.json eslint.config.js .prettierrc LICENSE THIRD_PARTY_NOTICES.md README.md CHANGELOG.md
 copy src packages/core/package.json packages/core/tsconfig.json packages/core/src
 # The editor workspace stays (npm ci needs every workspace in the lockfile), without its tests.
 copy editor/package.json editor/tsconfig.json editor/index.html editor/vite.config.ts editor/src

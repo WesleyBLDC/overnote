@@ -215,7 +215,7 @@ export class MockStore {
   }
 
   readonly handlers: { [M in rpc.MethodName]: (params: rpc.Params<M>) => rpc.Result<M> } = {
-    "system.ping": () => ({ version: "mock", pid: 0 }),
+    "system.ping": () => ({ version: "mock", pid: 0, host: "extension" }),
     "system.shutdown": () => ({}),
     "system.ready": () => ({ settings: { ...this.settings }, windowData: this.windowData() }),
     // Socket-only on the real helper, so the bridge refuses them the same way.
@@ -224,6 +224,7 @@ export class MockStore {
     "system.listBackups": () => socketOnly("system.listBackups"),
     "system.restoreBackup": () => socketOnly("system.restoreBackup"),
     "system.dismissRestoreOffer": () => socketOnly("system.dismissRestoreOffer"),
+    "system.importLegacy": () => socketOnly("system.importLegacy"),
     "window.toggle": () => {
       this.visible = !this.visible;
       this.emit(this.visible ? rpc.Event.WindowDidShow : rpc.Event.WindowDidHide, {});

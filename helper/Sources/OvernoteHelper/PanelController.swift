@@ -102,7 +102,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         body.autoresizingMask = [.width, .height]
 
         let background = NSVisualEffectView(frame: body.bounds)
-        // A dark, dense material: under the editor's darker tint it reads as solid dark glass.
+        // A dark, dense material behind the page; the editor paints its solid --bg-panel over it once loaded.
         background.material = Self.material
         background.blendingMode = .behindWindow
         background.state = .active
@@ -779,5 +779,10 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     func requestShutdown() async {
         onShutdown()
+    }
+
+    func flushEditor(timeout: TimeInterval) async -> Bool {
+        guard let bridge else { return true }
+        return await bridge.flush(timeout: timeout)
     }
 }

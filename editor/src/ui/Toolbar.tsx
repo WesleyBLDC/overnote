@@ -1,4 +1,4 @@
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
 
 interface ToolbarProps {
   title: string;
@@ -10,9 +10,43 @@ interface ToolbarProps {
   onNew: () => void;
 }
 
-/** Top bar: the live title in the middle and three buttons on the right. */
+interface ToolbarButtonProps {
+  icon: IconName;
+  label: string;
+  shortcut: string;
+  onClick: () => void;
+  anchor?: string;
+  testId?: string;
+}
+
+const keep = (event: React.MouseEvent) => event.preventDefault();
+
+/** An icon button with a tooltip pill that names it and its shortcut. */
+function ToolbarButton({ icon, label, shortcut, onClick, anchor, testId }: ToolbarButtonProps) {
+  return (
+    <button
+      type="button"
+      className="icon-button toolbar-button"
+      aria-label={label}
+      data-anchor={anchor}
+      data-testid={testId}
+      onMouseDown={keep}
+      onClick={onClick}
+      tabIndex={-1}
+    >
+      <Icon name={icon} />
+      <span className="tooltip" role="tooltip">
+        {label} <kbd>{shortcut}</kbd>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Top bar: Close on the left, an empty middle that drags the window, and the icon buttons on the right.
+ * The title fades into the middle only once the note's first line has scrolled away (useScrollEdges).
+ */
 export function Toolbar({ title, untitled, onClose, onActions, onBrowse, onNew }: ToolbarProps) {
-  const keep = (event: React.MouseEvent) => event.preventDefault();
   return (
     <header className="toolbar" data-testid="toolbar">
       <div className="toolbar-leading">
@@ -26,49 +60,20 @@ export function Toolbar({ title, untitled, onClose, onActions, onBrowse, onNew }
           onClick={onClose}
           tabIndex={-1}
         >
-          <Icon name="close" />
+          <span className="close-dot" data-testid="close-dot">
+            <Icon name="close" />
+          </span>
         </button>
       </div>
       <h1 className={`toolbar-title${untitled ? " is-untitled" : ""}`} data-testid="title" title={title}>
         {title}
       </h1>
       <div className="toolbar-actions chrome">
-        <button
-          type="button"
-          className="icon-button"
-          title="Actions (⌘K)"
-          aria-label="Actions"
-          data-anchor="actions"
-          onMouseDown={keep}
-          onClick={onActions}
-          tabIndex={-1}
-        >
-          <Icon name="command" />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          title="Browse Notes (⌘P)"
-          aria-label="Browse Notes"
-          data-anchor="browse"
-          onMouseDown={keep}
-          onClick={onBrowse}
-          tabIndex={-1}
-        >
-          <Icon name="browse" />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          title="Create Note (⌘N)"
-          aria-label="Create Note"
-          data-testid="new-note"
-          onMouseDown={keep}
-          onClick={onNew}
-          tabIndex={-1}
-        >
-          <Icon name="plus" />
-        </button>
+        {/* The terminal drawer is not built yet: the button is in place and does nothing for now. */}
+        <ToolbarButton icon="terminal" label="Terminal" shortcut="⌃`" testId="terminal" onClick={() => undefined} />
+        <ToolbarButton icon="notes" label="Notes" shortcut="⌘P" anchor="browse" onClick={onBrowse} />
+        <ToolbarButton icon="actions" label="Actions" shortcut="⌘K" anchor="actions" onClick={onActions} />
+        <ToolbarButton icon="newNote" label="New Note" shortcut="⌘N" testId="new-note" onClick={onNew} />
       </div>
     </header>
   );

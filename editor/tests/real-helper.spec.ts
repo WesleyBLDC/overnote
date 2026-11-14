@@ -2,6 +2,8 @@
  * The shipped editor (assets/editor) against the REAL helper binary (assets/bin/OvernoteHelper,
  * headless with test hooks): every bridge message the page sends goes over the helper's socket
  * through test.asBridge, so typing reaches the helper's SQLite database exactly as in the panel.
+ * The page also stands in for the panel's side of the shutdown flush: it long polls the helper's
+ * test.awaitFlush and answers with window.overnoteBridge.flush(), as callAsyncJavaScript does.
  * `npm run verify` builds the helper first; run `npm run build:helper` before running this alone.
  * OVERNOTE_HELPER_BIN points it at another build, such as helper/.build/release/OvernoteHelper.
  */
@@ -86,7 +88,10 @@ class RealHelper {
   }
 }
 
-/** Routes every bridge message the page sends to `helper` over its socket (test.asBridge). */
+/**
+ * Routes every bridge message the page sends to `helper` over its socket (test.asBridge), and
+ * relays the helper's shutdown flush to the page's editor (test.awaitFlush, test.flushDone).
+ */
 async function bridgeTo(page: Page, helper: RealHelper): Promise<void> {
   await page.exposeBinding("__toHelper", async (_source, message: { method: string; params: unknown }) => {
     try {
@@ -96,13 +101,35 @@ async function bridgeTo(page: Page, helper: RealHelper): Promise<void> {
       return { ok: false, error: { code: failure.code ?? -1, message: failure.message } };
     }
   });
+  // The page's clock may be paused, so a stopped helper is retried after a pause taken here.
+  await page.exposeBinding("__helperCall", async (_source, method: string, params: unknown) => {
+    try {
+      return await helper.call(method, params);
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return undefined;
+    }
+  });
   await page.addInitScript(() => {
     type Reply = { ok: boolean; result?: unknown; error?: unknown };
     const w = window as unknown as {
       __toHelper(message: unknown): Promise<Reply>;
-      overnoteBridge: { resolve(id: number, result: unknown): void; reject(id: number, error: unknown): void };
+      __helperCall(method: string, params: unknown): Promise<unknown>;
+      overnoteBridge: {
+        resolve(id: number, result: unknown): void;
+        reject(id: number, error: unknown): void;
+        flush?(): Promise<boolean>;
+      };
       webkit: unknown;
     };
+    void (async () => {
+      for (;;) {
+        const request = await w.__helperCall("test.awaitFlush", { waitMs: 1000 }).catch(() => undefined);
+        if (typeof request !== "number") continue;
+        await w.overnoteBridge.flush?.();
+        await w.__helperCall("test.flushDone", { request }).catch(() => undefined);
+      }
+    })();
     w.webkit = {
       messageHandlers: {
         overnote: {
@@ -150,6 +177,37 @@ test("typing in the shipped editor lands in the helper's database and survives a
     await expect(page.getByTestId("title")).toHaveText("Saved for real");
     await expect(page.locator(".note-editor")).toHaveText("Saved for realsecond line");
     expect(await stored()).toHaveLength(1);
+  } finally {
+    await helper.stop();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a shutdown inside the autosave delay saves the last keystrokes before the helper exits", async ({ page }) => {
+  const root = fs.mkdtempSync("/tmp/overnote-real-");
+  const helper = new RealHelper(root);
+  const text = async () => {
+    const { items } = (await helper.call("notes.list", {})) as { items: { id: string }[] };
+    return ((await helper.call("notes.get", { id: items[0]?.id })) as { text: string }).text;
+  };
+  try {
+    await helper.start();
+    await bridgeTo(page, helper);
+    // A paused page clock holds the 300 ms autosave, as if the shutdown came right after typing.
+    await page.clock.install();
+    await page.goto(`${PREVIEW_ORIGIN}/index.html`);
+    await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
+    await expect(page.locator(".note-editor")).toBeFocused();
+    await pauseClock(page);
+    await page.keyboard.type("Typed just before the handover");
+    await expect(page.locator(".note-editor")).toHaveText("Typed just before the handover");
+    expect(await text()).toBe("");
+
+    // system.shutdown, as the app's takeover and the update script send it: the helper asks the
+    // editor to save, waits for the save, and only then closes the database and exits.
+    await helper.stop();
+    await helper.start();
+    expect(await text()).toBe("Typed just before the handover");
   } finally {
     await helper.stop();
     fs.rmSync(root, { recursive: true, force: true });

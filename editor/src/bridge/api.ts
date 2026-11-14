@@ -51,6 +51,7 @@ export function createApi(client: BridgeClient) {
       reset: () => call(M.SettingsReset, {}),
     },
     on: client.on.bind(client),
+    onFlush: client.onFlush.bind(client),
   };
 }
 

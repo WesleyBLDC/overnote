@@ -125,6 +125,8 @@ start_helper
 [[ "$(stat -f %Lp "$SOCKET")" == "600" ]] || fail "socket is not 0600"
 [[ "$(cat "$PIDFILE")" == "$HELPER_PID" ]] || fail "PID file does not hold the helper pid"
 ok "socket 0600 in a 0700 directory, PID file written"
+rpc '{"id":1,"method":"system.ping"}' | grep -q '"host":"extension"' || fail "system.ping should report host extension"
+ok "system.ping reports host extension without --app"
 
 "$HELPER" --support-dir "$SUPPORT" --socket "$SOCKET" --pid-file "$PIDFILE" --headless || fail "a second instance should exit 0"
 kill -0 "$HELPER_PID" || fail "the second instance disturbed the first"
