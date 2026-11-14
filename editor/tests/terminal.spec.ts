@@ -175,7 +175,7 @@ test("a closed drawer ends its attach after five idle minutes, and reopening att
   expect(await calls(page, "term.close")).toHaveLength(0);
   await page.clock.fastForward("00:02");
   await expect.poll(async () => (await calls(page, "term.close")).length).toBe(1);
-  expect((await terminalMock(page)).live).toBe(false);
+  await expect.poll(async () => (await terminalMock(page)).live).toBe(false);
 
   await page.keyboard.press("Control+Backquote");
   await expect(drawer(page)).toBeVisible();
