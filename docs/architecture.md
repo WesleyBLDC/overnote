@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v3.4 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v3.5 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -112,6 +112,10 @@ The takeover's 5 s wait and the launcher's 2 s grace before SIGTERM both leave r
 - **The same method names and shapes as the socket**, served by one dispatcher in the helper.
   Bridge-only methods are marked (bridge) below.
 - Assets are served from the custom scheme `overnote://app/` (for example `overnote://app/index.html`), mapped to `--editor-dir`.
+- The terminal fast lane: `window.webkit.messageHandlers.overnoteTerm.postMessage(message)`, fire and forget, with no `id` and no reply, on its own handler so a keystroke never waits behind a note save on the ordered `overnote` handler.
+  `message` is `{ type: "write", data }` (keystrokes, `data` is base64 of the bytes) or `{ type: "ack", bytes }` (output bytes the page has drawn, sent from xterm.js's write callback).
+  The helper accepts writes only while the drawer is open and a terminal runs, and only from the main frame of `overnote://app/`, like the main bridge.
+  See [The terminal drawer](#the-terminal-drawer).
 
 ### Events (native to web)
 
@@ -125,6 +129,8 @@ The takeover's 5 s wait and the launcher's 2 s grace before SIGTERM both leave r
 | `notes.changed` | `{ ids: string[] }` | Data changed through the socket (so the editor reloads, or merges into unsaved edits) |
 | `settings.changed` | `Settings` | A setting changed |
 | `editor.willReload` | `{}` | Development only (`--watch-editor`): a new editor build landed; the editor saves, then reloads the page |
+| `term.data` | `{ data: string }` | Terminal output, base64 of the bytes, sent as soon as it arrives with at most two sends in flight; output that arrives meanwhile is merged into the next send. Never recorded by test hooks |
+| `term.exit` | `{ code: number }` | The drawer's program ended (for Herdr, the attach: a ⌃\ detach exits 0), after its last `term.data`. A signal reports 128 plus the signal number |
 
 ## 4. Data types
 
@@ -166,6 +172,7 @@ interface Settings {
   countMode: "characters" | "words"; // default "characters"
   panelFrame: { x: number; y: number; width: number; height?: number;
                 displays?: { [key: string]: PanelPoint } } | null; // y is the TOP edge; displays keyed "<display uuid>@<w>x<h>"
+  terminal: { open: boolean };     // default { open: false }: whether the terminal drawer is open (v3.5)
 }
 
 type PanelPlacement = "left" | "right" | "fill" | "center";
@@ -202,6 +209,10 @@ The helper stores `NoteContent` verbatim.
 | `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped from the minimum size (see `window.setMinimumSize`) to 860 pt times zoom. `temporary: true` (confirmation dialogs; panels and dropdowns stay inside the panel instead) applies even when windowAutoSize is off and is restored by the next non-temporary report |
 | `window.setMinimumSize` (bridge) | `{ width: number, height: number }` | `{}` | The smallest the panel may be, in points: the editor's toolbar (its controls plus 6rem for the title), one line of note text with the room kept below it for the overlaid count pill, and the format island with its side margins while it shows, at the current zoom. The helper rounds up and never goes below 405 by 197 pt, applies it to user resizing, auto-sizing, temporary growth, and restored frames, and grows a smaller panel at once, keeping its top edge. `-32602` unless both are positive numbers |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
+| `window.setDrawer` (bridge) | `{ height: number }` | `{}` | The terminal drawer's height in points, 0 when closed, at most 1000 (the editor sends 260). See [The terminal drawer](#the-terminal-drawer) |
+| `term.open` (bridge) | `{ cols: number, rows: number }` | `{ backend: "herdr" \| "shell" }` | Starts the drawer's terminal at that grid (whole numbers from 1 to 1000), or resizes the one already running: one terminal per helper |
+| `term.resize` (bridge) | `{ cols: number, rows: number }` | `{}` | The drawer's grid changed (`TIOCSWINSZ`) |
+| `term.close` (bridge) | `{}` | `{}` | Ends the drawer's program: for Herdr only the attach, and the kept shell keeps running |
 | `window.setDragRegions` (bridge) | `{ rects: { x: number, y: number, width: number, height: number }[] }` | `{}` | Points (CSS px times zoom), top-left origin, relative to the web view. A mouse down inside drags the window natively (title-bar behavior: it also works as the first click into an unfocused panel) |
 | `app.openURL` (bridge) | `{ url: string }` | `{}` | Opens http(s), mailto, and raycast:// links with NSWorkspace |
 | `clipboard.copy` (bridge) | `{ text: string, html?: string }` | `{}` | Writes plain text plus optional HTML to the general pasteboard |
@@ -323,6 +334,30 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   A temporary report does not end the wait.
   While it waits, `window.toggle` cancels the show (result `visible: false`), `window.hide` cancels it too, `window.show { noteId }` still emits `note.open`, `window.place` orders the panel in at the placed frame and ends the wait, and turning windowAutoSize off shows the panel at once.
 - Helper test-only flags: `--test-hooks` enables `test.*` socket methods.
+
+### The terminal drawer
+
+- A fixed 260 pt drawer under the note, the panel's width, drawn by xterm.js inside the editor's web view (loaded lazily, in its own chunk, also preloaded 1.5 s after boot).
+  The toolbar's Terminal button, ⌘K's Open Terminal or Close Terminal, and ⌃` toggle it; from the note ⌃` opens the drawer (or focuses an open one) and focuses the terminal, and from the terminal it closes the drawer and puts the caret back in the note.
+  The open state is the `terminal.open` setting, so the drawer comes back after a reload or restart, without taking focus from the note.
+- Geometry: `window.setDrawer` grows the panel down by the drawer, or up when that would leave the screen, and shrinks it back on close.
+  Every frame the helper remembers or computes is the note's: the saved `panelFrame`, auto-sizing and its 860 pt cap, the minimum size, and placements, which use the visible frame minus the drawer, so Fill, Left, and Right take the drawer's space from the note.
+  `window.place` returns the note's frame.
+  Closing puts the note back where it was before the drawer opened, unless the person moved or resized the panel meanwhile.
+  The editor sends the height before it shows the drawer and hides the drawer before it sends 0, so the note never squeezes; while the drawer shows, the note gives up its height at the bottom of the page and the drawer draws below it.
+  A page load (reload or new build) closes the helper's terminal and sets the drawer to 0 until the page asks again.
+- Keys: while the terminal has focus, every key goes to the shell, Esc and ⌃X included, except ⌃`, ⌘K, ⌘N, ⌘W, ⌘C, ⌘V, ⌘Q, and the four placements (⌃⌥ arrows).
+  ⌥ types characters (not Meta), and ⌘Z never undoes the note.
+- What runs: with Herdr's `hc` installed, a kept Herdr terminal named `overnote-drawer` (label `app=overnote`), created on first use in the home folder with `hc run --bg --keep --no-parent --no-notify`, then `hc attach overnote-drawer --history 500` in a pseudo terminal the helper owns.
+  The name is unique among live terminals, so two opens cannot create two.
+  The shell outlives the drawer, the panel, and the helper; Herdr.app is never launched, focused, or moved.
+  The helper finds `hc` with `OVERNOTE_HC` (tests; an empty value or a missing file means no Herdr), else the login shell's `zsh -lc 'command -v hc'` (a helper started by Raycast lacks the person's PATH), else `~/.local/bin`, `/opt/homebrew/bin`, and `/usr/local/bin`.
+  Without `hc`, the drawer runs the login shell (`$SHELL -l`) in a plain pseudo terminal, which ends with the helper, and says so in one line.
+  The program gets `TERM=xterm-256color`, `COLORTERM=truecolor`, `LANG`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `PATH`, and `TMPDIR`, and nothing else from the helper.
+- Flow: the helper reads the pseudo terminal on a background queue and sends output at once as `term.data` (no fixed timer), at most two sends in flight.
+  Every byte sent counts as unacked until the page's `ack`; above 256 KB unacked the helper stops reading, so a flood waits in the program (and in herdr-core) instead of the helper or the page.
+- Lifecycle: closing the drawer only hides it; after 5 minutes closed the editor sends `term.close`, and the next open attaches again with fresh history.
+  On `term.exit` the drawer says so, and the next key starts the program again.
 - The helper overlays an invisible 12 pt drag strip along the panel's top edge; the editor keeps about 12 pt of non-interactive top padding.
 - Back/forward history is two in-memory stacks in the editor (cap 100).
   Switching notes pushes the old current note on the back stack (skipping duplicates of the top) and clears forward.
@@ -530,11 +565,12 @@ The extension honors `OVERNOTE_SUPPORT_DIR` and `OVERNOTE_RUNTIME_DIR` too (`src
 
 ## Protocol versioning
 
-The protocol described here is v3.4 (v3.4 added `Overnote.app`, the app packaging of the helper with app mode, `--app`, its argument defaults, hotkey, and menu bar item, moved the data folder to `~/Library/Application Support/Overnote` with the one time copy from the extension's folder through the new `--legacy-support-dir`, added `host` to the `system.ping` result, defined the handover between the app and the extension, added the socket-only `system.importLegacy` with the `pre-import` backup reason so an empty shared database still receives the legacy notes, and added `window.overnoteBridge.flush()`, which the helper awaits before every shutdown; v3.3 added `window.place` on the socket and the bridge with the `PanelPlacement` type, and optional `width`, `height`, and `placement` on each `panelFrame.displays` point, which older points simply lack; v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v3.5 (v3.5 added the terminal drawer: the bridge-only `window.setDrawer`, `term.open`, `term.resize`, and `term.close`, the `term.data` and `term.exit` events, the `overnoteTerm` fast lane, and the `terminal` setting, which older helpers refuse as an unknown setting; v3.4 added `Overnote.app`, the app packaging of the helper with app mode, `--app`, its argument defaults, hotkey, and menu bar item, moved the data folder to `~/Library/Application Support/Overnote` with the one time copy from the extension's folder through the new `--legacy-support-dir`, added `host` to the `system.ping` result, defined the handover between the app and the extension, added the socket-only `system.importLegacy` with the `pre-import` backup reason so an empty shared database still receives the legacy notes, and added `window.overnoteBridge.flush()`, which the helper awaits before every shutdown; v3.3 added `window.place` on the socket and the bridge with the `PanelPlacement` type, and optional `width`, `height`, and `placement` on each `panelFrame.displays` point, which older points simply lack; v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.
 Helper 0.4.0 is the first release that speaks v2.14 and v2.15, so a socket client can tell from `system.ping` (or `system.status`) `version` whether the editor merges outside changes and whether a create or duplicate leaves the current note alone.
 Helper 0.5.0 is the first release that speaks v3.0 through v3.3 (and writes schema 2): `notes.duplicate` takes the copy's content and refuses `titleSuffix`, so a socket client that sent `titleSuffix` to 0.4.0 or earlier sends the content built with `duplicateContent` instead.
 Helper releases after 0.5.0 speak v3.4: they report `host` in `system.ping` and keep the database in the shared folder.
+The first release with the terminal drawer speaks v3.5; a socket client can tell it from `settings.get`, which then has a `terminal` key.
 Bump the version at the top of this document in the same pull request as the code change, and name the new version in the pull request description.

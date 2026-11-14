@@ -33,12 +33,12 @@ test("a fast boot never shows the status", async ({ page }) => {
 
 test("a boot slower than 300 ms shows the status until ready, then removes it", async ({ page }) => {
   await configureMock(page, { latency: 700 });
-  const start = Date.now();
   await page.goto("/?seed=empty");
   const status = page.getByTestId("boot-status");
   await expect(status).toHaveText("Loading your notes");
   await expect(status).toHaveAttribute("role", "status");
-  expect(Date.now() - start).toBeLessThan(1500);
+  // The status shows during the slow boot, not after it: the app is still not ready.
+  await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "false");
   await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
   await expect(status).toHaveCount(0);
 });

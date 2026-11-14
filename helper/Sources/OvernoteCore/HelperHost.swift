@@ -23,6 +23,15 @@ public protocol HelperHost: Sendable {
     /// Replaces the areas of the web view where a mouse down drags the panel. Points, with a
     /// top left origin relative to the web view.
     func setDragRegions(_ rects: [DragRect]) async
+    /// The terminal drawer's height in points, 0 when closed (`window.setDrawer`). The host adds
+    /// it below the note and keeps it out of the saved frame, auto-sizing, and the height cap.
+    func setDrawer(height: Double) async
+    /// Starts the drawer's terminal at `cols` by `rows`, or resizes the one already running.
+    /// Returns the backend: "herdr" (a kept Herdr terminal) or "shell" (a plain login shell).
+    func terminalOpen(cols: Int, rows: Int) async throws -> String
+    func terminalResize(cols: Int, rows: Int) async
+    /// Ends the drawer's attach; a kept Herdr terminal keeps running.
+    func terminalClose() async
     /// Opens a link in the default app for its scheme (already checked by `LinkPolicy`).
     func openURL(_ url: URL) async
     /// Returns keyboard focus to the previously frontmost app without hiding.
@@ -64,6 +73,7 @@ public struct DragRect: Equatable, Sendable {
 public final class RecordingHost: HelperHost, @unchecked Sendable {
     public enum Call: Equatable, Sendable {
         case toggle, show, hide, place(PanelPlacement), resize(Double, temporary: Bool), minimumSize(Double, Double), dragRegions([DragRect]), openURL(String), resignFocus, copy(String, String?), save(String, String)
+        case drawer(Double), terminalOpen(Int, Int), terminalResize(Int, Int), terminalClose
         case settingsChanged(Settings), emit(String, JSONValue), shutdown
     }
 
@@ -133,6 +143,14 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
     }
     public func setMinimumSize(width: Double, height: Double) async { record(.minimumSize(width, height)) }
     public func setDragRegions(_ rects: [DragRect]) async { record(.dragRegions(rects)) }
+    public func setDrawer(height: Double) async { record(.drawer(height)) }
+    /// Headless has no terminal: it records the call and answers like a missing Herdr would.
+    public func terminalOpen(cols: Int, rows: Int) async throws -> String {
+        record(.terminalOpen(cols, rows))
+        return TerminalBackend.shell.rawValue
+    }
+    public func terminalResize(cols: Int, rows: Int) async { record(.terminalResize(cols, rows)) }
+    public func terminalClose() async { record(.terminalClose) }
     public func openURL(_ url: URL) async { record(.openURL(url.absoluteString)) }
     public func resignFocus() async { record(.resignFocus) }
     public func copyToClipboard(text: String, html: String?) async { record(.copy(text, html)) }

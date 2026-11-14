@@ -19,6 +19,12 @@ export function createApi(client: BridgeClient) {
       setMinimumSize: (width: number, height: number) => call(M.WindowSetMinimumSize, { width, height }),
       resignFocus: () => call(M.WindowResignFocus, {}),
       setDragRegions: (rects: rpc.DragRect[]) => call(M.WindowSetDragRegions, { rects }),
+      setDrawer: (height: number) => call(M.WindowSetDrawer, { height }),
+    },
+    term: {
+      open: (size: rpc.TermSize) => call(M.TermOpen, size),
+      resize: (size: rpc.TermSize) => call(M.TermResize, size),
+      close: () => call(M.TermClose, {}),
     },
     clipboard: {
       copy: (params: P<"clipboard.copy">) => call(M.ClipboardCopy, params),

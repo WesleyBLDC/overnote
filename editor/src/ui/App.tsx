@@ -49,6 +49,8 @@ import { LinkPopover } from "./LinkPopover";
 import { Notices } from "./Notices";
 import { SlashMenu, type SlashMenuHandle } from "./SlashMenu";
 import { Toolbar } from "./Toolbar";
+import { TerminalDrawer, useTerminalDrawer } from "../terminal/TerminalDrawer";
+import { inTerminal, reachesOvernote, TOGGLE_TERMINAL } from "../terminal/keys";
 
 type ExportFormat = "md" | "html" | "txt";
 
@@ -373,6 +375,18 @@ export function App({ api }: { api: Api }) {
   useDragRegions(app, api, settings.zoom);
   useScrollEdges(app);
 
+  // ---- the terminal drawer ----
+
+  const setTerminalOpen = useCallback((open: boolean) => updateSettings({ terminal: { open } }), [updateSettings]);
+  const focusNote = useCallback(() => editor.view.focus(), [editor]);
+  const terminal = useTerminalDrawer({
+    api,
+    open: settings.terminal?.open ?? false,
+    setOpen: setTerminalOpen,
+    zoom: settings.zoom,
+    focusNote,
+  });
+
   // ---- actions ----
 
   const openLink = useCallback(() => openLinkIn(editor), [editor, openLinkIn]);
@@ -624,6 +638,15 @@ export function App({ api }: { api: Api }) {
           run: () => placeWindow("center"),
         },
         {
+          id: "terminal",
+          title: terminal.open ? "Close Terminal" : "Open Terminal",
+          shortcut: "⌃`",
+          section: "window",
+          icon: "terminal",
+          keywords: ["shell", "console", "herdr", "drawer"],
+          run: terminal.toggle,
+        },
+        {
           id: "formatBar",
           title: "Toggle Format Bar",
           shortcut: "⌥⌘,",
@@ -751,6 +774,8 @@ export function App({ api }: { api: Api }) {
     createQuicklink,
     placeWindow,
     preview,
+    terminal.open,
+    terminal.toggle,
   ]);
 
   // ---- window level shortcuts ----
@@ -774,16 +799,21 @@ export function App({ api }: { api: Api }) {
     placeWindow,
     preview,
     exitPreview,
+    terminal,
   });
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const h = handlers.current;
+      // While the terminal has focus, every key goes to the shell except a short allowlist (terminal/keys.ts).
+      const fromTerminal = inTerminal(event.target);
+      if (fromTerminal && !reachesOvernote(event)) return;
       if (h.confirm) return;
       const run = (fn: () => void) => {
         event.preventDefault();
         event.stopPropagation();
         fn();
       };
+      if (matches(event, TOGGLE_TERMINAL)) return run(() => h.terminal.toggleFromKeys(fromTerminal));
       if (matches(event, { code: "KeyK", meta: true })) return run(() => setPanel(h.panel ? null : "root"));
       if (matches(event, { code: "KeyP", meta: true }))
         return run(() => setPanel(h.panel === "browse" ? null : "browse"));
@@ -912,6 +942,7 @@ export function App({ api }: { api: Api }) {
       data-testid="app"
       data-ready={state.ready ? "true" : "false"}
       data-note-id={currentId ?? ""}
+      data-terminal={terminal.visible ? "open" : undefined}
     >
       <Toolbar
         title={title}
@@ -923,6 +954,8 @@ export function App({ api }: { api: Api }) {
         onActions={() => setPanel(panel ? null : "root")}
         onBrowse={() => setPanel("browse")}
         onNew={() => void session.newNote()}
+        terminalOpen={terminal.open}
+        onTerminal={terminal.toggle}
       />
       {slowBoot ? (
         <div className="boot-status" data-testid="boot-status" role="status">
@@ -1081,6 +1114,7 @@ export function App({ api }: { api: Api }) {
       />
       {confirm ? <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} /> : null}
       <Notices notices={notices} onExited={dismissNotice} onDismiss={dismiss} />
+      <TerminalDrawer visible={terminal.visible} setHost={terminal.controller.setHost} />
     </div>
   );
 }

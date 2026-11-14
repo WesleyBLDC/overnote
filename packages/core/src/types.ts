@@ -88,6 +88,13 @@ export interface Settings {
   /** Default "characters". */
   countMode: CountMode;
   panelFrame: PanelFrame | null;
+  /** The terminal drawer. Default `{ open: false }`; the drawer height is a fixed 260 pt. */
+  terminal: TerminalSettings;
+}
+
+export interface TerminalSettings {
+  /** Whether the drawer is open, so the panel reopens it after a restart. */
+  open: boolean;
 }
 
 export interface WindowData {
@@ -117,4 +124,5 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   showFormatBar: false,
   countMode: "characters",
   panelFrame: null,
+  terminal: Object.freeze({ open: false }),
 });

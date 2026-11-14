@@ -35,6 +35,7 @@ export type {
   PanelPoint,
   PanelRect,
   RpcErrorPayload,
+  TerminalSettings,
 } from "./types";
 export type { JSONContent } from "@tiptap/core";
 export * as rpc from "./rpc";

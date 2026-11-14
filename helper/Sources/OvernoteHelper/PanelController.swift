@@ -21,8 +21,20 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private var webView: NotesWebView?
     /// The editor's bars plus one line at the current zoom (`window.setMinimumSize`), nil until it reports.
     private var reportedMinimum: CGSize?
-    /// The smallest the panel may be, for every way its size is set (`PanelSizing`).
+    /// The smallest the note may be, for every way its size is set (`PanelSizing`).
     var minimumSize: CGSize { PanelSizing.minimumSize(reported: reportedMinimum) }
+    /// The terminal drawer's height in points (`window.setDrawer`), 0 when closed. The window is
+    /// the note plus the drawer below it; every remembered and computed frame is the note's.
+    private(set) var drawer: CGFloat = 0
+    /// The note's frame before the drawer opened and right after, so closing the drawer puts the
+    /// note back where it was when the person did not move or resize it meanwhile.
+    private var drawerOpening: (before: NSRect, after: NSRect)?
+    /// The drawer's terminal and its fast lane (`overnoteTerm`).
+    private var terminal: TerminalBridge?
+    /// The note's frame: the panel without the drawer.
+    var noteFrame: NSRect { PanelGeometry.note(window: panel.frame, drawer: drawer) }
+    /// The smallest the window may be: the note's minimum plus the drawer.
+    private var windowMinimumSize: CGSize { CGSize(width: minimumSize.width, height: minimumSize.height + drawer) }
     /// The app that was frontmost when the panel was shown; focus returns to it.
     private var previousApp: NSRunningApplication?
     private(set) var settings: Settings
@@ -134,7 +146,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
             contentController.add(WeakScriptMessageHandler(bridge), name: WebBridge.handlerName)
             webView.navigationDelegate = bridge
             webView.uiDelegate = bridge
+            bridge.onPageNavigation = { [weak self] in self?.pageDidNavigate() }
             self.bridge = bridge
+            let terminal = TerminalBridge(webView: webView, logger: logger)
+            terminal.acceptsInput = { [weak self] in (self?.drawer ?? 0) > 0 }
+            contentController.add(WeakScriptMessageHandler(terminal), name: TerminalBridge.handlerName)
+            self.terminal = terminal
         }
 
         let strip = DragStripView(
@@ -173,6 +190,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         bridge?.onPageNavigation = { [weak self] in
             self?.reloadFallback?.cancel()
             self?.reloadFallback = nil
+            self?.pageDidNavigate()
         }
         logger.log("Watching \(directory) for new editor builds")
     }
@@ -211,7 +229,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private func applyWindowSettings() {
         // Our own optional setting, default off.
         panel.sharingType = settings.hideWhileScreenSharing ? .none : .readOnly
-        panel.minSize = minimumSize
+        panel.minSize = windowMinimumSize
     }
 
     // MARK: - Showing and hiding
@@ -333,7 +351,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         let key = screen.positionKey
         if let placement = PanelGeometry.storedPlacement(in: settings.panelFrame, displayKey: key) {
             let frame = PanelGeometry.placed(
-                placement, current: CGSize(width: width, height: targetHeight(on: screen)), visible: screen.visibleFrame,
+                placement, current: CGSize(width: width, height: targetHeight(on: screen)), visible: noteArea(screen),
                 minimum: minimumSize)
             setFrame(frame)
             storePlacement(placement, frame: frame, displayKey: key, patch: [:])
@@ -341,14 +359,14 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         }
         setFrame(
             PanelGeometry.placement(
-                stored: settings.panelFrame, displayKey: screen.positionKey, visible: screen.visibleFrame, width: width,
+                stored: settings.panelFrame, displayKey: screen.positionKey, visible: noteArea(screen), width: width,
                 height: targetHeight(on: screen), minimum: minimumSize))
     }
 
     /// The first open frame: the default size, centered at the top of the display under the pointer.
     private func restoreDefaultFrame() {
         guard let screen = panel.screen ?? screenUnderPointer else { return }
-        let visible = screen.visibleFrame
+        let visible = noteArea(screen)
         let height = settings.windowAutoSize ? targetHeight(on: screen) : NotesPanel.defaultHeight
         let frame = NSRect(
             x: visible.midX - NotesPanel.defaultWidth / 2, y: visible.maxY - height, width: NotesPanel.defaultWidth,
@@ -363,16 +381,16 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         if let temporaryHeight {
             height = PanelSizing.autoHeight(temporaryHeight, minimum: minimum, zoom: settings.zoom)
         } else if settings.windowAutoSize {
-            let content = contentHeight ?? (panel.isVisible ? panel.frame.height : NotesPanel.defaultHeight)
+            let content = contentHeight ?? (panel.isVisible ? noteFrame.height : NotesPanel.defaultHeight)
             height = PanelSizing.autoHeight(content, minimum: minimum, zoom: settings.zoom)
         } else if let saved = settings.panelFrame?.height {
             height = CGFloat(saved)
         } else {
             // No stored height yet: the first open size, or whatever the panel had before a
             // temporary growth.
-            height = heightBeforeTemporary ?? panel.frame.height
+            height = heightBeforeTemporary ?? noteFrame.height
         }
-        return min(max(height, minimum), screen.visibleFrame.height).rounded()
+        return min(max(height, minimum), noteArea(screen).height).rounded()
     }
 
     /// Grows the frame to the minimum size, clamps it to the display, and nudges it fully onto
@@ -381,14 +399,21 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         PanelGeometry.keepOnScreen(frame, visible: visible, minimum: minimumSize)
     }
 
+    /// The part of a display's visible area the note may use: the drawer keeps the bottom.
+    private func noteArea(_ screen: NSScreen) -> NSRect {
+        PanelGeometry.noteArea(visible: screen.visibleFrame, drawer: drawer)
+    }
+
     /// Every frame change the helper makes goes through here, so the window delegate never
-    /// mistakes one for the system or a window manager placing the panel.
+    /// mistakes one for the system or a window manager placing the panel. `frame` is the note's;
+    /// the drawer, when open, hangs below it.
     private func setFrame(_ frame: NSRect) {
-        guard frame != panel.frame else { return }
+        let window = PanelGeometry.window(note: frame, drawer: drawer)
+        guard window != panel.frame else { return }
         applyingFrame = true
         defer { applyingFrame = false }
         // No animation: height steps land at once.
-        panel.setFrame(frame, display: panel.isVisible, animate: false)
+        panel.setFrame(window, display: panel.isVisible, animate: false)
         panel.invalidateShadow()
         lastFrame = panel.frame
         if let key = panel.screen?.positionKey { lastScreenKey = key }
@@ -398,11 +423,11 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private func applyHeight(force: Bool = false) {
         guard !panel.isUserResizing, !panel.inLiveResize, let screen = panel.screen ?? screenUnderPointer else { return }
         let height = targetHeight(on: screen)
-        guard force || abs(height - panel.frame.height) > Self.heightTolerance else { return }
-        var frame = panel.frame
+        guard force || abs(height - noteFrame.height) > Self.heightTolerance else { return }
+        var frame = noteFrame
         frame.origin.y = frame.maxY - height
         frame.size.height = height
-        setFrame(keepOnScreen(frame, visible: screen.visibleFrame))
+        setFrame(keepOnScreen(frame, visible: noteArea(screen)))
     }
 
     // MARK: - Remembering the frame
@@ -429,7 +454,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         screenConfigurationChanged = decision.systemRelocation
         guard let screen = panel.screen else { return }
         let saved = PanelGeometry.recording(
-            panel.frame, displayKey: screen.positionKey, in: settings.panelFrame, autoSize: settings.windowAutoSize,
+            noteFrame, displayKey: screen.positionKey, in: settings.panelFrame, autoSize: settings.windowAutoSize,
             temporary: temporaryHeight != nil, keepsPlacement: decision.keepsPlacement)
         guard saved != settings.panelFrame else { return }
         do {
@@ -468,9 +493,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     /// change leaves auto-sizing on. Called at the end of a drag in the resize zones or along
     /// the window edge, and for any frame the system or a window manager sets (tiling or
     /// Accessibility); the helper's own resizes never get here.
-    func userDidResize(from start: NSRect, to end: NSRect) {
+    func userDidResize(from startWindow: NSRect, to endWindow: NSRect) {
+        lastFrame = endWindow
+        // The person resized the window; what is remembered is the note above the drawer.
+        let start = PanelGeometry.note(window: startWindow, drawer: drawer)
+        let end = PanelGeometry.note(window: endWindow, drawer: drawer)
         let heightChanged = PanelGeometry.changesHeight(from: start, to: end, tolerance: Self.heightTolerance)
-        lastFrame = end
         if heightChanged {
             // The user's height wins over a temporary growth that was in effect.
             temporaryHeight = nil
@@ -510,10 +538,10 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         lastFrame = panel.frame
         guard panel.isVisible, start != .zero else { return }
         let minimum = minimumSize
-        if panel.frame.width < minimum.width || panel.frame.height < minimum.height,
+        if noteFrame.width < minimum.width || noteFrame.height < minimum.height,
             let screen = panel.screen ?? screenUnderPointer
         {
-            setFrame(keepOnScreen(panel.frame, visible: screen.visibleFrame))
+            setFrame(keepOnScreen(noteFrame, visible: noteArea(screen)))
         }
         userDidResize(from: start, to: panel.frame)
     }
@@ -604,8 +632,8 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
             temporaryHeight = nil
             heightBeforeTemporary = nil
         }
-        let current = panel.isVisible ? panel.frame.size : CGSize(width: panel.frame.width, height: targetHeight(on: screen))
-        let frame = PanelGeometry.placed(placement, current: current, visible: screen.visibleFrame, minimum: minimumSize)
+        let current = panel.isVisible ? noteFrame.size : CGSize(width: noteFrame.width, height: targetHeight(on: screen))
+        let frame = PanelGeometry.placed(placement, current: current, visible: noteArea(screen), minimum: minimumSize)
         setFrame(frame)
         storePlacement(
             placement, frame: frame, displayKey: screen.positionKey,
@@ -631,8 +659,8 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
             // Temporary growth only grows: a panel that is already tall enough stays as it is,
             // and so does an earlier, taller temporary growth.
             let wanted = PanelSizing.autoHeight(rounded, minimum: minimumSize.height, zoom: settings.zoom)
-            guard panel.frame.height < wanted.rounded() - Self.heightTolerance else { return }
-            if temporaryHeight == nil { heightBeforeTemporary = panel.frame.height }
+            guard noteFrame.height < wanted.rounded() - Self.heightTolerance else { return }
+            if temporaryHeight == nil { heightBeforeTemporary = noteFrame.height }
             temporaryHeight = wanted
             applyHeight(force: true)
         } else {
@@ -658,14 +686,59 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         let reported = CGSize(width: width, height: height)
         guard reported != reportedMinimum else { return }
         reportedMinimum = reported
-        panel.minSize = minimumSize
-        if panel.frame.width < minimumSize.width || panel.frame.height < minimumSize.height {
+        panel.minSize = windowMinimumSize
+        if noteFrame.width < minimumSize.width || noteFrame.height < minimumSize.height {
             applyHeight(force: true)
         }
     }
 
     func setDragRegions(_ rects: [DragRect]) async {
         webView?.dragRects = rects.map { NSRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
+    }
+
+    // MARK: - The terminal drawer
+
+    /// `window.setDrawer`: grows the window down by the drawer (up when that would leave the
+    /// screen) and shrinks it back on close. The note keeps its frame, so the saved frame,
+    /// auto-sizing, and the 860 pt cap never count the drawer. Closing puts the note back where it
+    /// was before the drawer opened, unless the person moved or resized the panel meanwhile.
+    func setDrawer(height: Double) async {
+        applyDrawer(CGFloat(height).rounded())
+    }
+
+    private func applyDrawer(_ height: CGFloat) {
+        guard height != drawer else { return }
+        var note = noteFrame
+        let opening = drawer == 0
+        drawer = height
+        panel.minSize = windowMinimumSize
+        if height == 0, let restore = drawerOpening, restore.after == note {
+            note = restore.before
+        }
+        if height == 0 { drawerOpening = nil }
+        guard let screen = panel.screen ?? screenUnderPointer else { return }
+        setFrame(keepOnScreen(note, visible: noteArea(screen)))
+        if opening, height > 0 { drawerOpening = (before: note, after: noteFrame) }
+    }
+
+    func terminalOpen(cols: Int, rows: Int) async throws -> String {
+        guard let terminal else { throw RPCError.internal("The terminal is not available") }
+        return try await terminal.open(cols: cols, rows: rows).rawValue
+    }
+
+    func terminalResize(cols: Int, rows: Int) async {
+        terminal?.resize(cols: cols, rows: rows)
+    }
+
+    func terminalClose() async {
+        terminal?.close()
+    }
+
+    /// The page started loading (a reload or a new editor build): its terminal goes, and the
+    /// drawer closes until the new page asks for it again.
+    private func pageDidNavigate() {
+        terminal?.close()
+        applyDrawer(0)
     }
 
     func openURL(_ url: URL) async {

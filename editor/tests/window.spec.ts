@@ -101,11 +101,16 @@ test("the minimum size is the bars plus one line at the current zoom, never belo
   await page.keyboard.press("Meta+Equal");
   for (let i = 0; i < 19; i++) await page.keyboard.press("Meta+Equal");
   await expect.poll(async () => (await minimum()).height).toBeGreaterThanOrEqual(2 * oneLine - 8);
+  // The zoom presses can still be landing: wait until the panel matches the latest minimum, then check it.
+  await expect
+    .poll(async () => {
+      const [m, b] = [await minimum(), await box()];
+      return b.height === m.height && b.width === m.width;
+    })
+    .toBe(true);
   const atDouble = await minimum();
   expect(atDouble.height).toBeLessThanOrEqual(2 * oneLine + 2);
   expect(atDouble.width).toBeGreaterThan(600);
-  await expect.poll(async () => (await box()).height).toBe(atDouble.height);
-  await expect.poll(async () => (await box()).width).toBe(atDouble.width);
 
   // Every bar fits: the toolbar controls, some of the title, and the format bar all stay inside.
   await page.keyboard.press("Alt+Meta+Comma");
@@ -651,16 +656,18 @@ test("the top bar follows the editor board: a 46 point bar, the Close dot, and 3
     expect(c.inCorner, String(c.name)).toBe(false);
   }
 
-  // Hovering a button shows its tooltip pill with the name and the shortcut; Terminal does nothing yet.
+  // Hovering a button shows its tooltip pill with the name and the shortcut; Terminal toggles the drawer
+  // (terminal.spec.ts covers the drawer itself).
   const actions = page.locator("[data-anchor=actions]");
   await actions.hover();
   await expect(actions.getByRole("tooltip")).toHaveText("Actions ⌘K");
   await expect(actions.getByRole("tooltip")).toHaveCSS("opacity", "1");
-  const before = (await calls(page)).length;
   await page.getByTestId("terminal").click();
   await expect(page.getByTestId("terminal").getByRole("tooltip")).toHaveText("Terminal ⌃`");
+  await expect(page.getByTestId("terminal-drawer")).toBeVisible();
+  await page.getByTestId("terminal").click();
+  await expect(page.getByTestId("terminal-drawer")).toBeHidden();
   await settle(page);
-  expect((await calls(page)).length).toBe(before);
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
 
   await page.keyboard.press("Alt+Meta+Comma");

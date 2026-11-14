@@ -1,0 +1,41 @@
+/*
+ * The terminal drawer: a fixed 260 pt well hung below the note. While it shows, the note (.app) gives up that
+ * height at its bottom and the drawer draws in the space the helper added to the panel (window.setDrawer),
+ * so the note keeps its size and its footer, notices, and dialogs stay inside the note.
+ */
+.app[data-terminal="open"] {
+  height: calc(100% - var(--terminal-height));
+}
+
+.terminal-drawer {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: var(--terminal-height);
+  box-sizing: border-box;
+  border-top: var(--hairline) solid var(--terminal-divider);
+  background: var(--terminal-bg);
+}
+
+.terminal-drawer[hidden] {
+  display: none;
+}
+
+.terminal-host {
+  box-sizing: border-box;
+  height: 100%;
+  /* Clear of the helper's 10 pt resize zones along the bottom and side edges. */
+  padding: var(--space-2) max(var(--edge-zone), var(--space-3)) max(var(--edge-zone), var(--space-2));
+}
+
+/* xterm.js paints its own background; the well's token wins so both appearances match the theme. */
+.terminal-drawer .terminal-host .xterm,
+.terminal-drawer .terminal-host .xterm-viewport {
+  background: var(--terminal-bg);
+}
+
+.terminal-host .xterm:focus,
+.terminal-host .xterm-helper-textarea:focus {
+  outline: none;
+}
