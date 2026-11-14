@@ -99,6 +99,7 @@ Overnote has few unit tests and many end-to-end tests.
   Serialization is covered by the fixture runner over `packages/core/tests/fixtures/`.
   Beyond that, unit tests are only for logic end-to-end tests cannot reach cheaply, such as fold rules, ordering and cursor math, trash purge, and the launcher's restart and version logic.
   Do not add a unit test for every function, and remove redundant ones when you touch an area.
+  Aim for broad coverage of behaviour, not line counts: one test per rule, not one per input.
 - Every feature closes with end-to-end tests that exercise it the way a person does:
   - editor behavior through Playwright against the real editor UI in the browser harness (`editor/tests/`), plus the shipped editor build against the real helper (`editor/tests/real-helper.spec.ts`);
   - helper and extension behavior through the real helper binary over its socket (`scripts/smoke-helper.sh`), and the Raycast commands with their data layer against it (`src/__tests__/commands.e2e.test.ts`);
