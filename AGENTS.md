@@ -11,6 +11,7 @@
 
 - Clean room: build only from this repository's docs, code, and tests plus public library documentation; never read the Raycast app bundle or any reverse-engineering output.
 - Testing follows the Testing policy in `CONTRIBUTING.md`: keep unit tests to the essentials and delete redundant ones in areas you touch; a feature is done only when its end-to-end test passes; run `npm run verify` before calling work done.
+- CI runs only `npm run verify:fast` on pull requests, so a green CI run never replaces `npm run verify`.
 - Protocol changes update `docs/architecture.md` in the same change as the code, with a protocol version bump.
 - `main` only moves through a merged pull request: work on a branch and open one; never push to `main` or force push.
   To catch up with `main`, merge `origin/main` into the branch rather than rebasing a pushed branch.

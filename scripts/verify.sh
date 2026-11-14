@@ -1,5 +1,5 @@
 #!/bin/bash
-# The full suite, and the only gate: checks run locally on macOS with Apple silicon.
+# The full suite, and the gate: it runs locally on macOS with Apple silicon. CI runs only the fast mode.
 #
 #   npm run verify
 #   VERIFY_MODE=fast npm run verify

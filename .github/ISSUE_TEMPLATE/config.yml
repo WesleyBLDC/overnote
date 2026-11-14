@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability privately
+    url: https://github.com/WesleyBLDC/overnote/security/advisories/new
+    about: Do not post security details in a public issue.
+  - name: Install, update, and troubleshooting help
+    url: https://github.com/WesleyBLDC/overnote/blob/main/docs/install.md
+    about: Install, update, backup, and uninstall steps, plus fixes for common problems.

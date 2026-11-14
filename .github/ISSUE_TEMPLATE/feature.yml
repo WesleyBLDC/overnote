@@ -1,0 +1,27 @@
+name: Feature idea
+description: Suggest something Overnote cannot do yet.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the roadmap in the README and the open issues first; a thumbs up on an existing issue helps more than a duplicate.
+        Overnote is a clean-room project: describe the behavior you want in your own words, and never paste material taken from the Raycast app.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation, and what gets in your way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you picture it working, including shortcuts or commands if you have some in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do instead today?
