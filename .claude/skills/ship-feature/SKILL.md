@@ -17,8 +17,9 @@ description: Take an Overnote change from a branch to a merged pull request with
 4. Commit as `WesleyBLDC <WesleyBLDC@users.noreply.github.com>`, with no co-author trailer.
 5. Publish the branch, then open the PR in a separate command: `gh-axi pr create -R WesleyBLDC/overnote --title "Area: summary" --body-file <file> --head <branch>`.
    Doing both in one command, or passing a base flag, trips the lead guard.
-   The guard also matches words in heredoc text, so write file contents with the editor tools rather than shell heredocs when they mention branch rules.
-6. Merge: `gh-axi pr merge <n> -R WesleyBLDC/overnote --squash --delete-branch`.
+   The guard also matches words in heredoc text, and a push in the same command as text naming `main`, so write file contents with the editor tools and run the push as its own command.
+6. Merge: `gh-axi pr merge <n> -R WesleyBLDC/overnote --squash --delete-branch --subject "<PR title> (#<n>)" --body "<one paragraph summary>"`.
+   Always pass `--subject` and `--body`: GitHub's generated squash message appends a `Co-authored-by` trailer, which the maintainer's rules forbid.
    "Base branch was modified" means another PR just merged; wait a few seconds and run it again.
    When several PRs are ready, merge them in dependency order, and merge `origin/main` into each later branch and verify again before merging it.
 7. Record any lesson from this run as a rule or skill step (see "Learning" in `AGENTS.md`).

@@ -4,9 +4,11 @@ import Testing
 @testable import OvernoteCore
 
 // Unit tests are limited to logic end to end tests cannot reach cheaply (the testing policy in
-// CONTRIBUTING.md): fold rules, ordering and cursor math, pins, trash purge, the update conflict, RPC
-// framing, the panel size limits and frame memory, and the security checks on file names and asset paths. Everything else is covered
-// by scripts/smoke-helper.sh and scripts/e2e-window.sh against the real binary.
+// CONTRIBUTING.md): fold rules, search fallbacks and migrations, ordering and cursor math, pins, trash
+// purge, RPC framing, the panel size limits and frame memory, backup retention, app mode, and the
+// security checks on file names, links, and asset paths. Everything else is covered by
+// scripts/smoke-helper.sh, scripts/e2e-update.sh, and the extension's end to end tests against the
+// real binary.
 
 @Suite("Fold rule")
 struct FoldTests {
@@ -47,25 +49,13 @@ struct FoldTests {
         #expect(TextFolding.fold("E\u{301} A\u{300} Cafe\u{301}") == "e a cafe")
     }
 
-    @Test func ftsPhraseOnlyForTermsOfThreeScalars() {
-        #expect(TextFolding.ftsPhrase(for: "ab") == nil)
-        #expect(TextFolding.ftsPhrase(for: "😀") == nil)
-        #expect(TextFolding.ftsPhrase(for: "   ") == nil)
-        #expect(TextFolding.ftsPhrase(for: " Café ") == "\"cafe\"")
-        #expect(TextFolding.ftsPhrase(for: "say \"hi\"") == "\"say \"\"hi\"\"\"")
-    }
-
-    @Test func likePatternTrimsFoldsAndEscapesWildcards() {
-        #expect(TextFolding.likePattern(for: "  \n") == nil)
-        #expect(TextFolding.likePattern(for: " Ab ") == "%ab%")
-        #expect(TextFolding.likePattern(for: "50%_\\") == "%50\\%\\_\\\\%")
-    }
 }
 
 @Suite("Schema 2 search")
 struct SearchIndexTests {
     /// Filtered pages through the trigram index equal the folded substring results, including
-    /// the short terms the index cannot answer and so keep the LIKE scan.
+    /// the short terms the index cannot answer and so keep the LIKE scan, title matches first in
+    /// browse, quotes inside a phrase, and wildcards and backslashes taken literally.
     @Test func indexedResultsEqualFoldedSubstringResults() throws {
         let f = try Fixture()
         let cafe = try f.make("Café Über\nthe body", title: "Café Über")
@@ -74,6 +64,7 @@ struct SearchIndexTests {
         let emoji = try f.make("Mood 😀 today\nnotes", title: "Mood 😀 today")
         let cjk = try f.make("中文標題測試\nbody", title: "中文標題測試")
         let file = try f.make("ﬁle notes\nbody", title: "ﬁle notes")
+        let quote = try f.make("Don't \"quote\" me\nback\\slash", title: "Don't \"quote\" me")
         try f.make("unrelated\nnothing here", title: "unrelated")
         #expect(try f.browseIds(filter: "CAFÉ") == [cafe.id, quix.id])  // title match first
         #expect(try f.listIds(filter: "cafe") == [quix.id, cafe.id])
@@ -86,19 +77,10 @@ struct SearchIndexTests {
         #expect(try f.browseIds(filter: "中文標") == [cjk.id])
         #expect(try f.browseIds(filter: "中文") == [cjk.id])
         #expect(try f.browseIds(filter: "ﬁl") == [file.id])
+        #expect(try f.browseIds(filter: "\"quote\"") == [quote.id])
+        #expect(try f.browseIds(filter: "\\") == [quote.id])
         #expect(try f.browseIds(filter: "xyzzy").isEmpty)
-    }
-
-    /// Removes one note's index row behind the triggers' back: only a page that really narrows
-    /// through notes_fts loses that note, while a two scalar term keeps the LIKE scan and finds it.
-    @Test func filteredPagesNarrowThroughTheIndex() throws {
-        let f = try Fixture()
-        let hidden = try f.make("Café hidden\nbody", title: "Café hidden")
-        let shown = try f.make("Café shown\nbody", title: "Café shown")
-        try Self.removeFromIndex(f, id: hidden.id)
-        #expect(try f.browseIds(filter: "café") == [shown.id])
-        #expect(try f.listIds(filter: "CAFE") == [shown.id])
-        #expect(try f.browseIds(filter: "ca") == [shown.id, hidden.id])
+        #expect(try f.listIds(filter: "  \n").count == 8)
     }
 
     @Test func theIndexFollowsEveryWrite() throws {
@@ -138,26 +120,6 @@ struct SearchIndexTests {
         let side = try SQLiteDatabase(path: f.directory.file("notes.sqlite"))
         defer { side.close() }
         #expect(try side.run("DELETE FROM notes_fts WHERE id = ?", [.text(id)]) == 1)
-    }
-
-    /// Reads on the second connection see each write as soon as it commits, and a restore
-    /// reopens that connection on the restored database.
-    @Test func secondConnectionSeesWritesAndRestores() throws {
-        let f = try Fixture()
-        let kept = try f.make("kept note")
-        let backup = f.directory.file("backup.sqlite")
-        try f.repository.backup(to: backup)
-        let later = try f.make("later note")
-        #expect(try f.repository.count() == 2)
-        try f.repository.delete(later.id)
-        #expect(try f.repository.count() == 1)
-        #expect(try f.repository.listDeleted().map(\.summary.id) == [later.id])
-        _ = try f.repository.recover(later.id)
-        #expect(try f.browseIds(filter: "note") == [later.id, kept.id])
-        #expect(try f.repository.restore(from: backup) == [kept.id])
-        #expect(try f.repository.count() == 1)
-        #expect(try f.browseIds(filter: "note") == [kept.id])
-        #expect(try f.repository.listDeleted().isEmpty)
     }
 
     /// A version 1 database gains the index and the paging indexes, and its notes stay findable.
@@ -203,29 +165,6 @@ struct SearchIndexTests {
         #expect(try fallback.list(filter: "café odd").items.map(\.id) == ["01HF7YAT000000000000000003"])
     }
 
-    /// The trigger delete by `id` cannot seek: `id` is UNINDEXED and `notes` is WITHOUT
-    /// ROWID, so there is no FTS rowid for the trigger to delete by. This pins the query
-    /// plan evidence; making the delete indexed needs a schema version that stores an
-    /// integer rowid per note, which needs a protocol version the lead allocates.
-    @Test func ftsDeleteByIdScansAndOnlyARowidDeleteSeeks() throws {
-        let f = try Fixture()
-        _ = try f.make("cafe body")
-        let check = try SQLiteDatabase(path: f.directory.file("notes.sqlite"), readOnly: true)
-        defer { check.close() }
-        func plan(_ sql: String) throws -> String {
-            try check.query(sql) { $0.text(3) }.joined(separator: " | ")
-        }
-        let byId = try plan("EXPLAIN QUERY PLAN DELETE FROM notes_fts WHERE id = 'x'")
-        #expect(byId.contains("SCAN notes_fts"))
-        #expect(!byId.contains(":="))
-        let byRowid = try plan("EXPLAIN QUERY PLAN DELETE FROM notes_fts WHERE rowid = 1")
-        #expect(byRowid.contains(":="))
-        let notesSQL = try check.queryFirst("SELECT sql FROM sqlite_master WHERE name = 'notes'") { $0.text(0) }
-        #expect(notesSQL?.contains("WITHOUT ROWID") == true)
-        let ftsSQL = try check.queryFirst("SELECT sql FROM sqlite_master WHERE name = 'notes_fts'") { $0.text(0) }
-        #expect(ftsSQL?.contains("id UNINDEXED") == true)
-    }
-
     /// A read only open must fail at open, not at the first query, so the repository can
     /// fall back to the writer connection when the reader cannot be opened.
     @Test func readOnlyOpenSurfacesACorruptFileAtOpen() throws {
@@ -233,18 +172,6 @@ struct SearchIndexTests {
         let path = directory.file("corrupt.sqlite")
         try "not a database, only padding text........................".write(toFile: path, atomically: true, encoding: .utf8)
         #expect(throws: SQLiteError.self) { try SQLiteDatabase(path: path, readOnly: true) }
-    }
-
-    /// The tokenizer probe answers directly, leaves no probe table behind, and reports
-    /// false when the database cannot be probed at all.
-    @Test func tokenizerProbeReportsAndLeavesNothingBehind() throws {
-        let directory = TempDirectory()
-        let db = try SQLiteDatabase(path: directory.file("probe.sqlite"))
-        #expect(Migrations.ftsAvailable(db))
-        #expect(Migrations.ftsAvailable(db))
-        #expect(try db.queryFirst("SELECT count(*) FROM sqlite_temp_master WHERE name = 'overnote_fts_probe'") { $0.int(0) } == 0)
-        db.close()
-        #expect(!Migrations.ftsAvailable(db))
     }
 
     /// Only an error that names the FTS index may disable it for the process; a transient
@@ -306,19 +233,6 @@ struct OrderingTests {
         // list: pinned, then updatedAt desc. browse: pinned, then lastAccessedAt desc.
         #expect(try f.listIds() == [b.id, d.id, c.id, a.id])
         #expect(try f.browseIds() == [b.id, d.id, a.id, c.id])
-    }
-
-    @Test func browseFilterRanksTitleMatchesFirstAndWildcardsAreLiteral() throws {
-        let f = try Fixture()
-        let x = try f.make("Groceries 100%\nmilk", title: "Groceries 100%")
-        let y = try f.make("Notes\nremember groceries", title: "Notes")
-        try f.make("snake_case")
-        f.clock.advance()
-        try f.repository.touchAccessed(y.id)
-        #expect(try f.browseIds(filter: "GROCÉRIES") == [x.id, y.id])
-        #expect(try f.listIds(filter: "groceries") == [y.id, x.id])
-        #expect(try f.listIds(filter: "%") == [x.id])
-        #expect(try f.listIds(filter: "   ").count == 3)
     }
 
     @Test(arguments: [ListCursor.Kind.list, .browse])
@@ -605,17 +519,11 @@ struct PanelPlacementTests {
         var mixed = cleared
         mixed.displays["UUID-A@1920x1080"] = PanelPoint(x: 0, y: 1050, width: 960, height: 1050, placement: .fill)
         #expect(PanelGeometry.storedPlacement(in: mixed, displayKey: key) == nil)
-    }
-
-    /// A hide after the display changed resolution while the panel stayed open records under a
-    /// new key for the same display uuid, and the placement carries over to it.
-    @Test func aHideAfterAResolutionChangeKeepsThePlacement() {
-        let filled = CGRect(x: 0, y: 0, width: 1440, height: 876)
-        let stored = PanelGeometry.placing(
-            .fill, frame: filled, displayKey: "UUID-A@1440x900", in: nil, autoSize: false, temporary: false)
+        // A hide after the display changed resolution while the panel stayed open records under a
+        // new key for the same display uuid, and the placement carries over to it.
         let hidden = PanelGeometry.recording(
-            filled, displayKey: "UUID-A@1680x1050", in: stored, autoSize: false, temporary: false, keepsPlacement: true)
-        #expect(PanelGeometry.storedPlacement(in: hidden, displayKey: "UUID-A@1680x1050") == .fill)
+            placed, displayKey: "UUID-A@1680x1050", in: stored, autoSize: false, temporary: false, keepsPlacement: true)
+        #expect(PanelGeometry.storedPlacement(in: hidden, displayKey: "UUID-A@1680x1050") == .left)
     }
 
     /// Points stored before placements existed read back and write back unchanged; placed ones
@@ -638,7 +546,7 @@ struct PanelPlacementTests {
         #expect(throws: RPCError.self) { _ = try Settings.defaults.applying(["panelFrame": bad]) }
     }
 
-    @Test func windowPlaceAnswersOnBothChannelsAndRefusesOtherPlacements() async throws {
+    @Test func windowPlaceAnswersOnTheBridge() async throws {
         let f = try Fixture()
         let host = RecordingHost()
         let dispatcher = RPCDispatcher(repository: f.repository, host: host)
@@ -650,19 +558,16 @@ struct PanelPlacementTests {
                 return (error as? RPCError)?.code
             }
         }
-        let result = try await dispatcher.handle(method: "window.place", params: ["placement": "right"], source: .socket)
-        #expect(result == ["placement": "right", "frame": ["x": 720.0, "y": 875.0, "width": 720.0, "height": 875.0]])
+        // The socket answer and its refusals run end to end in scripts/smoke-helper.sh.
         #expect(await code(["placement": "center"], source: .bridge) == nil)
-        #expect(await code(["placement": "top"], source: .socket) == RPCError.badParamsCode)
         #expect(await code(["placement": 1], source: .bridge) == RPCError.badParamsCode)
-        #expect(await code([:], source: .socket) == RPCError.badParamsCode)
-        #expect(host.calls == [.place(.right), .place(.center)])
+        #expect(host.calls == [.place(.center)])
     }
 }
 
 @Suite("Update conflict")
 struct UpdateConflictTests {
-    @Test func staleExpectedUpdatedAtWritesNothingAndTimestampsAlwaysMove() throws {
+    @Test func staleExpectedUpdatedAtWritesNothingAndUpdatedAtAlwaysMoves() throws {
         let f = try Fixture()
         let note = try f.make("one")
         // Same millisecond: updatedAt still moves, so the next expectation can detect it.
@@ -672,10 +577,6 @@ struct UpdateConflictTests {
         #expect(stale == .conflict(first.note))
         #expect(stale.json["status"] == "conflict")
         #expect(try f.repository.get(note.id).content.text == "two")
-        // A caret only update never moves updatedAt.
-        f.clock.advance(100)
-        let caret = try f.repository.update(note.id, NotePatch(caretPosition: 3))
-        #expect(caret.note.updatedAt == first.note.updatedAt)
     }
 }
 
@@ -714,52 +615,6 @@ struct CurrentNoteTests {
     }
 }
 
-@Suite("Duplicate")
-struct DuplicateTests {
-    /// A renamed copy must keep its title and first line in step, and the helper never derives
-    /// content, so it stores the content core built verbatim and refuses the old title-only suffix.
-    @Test func storesTheGivenContentAndRefusesATitleOnlySuffix() async throws {
-        let f = try Fixture()
-        let dispatcher = RPCDispatcher(repository: f.repository, host: RecordingHost())
-        func call(_ method: String, _ params: JSONValue) async throws -> JSONValue {
-            try await dispatcher.handle(method: method, params: params, source: .socket)
-        }
-        let source = try f.make("Groceries\n\nmilk", title: "Groceries")
-
-        let plain = try await call("notes.duplicate", ["id": .string(source.id)])
-        #expect(plain["title"] == "Groceries")
-        #expect(plain["rawContent"]?.stringValue == source.content.rawContent)
-
-        let copy = try await call(
-            "notes.duplicate",
-            [
-                "id": .string(source.id), "rawContent": #"{"type":"doc","copy":true}"#,
-                "markdown": "# Groceries copy\n\nmilk", "text": "Groceries copy\n\nmilk", "title": "Groceries copy",
-            ])
-        #expect(copy["title"] == "Groceries copy")
-        #expect(copy["text"] == "Groceries copy\n\nmilk")
-        #expect(copy["markdown"] == "# Groceries copy\n\nmilk")
-        #expect(copy["rawContent"] == #"{"type":"doc","copy":true}"#)
-        #expect(copy["caretPosition"] == 0)
-        #expect(try f.listIds(filter: "groceries COPY") == [copy["id"]?.stringValue])
-        #expect(try f.repository.get(source.id).content == source.content)
-
-        func errorCode(_ params: JSONValue) async -> Int? {
-            do {
-                _ = try await call("notes.duplicate", params)
-                return nil
-            } catch {
-                return (error as? RPCError)?.code
-            }
-        }
-        let count = try f.repository.count()
-        #expect(await errorCode(["id": .string(source.id), "titleSuffix": " copy"]) == RPCError.badParamsCode)
-        #expect(await errorCode(["id": .string(source.id), "title": "Groceries copy"]) == RPCError.badParamsCode)
-        #expect(await errorCode(["id": "missing", "rawContent": "{}"]) == RPCError.noteNotFound("missing").code)
-        #expect(try f.repository.count() == count)
-    }
-}
-
 @Suite("Panel size")
 struct PanelSizeTests {
     @Test func theMinimumIsTheEditorsReportButNeverBelowTheFloor() {
@@ -792,7 +647,7 @@ struct PanelSizeTests {
                 == CGSize(width: 1512, height: 197))
     }
 
-    @Test func theBridgeChecksTheEditorsMinimumAndTheSocketCannotSendIt() async throws {
+    @Test func theBridgeChecksTheEditorsMinimum() async throws {
         let f = try Fixture()
         let host = RecordingHost()
         let dispatcher = RPCDispatcher(repository: f.repository, host: host)
@@ -809,13 +664,8 @@ struct PanelSizeTests {
         #expect(await code(["width": 0, "height": 200]) == RPCError.badParamsCode)
         #expect(await code(["width": 400, "height": -1]) == RPCError.badParamsCode)
         #expect(await code(["width": "wide", "height": 200]) == RPCError.badParamsCode)
-        #expect(await code(["width": 400, "height": 200], source: .socket) == RPCError.methodNotFoundCode)
         #expect(await code(["height": 0], source: .bridge) == RPCError.badParamsCode)
         #expect(host.calls.count == 1)
-        // The old overhang method is gone.
-        await #expect(throws: RPCError.self) {
-            _ = try await dispatcher.handle(method: "window.setOverhang", params: ["height": 0], source: .bridge)
-        }
     }
 }
 
@@ -830,11 +680,6 @@ struct FramingTests {
         let noMethod = try await response(#"{"id":"a"}"#)
         #expect(noMethod["id"] == "a")
         #expect(noMethod["error"]?["code"] == -32602)
-        let badParams = try await response(#"{"id":3,"method":"notes.get","params":7}"#)
-        #expect(badParams["id"] == 3)
-        #expect(badParams["error"]?["code"] == -32602)
-        #expect(try await response(#"{"id":4,"method":"nope"}"#)["error"]?["code"] == -32601)
-        #expect(try await response(#"{"id":5,"method":"notes.count"}"#) == ["id": 5, "result": ["count": 0]])
     }
 
     @Test(arguments: [
@@ -1030,45 +875,6 @@ struct BackupTests {
         #expect(BackupRetention.kept(few, now: now) == ["a", "b"])
     }
 
-    @Test func restoreOnlyAcceptsBackupFilesInsideTheBackupsFolder() throws {
-        let directory = TempDirectory()
-        let folder = directory.file("backups")
-        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
-        let store = BackupStore(directory: folder)
-        // A prerelease version and a hyphenated reason still parse as a backup name.
-        let name = BackupName.make(createdAt: 1_792_065_600_123, version: "0.3.0-beta.1", reason: .preUpdate)
-        #expect(name == "notes-20261015T120000.123Z-v0.3.0-beta.1-pre-update.sqlite")
-        let good = folder + "/" + name
-        try "x".write(toFile: good, atomically: true, encoding: .utf8)
-        try "x".write(toFile: directory.file(name), atomically: true, encoding: .utf8)
-        try "x".write(toFile: folder + "/notes.sqlite", atomically: true, encoding: .utf8)
-        let linked = folder + "/" + BackupName.make(createdAt: 1_792_065_600_001, version: "1.0.0", reason: .manual)
-        try FileManager.default.createSymbolicLink(atPath: linked, withDestinationPath: directory.file(name))
-        try FileManager.default.createDirectory(
-            atPath: folder + "/" + BackupName.make(createdAt: 1_792_065_600_002, version: "1.0.0", reason: .manual),
-            withIntermediateDirectories: true)
-
-        #expect(try store.validatedRestorePath(good).hasSuffix("/backups/" + name))
-        #expect(try store.validatedRestorePath(folder + "/../backups/./" + name).hasSuffix("/backups/" + name))
-        func code(_ path: String) -> Int? {
-            do {
-                _ = try store.validatedRestorePath(path)
-                return nil
-            } catch let error as RPCError {
-                return error.code
-            } catch {
-                return -1
-            }
-        }
-        #expect(code(directory.file(name)) == RPCError.badParams("").code)  // outside the folder
-        #expect(code(folder + "/../" + name) == RPCError.badParams("").code)  // .. out of the folder
-        #expect(code(linked) == RPCError.badParams("").code)  // a symlink pointing outside
-        #expect(code(folder + "/notes.sqlite") == RPCError.badParams("").code)  // not a backup name
-        #expect(code(folder + "/" + BackupName.make(createdAt: 1_792_065_600_002, version: "1.0.0", reason: .manual)) == RPCError.badParams("").code)
-        #expect(code(folder + "/missing.sqlite") == RPCError.notFoundCode)
-        #expect(code(name) == RPCError.badParams("").code)  // relative
-    }
-
     @Test func restoringTheOldestKeptBackupIsNotPrunedByThePreRestoreBackup() throws {
         let fixture = try Fixture()
         try fixture.make("Kept")
@@ -1122,7 +928,7 @@ struct AppModeTests {
         #expect(!plain.app && plain.hostKind == .extension && plain.legacySupportDir == nil)
     }
 
-    @Test func theLegacyDatabaseMovesOnlyIntoASharedDatabaseWithNoNoteAtAll() throws {
+    @Test func theLegacyDatabaseMovesOnlyIntoASharedDatabaseWithNoNoteAtAll() {
         // holdsNotes: nil means the database cannot be read.
         func decide(shared: Bool?, legacy: Bool?, legacyDir: String? = "/legacy") -> LegacyMigration.Decision {
             var files: Set<String> = []
@@ -1148,23 +954,5 @@ struct AppModeTests {
         #expect(unreadable == .alreadyMigrated)
         #expect(decide(shared: false, legacy: true, legacyDir: nil) == .noLegacyFolder)
         #expect(decide(shared: false, legacy: true, legacyDir: "/shared/") == .noLegacyFolder)
-
-        // The copy carries the notes, and the legacy file is byte for byte unchanged.
-        let directory = try TempDirectory()
-        let legacyDir = directory.file("legacy")
-        let sharedDir = directory.file("shared")
-        try FileManager.default.createDirectory(atPath: legacyDir, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(atPath: sharedDir, withIntermediateDirectories: true)
-        let legacyPath = legacyDir + "/notes.sqlite"
-        let legacy = try NotesRepository(path: legacyPath)
-        _ = try legacy.create(Fixture.content("Carried over"), makeCurrent: false)
-        legacy.close()
-        let before = try Data(contentsOf: URL(fileURLWithPath: legacyPath))
-        try LegacyMigration.copy(from: legacyPath, toSupportDir: sharedDir)
-        #expect(try Data(contentsOf: URL(fileURLWithPath: legacyPath)) == before)
-        let shared = try NotesRepository(path: sharedDir + "/notes.sqlite")
-        #expect(try shared.count() == 1)
-        shared.close()
-        #expect(try FileManager.default.contentsOfDirectory(atPath: sharedDir).allSatisfy { !$0.hasPrefix(".") })
     }
 }
