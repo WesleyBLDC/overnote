@@ -2,6 +2,7 @@
 import { normalizeLinkHref } from "@overnote/core";
 import type { Editor } from "@tiptap/core";
 import { useEffect, useRef, useState } from "react";
+import { focusEditorNow } from "../editor/commands";
 import type { LinkTarget } from "../editor/linkRange";
 import { useDropdownPlacement } from "./hooks";
 import { Icon } from "./icons";
@@ -42,17 +43,12 @@ export function LinkPopover({ editor, target, onClose, notify, openUrl, copy }: 
 
   const close = () => {
     onClose();
-    editor.commands.focus();
+    focusEditorNow(editor);
   };
 
   const unlink = () => {
-    editor
-      .chain()
-      .focus()
-      .setTextSelection({ from: target.from, to: target.to })
-      .unsetLink()
-      .setTextSelection(target.to)
-      .run();
+    focusEditorNow(editor);
+    editor.chain().setTextSelection({ from: target.from, to: target.to }).unsetLink().setTextSelection(target.to).run();
     onClose();
   };
 
@@ -66,9 +62,9 @@ export function LinkPopover({ editor, target, onClose, notify, openUrl, copy }: 
       notify("Invalid link. Enter a valid URL or deeplink.", "error");
       return;
     }
+    focusEditorNow(editor);
     editor
       .chain()
-      .focus()
       .setTextSelection({ from: target.from, to: target.to })
       .unsetLink()
       .setLink({ href })

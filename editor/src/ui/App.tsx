@@ -19,7 +19,7 @@ import type { AnyExtension, Editor } from "@tiptap/core";
 import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Api } from "../bridge/api";
-import { runFormat, type FormatId } from "../editor/commands";
+import { focusEditorNow, runFormat, type FormatId } from "../editor/commands";
 import { createEditorExtensions } from "../editor/extensions";
 import { createNoteLowlight, loadGrammars } from "../editor/lowlight";
 import { chooseLinkTarget, type LinkTarget } from "../editor/linkRange";
@@ -291,7 +291,7 @@ export function App({ api }: { api: Api }) {
         if (cancelled) return;
         setSettings(ready.settings);
         await session.applyBoot(ready.windowData);
-        editor.commands.focus();
+        focusEditorNow(editor);
       })
       .catch((error: unknown) => notify(`Could not load notes: ${String(error)}`, "error"));
     return () => {
@@ -305,7 +305,9 @@ export function App({ api }: { api: Api }) {
       api.on("note.new", ({ note }) => void session.handleNoteNew(note)),
       api.on("notes.changed", ({ ids }) => void session.handleNotesChanged(ids)),
       api.on("window.didShow", () => {
-        if (!editor.isDestroyed) editor.commands.focus(undefined, { scrollIntoView: true });
+        if (editor.isDestroyed) return;
+        focusEditorNow(editor);
+        editor.commands.scrollIntoView();
       }),
       api.on("window.didHide", () => session.saveInBackground()),
       api.on("window.didResignKey", () => session.saveInBackground()),
@@ -471,7 +473,7 @@ export function App({ api }: { api: Api }) {
   const moveItem = useCallback(
     (direction: "up" | "down") => {
       moveListItem(direction)(editor.state, editor.view.dispatch, editor.view);
-      editor.commands.focus();
+      focusEditorNow(editor);
     },
     [editor],
   );
@@ -872,7 +874,7 @@ export function App({ api }: { api: Api }) {
           if (!h.find) setFind({ term: selected });
           else if (!findRef.current?.focusOrClose(selected)) {
             setFind(null);
-            editor.commands.focus();
+            focusEditorNow(editor);
           }
         });
       }
@@ -917,7 +919,8 @@ export function App({ api }: { api: Api }) {
 
   const runSlash = (item: SlashItem) => {
     if (!slash) return;
-    editor.chain().focus().deleteRange({ from: slash.from, to: slash.to }).run();
+    focusEditorNow(editor);
+    editor.chain().deleteRange({ from: slash.from, to: slash.to }).run();
     runFormat(editor, item.id as FormatId, openLink);
   };
 
@@ -986,7 +989,7 @@ export function App({ api }: { api: Api }) {
           }
           if (event.target === event.currentTarget) {
             event.preventDefault();
-            editor.commands.focus("end");
+            focusEditorNow(editor, "end");
           }
         }}
       >
@@ -1027,7 +1030,8 @@ export function App({ api }: { api: Api }) {
           from={emojiQuery.from}
           query={emojiQuery.query}
           onPick={(emoji) => {
-            editor.chain().focus().insertContentAt({ from: emojiQuery.from, to: emojiQuery.to }, emoji).run();
+            focusEditorNow(editor);
+            editor.chain().insertContentAt({ from: emojiQuery.from, to: emojiQuery.to }, emoji).run();
             recordEmojiUse(emoji);
           }}
           onDismiss={() => setEmojiDismissed(emojiQuery.from)}

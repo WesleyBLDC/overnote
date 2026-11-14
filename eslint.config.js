@@ -37,6 +37,21 @@ module.exports = defineConfig([
     files: ["editor/src/**/*.{ts,tsx}"],
     extends: [reactHooks.configs.flat.recommended],
     languageOptions: { globals: globals.browser },
+    rules: {
+      // Tiptap's focus command focuses again a frame later and can steal focus from a panel opened
+      // in between (⌘K right after a format bar click); focusEditorNow focuses at once.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.property.name='focus'][callee.object.property.name='commands']",
+          message: "Use focusEditorNow(editor) from editor/commands: Tiptap's focus command refocuses a frame later.",
+        },
+        {
+          selector: "CallExpression[callee.property.name='focus'][callee.object.callee.property.name='chain']",
+          message: "Call focusEditorNow(editor) before the chain: Tiptap's focus command refocuses a frame later.",
+        },
+      ],
+    },
   },
   {
     files: ["editor/tests/**/*.ts", "editor/unit/**/*.ts", "editor/*.config.ts", "packages/core/**/*.ts"],

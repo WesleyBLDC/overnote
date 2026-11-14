@@ -160,6 +160,8 @@ Keep it that way when you add one.
 
 Flaky tests count as failures.
 If you see one, even outside your change, please fix it or open an issue.
+End-to-end tests must hold on a busy machine: wait on the state the test cares about (web-first assertions, `expect.poll`, or `page.clock` for timers), never on fixed sleeps, wall clock bounds, longer timeouts, or retries.
+Before landing a new or changed spec, run it with `npx playwright test <spec> --repeat-each=20` from `editor/` while the machine is under load.
 
 ## Style
 
