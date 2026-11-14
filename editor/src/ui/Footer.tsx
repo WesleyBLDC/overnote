@@ -4,49 +4,51 @@ import { characterLabel, wordLabel } from "../lib/relativeTime";
 import { FormatBar } from "./FormatBar";
 import { Icon } from "./icons";
 
+interface Counts {
+  characters: number;
+  words: number;
+}
+
 interface FooterProps {
   editor: Editor | null;
-  counts: { characters: number; words: number };
+  counts: Counts;
+  /** What the selection holds, or null when nothing is selected. */
+  selected: Counts | null;
   countMode: CountMode;
   showFormatBar: boolean;
   onToggleCount: () => void;
-  onToggleFormatBar: () => void;
   openLink: () => void;
 }
 
-/** Bottom bar: the counter (or the format bar) in the middle and the format bar toggle on the right. */
+const number = (n: number) => n.toLocaleString("en-US");
+
+/**
+ * The bottom of the panel: an overlay, so it takes no height from the note. The count pill sits in the
+ * bottom right corner, and the format island, when it is on (⌥⌘, or ⌘K), floats in the middle.
+ */
 export function Footer(props: FooterProps) {
-  const label = props.countMode === "words" ? wordLabel(props.counts.words) : characterLabel(props.counts.characters);
+  const words = props.countMode === "words";
+  const total = words ? props.counts.words : props.counts.characters;
+  const part = props.selected ? (words ? props.selected.words : props.selected.characters) : null;
+  const label = words ? wordLabel(total) : characterLabel(total);
   return (
     <footer className="footer" data-testid="footer">
-      <div className="footer-spacer" />
-      <div className="footer-center">
-        {props.showFormatBar && props.editor ? (
+      {props.showFormatBar && props.editor ? (
+        <div className="footer-center">
           <FormatBar editor={props.editor} openLink={props.openLink} />
-        ) : (
-          <button
-            type="button"
-            className="counter"
-            data-testid="counter"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={props.onToggleCount}
-            title="Switch between characters and words"
-          >
-            {label}
-          </button>
-        )}
-      </div>
+        </div>
+      ) : null}
       <button
         type="button"
-        className={`icon-button round chrome${props.showFormatBar ? " is-active" : ""}`}
-        title={props.showFormatBar ? "Hide Format Buttons (⌥⌘,)" : "Show Format Buttons (⌥⌘,)"}
-        aria-label={props.showFormatBar ? "Hide Format Buttons" : "Show Format Buttons"}
-        data-testid="format-toggle"
-        tabIndex={-1}
+        className="counter"
+        data-testid="counter"
+        aria-label={part === null ? label : `${number(part)} of ${label} selected`}
         onMouseDown={(event) => event.preventDefault()}
-        onClick={props.onToggleFormatBar}
+        onClick={props.onToggleCount}
+        title="Switch between characters and words"
       >
-        <Icon name="sliders" />
+        <span className="counter-value">{part === null ? number(total) : `${number(part)}/${number(total)}`}</span>
+        <Icon name={words ? "words" : "format"} />
       </button>
     </footer>
   );

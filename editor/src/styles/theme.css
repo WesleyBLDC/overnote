@@ -1,20 +1,105 @@
 /*
- * Overnote theme: every color, size, spacing, radius, and motion token lives here.
- * The native panel provides the vibrancy material; the editor paints a deep, nearly solid tint on top
- * (--body-tint) so text keeps strong contrast whatever is behind the window.
- * The accent is Overnote iris violet, tuned darker in light mode and paler in dark mode so every text, fill, and indicator role keeps its contrast on the body tint.
+ * Overnote theme: every color, type, size, spacing, radius, and motion token lives here.
+ * Colors are the Graphite theme from the branding guide: neutral graphite surfaces, with near black (light)
+ * or near white (dark) as the accent. Components refer to these tokens only, never to raw color values.
+ * The guide's tokens come first, exactly as the guide gives them; the tokens after them are Overnote's own,
+ * derived from the guide's palette.
+ * Rules from the guide: links are --accent-strong with an underline in --link-underline; an active button is an
+ * --accent-soft fill with an --accent-strong icon, and hover is --accent-soft at two thirds strength; text under
+ * 14 px is never lighter than --text-tertiary.
  */
+
+/* Geist and Geist Mono (SIL Open Font License 1.1, see THIRD_PARTY_NOTICES.md), bundled with the editor build. */
+/* block: the panel stays hidden until the editor is ready, so the fallback face is never painted. */
+@font-face {
+  font-family: "Geist";
+  src: url("../fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("../fonts/Geist-Italic-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../fonts/GeistMono-Italic-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: block;
+}
+
 :root {
   color-scheme: light dark;
   --zoom: 1;
 
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
-  /* The UI base (1rem at 100% zoom); note text is --note-scale times larger (16.8 px at 100%). */
+  /* ---- Graphite: type ---- */
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ---- Graphite: light ---- */
+  --bg-panel: #fbfbfc;
+  --bg-raised: #ffffff;
+  --bg-sunken: #f1f1f3;
+  --bg-code: #ededf0;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --text: #1a1a1d;
+  --text-secondary: #5f6168;
+  --text-tertiary: #6b6e75;
+  --accent: #27272a;
+  --accent-strong: #18181b;
+  --accent-soft: rgba(24, 24, 27, 0.08);
+  --on-accent: #ffffff;
+  /* Translucent: WebKit uses it as is, so the list gutter fill (editor.css) matches the native highlight. */
+  --selection: rgba(24, 24, 27, 0.14);
+  --focus-ring: rgba(24, 24, 27, 0.55);
+  --cursor: #27272a;
+  --link-underline: rgba(24, 24, 27, 0.35);
+  --danger: #c9302c;
+  --success: #1f7a45;
+  --warning: #9a5b00;
+  --island: rgba(255, 255, 255, 0.88);
+  /* For an island pinned open over the note; the format bar today always floats, so it uses --island. */
+  --island-pinned: #ffffff;
+  --island-blur: 20px;
+
+  /*
+   * ---- type scale ----
+   * The UI base is 14 px at 100% zoom (1rem), and zoom scales the root font size, so every size here is in rem:
+   * at 100% each one is exactly the guide's pixel size, and zoom scales them all together.
+   */
   --font-size: 14px;
+  --type-title: calc(23rem / 14);
+  --type-heading: calc(18rem / 14);
+  --type-subheading: calc(16rem / 14);
+  --type-body: calc(15rem / 14);
+  --type-secondary: calc(13rem / 14);
+  --type-small: calc(11.5rem / 14);
+  --type-label: calc(11rem / 14);
+  --type-code: calc(13rem / 14);
+  --weight-heading: 600;
+  --weight-secondary: 500;
+  --weight-label: 600;
   --line-height: 1.6;
-  --note-scale: 1.2;
-  --note-line-height: 1.65;
+  --line-height-code: 1.65;
+  /* Tracking tightens as size grows: 0 at body size, -1% at 20 px and above; uppercase labels open up. */
+  --tracking-title: -0.01em;
+  --tracking-label: 0.06em;
 
   /* ---- spacing and shape (rem, so zoom scales them) ---- */
   --space-0: 0.125rem;
@@ -46,53 +131,42 @@
   --pop-scale: 0.98;
   --panel-scale: 0.92;
 
-  /* ---- colors: light ---- */
-  --body-tint: rgba(251, 251, 252, 0.94);
-
-  --accent: #5b4bd5;
-  --accent-soft: rgba(91, 75, 213, 0.12);
-  --accent-strong: #4738b0;
-  --on-accent: #ffffff;
-
-  --text: rgba(12, 12, 14, 0.9);
-  --text-secondary: rgba(12, 12, 14, 0.58);
-  --text-essential: rgba(12, 12, 14, 0.62);
-  --text-tertiary: rgba(12, 12, 14, 0.42);
-  --text-dimmed: rgba(12, 12, 14, 0.42);
-  --placeholder: rgba(12, 12, 14, 0.3);
-
-  --surface: transparent;
-  --surface-raised: #ffffff;
-  --surface-hover: rgba(12, 12, 14, 0.05);
-  --surface-selected: rgba(12, 12, 14, 0.12);
-  --surface-code: rgba(12, 12, 14, 0.07);
-  --border: rgba(12, 12, 14, 0.08);
-  --border-strong: rgba(12, 12, 14, 0.16);
-  --link-underline: rgba(12, 12, 14, 0.36);
-  --focus-ring: #40309f;
-  --focus-gap: #ffffff;
+  /* ---- colors derived from Graphite ---- */
+  /* Hover is the active fill at two thirds strength. */
+  --accent-soft-hover: color-mix(in srgb, var(--accent-soft) 67%, transparent);
   --shadow:
     0 0.6rem 2rem rgba(10, 12, 16, 0.16), 0 0.1rem 0.35rem rgba(10, 12, 16, 0.06), 0 0 0 0.5px rgba(10, 12, 16, 0.12);
   --shadow-small: 0 0.15rem 0.6rem rgba(10, 12, 16, 0.1), 0 0 0 0.5px rgba(10, 12, 16, 0.1);
-  /* Translucent: WebKit uses it as is, so the list gutter fill (editor.css) matches the native highlight. */
-  --selection: rgba(91, 75, 213, 0.16);
-  --find-match: rgba(255, 196, 0, 0.35);
-  --find-active: rgba(255, 140, 0, 0.6);
-  --find-active-outline: rgba(190, 95, 0, 0.95);
-  --danger: #d13b3b;
-  --success: #2f7d4f;
+  /* Find highlights are --warning washes; the current match adds a solid --warning outline. */
+  --find-match: color-mix(in srgb, var(--warning) 20%, transparent);
+  --find-active: color-mix(in srgb, var(--warning) 40%, transparent);
+  --find-active-outline: var(--warning);
   --dialog-scrim: rgba(0, 0, 0, 0.12);
+  /* From the editor board: the quote bar and text, the task box ring, the count pill, tooltips, and the panel. */
+  --quote-bar: rgba(0, 0, 0, 0.18);
+  --text-quote: #3a3d43;
+  --checkbox-ring: #b4b6bb;
+  --count-text: var(--text-secondary);
+  --tooltip-bg: var(--bg-raised);
+  --tooltip-ring: var(--border-strong);
+  --tooltip-key: var(--text-tertiary);
+  --panel-shadow: 0 14px 40px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+  /* The switch knob stays white in both modes, like a native switch. */
+  --switch-knob: #ffffff;
+  --switch-knob-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 
-  --keycap-bg: rgba(12, 12, 14, 0.05);
-  --keycap-border: rgba(12, 12, 14, 0.08);
-  --keycap-text: rgba(12, 12, 14, 0.5);
+  /* Keycaps are neutral: a sunken chip with a strong hairline, in tertiary text that turns secondary on a selected row. */
+  --keycap-bg: var(--bg-sunken);
+  --keycap-border: var(--border-strong);
+  --keycap-text: var(--text-tertiary);
 
-  --code-keyword: #8b3fbf;
-  --code-string: #1f7a3a;
-  --code-number: #b35900;
-  --code-comment: rgba(12, 12, 14, 0.62);
-  --code-title: #1d5fbf;
-  --code-attr: #9a5b00;
+  /* Syntax colors: each one keeps 4.5:1 or better on --bg-code and --bg-sunken. */
+  --code-keyword: #b4233c;
+  --code-string: #1f7a45;
+  --code-number: #a14900;
+  --code-comment: var(--text-secondary);
+  --code-title: #1f5bb5;
+  --code-attr: #7a5800;
 
   /* ---- window layout ---- */
   --drag-strip: 12px;
@@ -101,93 +175,100 @@
   --edge-zone: 10px;
   /* Dropdowns keep this far from the panel's sides and bottom: clear of the edge zones, and never touching. */
   --dropdown-inset: max(var(--edge-zone), var(--space-2));
-  /* One line note at 100%: 52 (toolbar) + 7 + 27.7 (one 16.8 px line at 1.65) + 4.2 + 48 (footer), about 139 points. */
-  --toolbar-height: 3.715rem;
-  --content-top: 0.5rem;
-  --content-bottom: 0.3rem;
-  --footer-height: 3.43rem;
+  /*
+   * The editor board's layout, in rem so zoom scales it (px at 100%): a 46 pt top bar with 30 pt icon buttons,
+   * note text inset 28 pt, 6 pt below the bar, and 60 pt of room at the bottom for the overlaid count pill and
+   * format island. One line note at 100%: 46 + 6 + 24 (one 15 px line at 1.6) + 60, about 136 points.
+   */
+  --toolbar-height: calc(46rem / 14);
+  --toolbar-inset-left: calc(16rem / 14);
+  --toolbar-button: calc(30rem / 14);
+  --toolbar-button-radius: calc(8rem / 14);
+  --toolbar-icon: calc(17rem / 14);
+  --toolbar-stroke: calc(1.6rem / 14);
+  --close-dot: calc(12rem / 14);
+  --content-top: calc(6rem / 14);
+  --content-bottom: calc(60rem / 14);
+  --footer-inset: calc(12rem / 14);
+  --count-height: calc(24rem / 14);
+  /* The format island stays this far from both sides, clear of the count pill. */
+  --count-room: calc(max(var(--corner-clearance), var(--footer-inset)) + 6rem);
+  --radius-pill: calc(6rem / 14);
+  --radius-panel: 14px;
   /* Content that scrolls under the toolbar fades out over this height. */
   --scroll-fade: 1.4rem;
-  /* Toolbar and format bar icons are about a third larger than the 1rem base, with hit targets to match. */
+  /* Format bar icons are about a third larger than the 1rem base, with hit targets to match. */
   --chrome-icon: 1.32rem;
   --chrome-hit: 2.25rem;
-  --close-size: 1.1rem;
-  /* Buttons in the footer, the panels, and the popovers. */
+  /* Buttons in the panels and the popovers. */
   --button-size: 1.87rem;
-  --button-size-round: 2.53rem;
-  /* The last toolbar glyph ends on the text column's right edge, clear of the corner square. */
-  --toolbar-inset-right: max(
-    var(--corner-clearance),
-    calc(var(--content-x) - (var(--chrome-hit) - var(--chrome-icon)) / 2)
-  );
-  --close: #ec5f59;
+  /* The board insets the last button 12 pt; it stays clear of the helper's 24 pt corner square. */
+  --toolbar-inset-right: max(var(--corner-clearance), calc(12rem / 14));
+  --close: #ec6559;
   --close-glyph: rgba(0, 0, 0, 0.6);
-  --quote-border: rgba(12, 12, 14, 0.2);
   /* In em, so it resolves against the note text where it is used. */
   --list-gutter: 1.55em;
-  /* The text column starts where the Close control does: just clear of the 24 pt corner square. */
-  --content-x: 1.715rem;
+  --content-x: 2rem;
   /* Panels (⌘K, browse, settings): row heights and widths. */
   --row-height: 2.4rem;
   --row-height-tall: 3.2rem;
   --panel-width: 22.8rem;
-  --harness-backdrop: linear-gradient(135deg, #e9eef2, #d9e4ea);
-  --harness-material: rgba(236, 238, 241, 0.7);
-  --scrollbar-thumb: rgba(12, 12, 14, 0.22);
-  --scrollbar-thumb-hover: rgba(12, 12, 14, 0.38);
+  --harness-backdrop: linear-gradient(135deg, #e9e9ec, #d6d6da);
+  --harness-material: rgba(236, 236, 239, 0.7);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.22);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.38);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --body-tint: rgba(24, 24, 26, 0.94);
-    --scrollbar-thumb: rgba(255, 255, 255, 0.22);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
-
-    --accent: #8f80ff;
-    --accent-soft: rgba(143, 128, 255, 0.18);
-    --accent-strong: #b8aeff;
-    --on-accent: #191426;
-
-    --text: rgba(255, 255, 255, 0.94);
-    --text-secondary: rgba(255, 255, 255, 0.6);
-    --text-essential: rgba(255, 255, 255, 0.68);
-    --text-tertiary: rgba(255, 255, 255, 0.4);
-    --text-dimmed: rgba(255, 255, 255, 0.4);
-    --placeholder: rgba(255, 255, 255, 0.3);
-
-    --surface-raised: #252528;
-    --quote-border: rgba(255, 255, 255, 0.22);
-    --surface-hover: rgba(255, 255, 255, 0.06);
-    --surface-selected: rgba(255, 255, 255, 0.15);
-    --surface-code: rgba(255, 255, 255, 0.09);
+    /* ---- Graphite: dark ---- */
+    --bg-panel: #18181a;
+    --bg-raised: #232326;
+    --bg-sunken: #111113;
+    --bg-code: #26262a;
     --border: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.16);
-    --link-underline: rgba(255, 255, 255, 0.42);
-    --focus-ring: #d4ccff;
-    --focus-gap: #252528;
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text: #ededef;
+    --text-secondary: #a1a1a8;
+    --text-tertiary: #8e8e95;
+    --accent: #e4e4e7;
+    --accent-strong: #ffffff;
+    --accent-soft: rgba(255, 255, 255, 0.12);
+    --on-accent: #18181a;
+    --selection: rgba(255, 255, 255, 0.18);
+    --focus-ring: rgba(255, 255, 255, 0.55);
+    --cursor: #e4e4e7;
+    --link-underline: rgba(255, 255, 255, 0.35);
+    --danger: #ff7b72;
+    --success: #7dd69a;
+    --warning: #e6b673;
+    --island: rgba(35, 35, 38, 0.88);
+    --island-pinned: #232326;
+    --island-blur: 20px;
+
+    /* ---- derived ---- */
     --shadow:
       0 0.6rem 2rem rgba(0, 0, 0, 0.45), 0 0.1rem 0.35rem rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
     --shadow-small: 0 0.15rem 0.6rem rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
-    --selection: rgba(143, 128, 255, 0.24);
-    --find-match: rgba(255, 200, 0, 0.3);
-    --find-active: rgba(255, 150, 0, 0.55);
-    --find-active-outline: rgba(255, 175, 70, 0.95);
-    --danger: #ff6b6b;
-    --success: #7dd69a;
+    --find-match: color-mix(in srgb, var(--warning) 22%, transparent);
+    --find-active: color-mix(in srgb, var(--warning) 40%, transparent);
     --dialog-scrim: rgba(0, 0, 0, 0.3);
+    --quote-bar: rgba(255, 255, 255, 0.22);
+    --text-quote: #d4d4d8;
+    --checkbox-ring: #5a5a60;
+    --count-text: var(--text-tertiary);
+    --tooltip-bg: #2a2a2e;
+    --panel-shadow: 0 14px 40px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(255, 255, 255, 0.14);
 
-    --keycap-bg: rgba(255, 255, 255, 0.07);
-    --keycap-border: rgba(255, 255, 255, 0.07);
-    --keycap-text: rgba(255, 255, 255, 0.5);
-
-    --code-keyword: #d19bff;
-    --code-string: #8fd99c;
-    --code-number: #ffb86b;
-    --code-comment: rgba(255, 255, 255, 0.68);
+    --code-keyword: #ff8f80;
+    --code-string: #7dd69a;
+    --code-number: #f5a86b;
     --code-title: #82b6ff;
-    --code-attr: #f0c674;
-    --harness-backdrop: linear-gradient(135deg, #2a3a46, #10161b);
-    --harness-material: rgba(52, 54, 58, 0.62);
+    --code-attr: #e6c87a;
+    --harness-backdrop: linear-gradient(135deg, #34343a, #111113);
+    --harness-material: rgba(52, 52, 56, 0.62);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.22);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
   }
 }
 

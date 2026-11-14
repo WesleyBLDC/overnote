@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
@@ -37,9 +38,27 @@ function nativeHtml(): Plugin {
   };
 }
 
+/**
+ * The bundled Geist fonts are licensed under the SIL Open Font License, which asks that the licence travel
+ * with the font files, so the build writes it next to them.
+ */
+function fontLicence(): Plugin {
+  return {
+    name: "overnote-font-licence",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "assets/Geist-OFL.txt",
+        source: readFileSync(new URL("./src/fonts/OFL.txt", import.meta.url), "utf8"),
+      });
+    },
+  };
+}
+
 export default defineConfig({
   base: "./",
-  plugins: [react(), nativeHtml()],
+  plugins: [react(), nativeHtml(), fontLicence()],
   build: {
     outDir: OUT_DIR,
     emptyOutDir: true,
