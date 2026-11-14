@@ -6,6 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/WesleyBLDC/overnote)](https://github.com/WesleyBLDC/overnote/releases)
+[![CI](https://github.com/WesleyBLDC/overnote/actions/workflows/ci.yml/badge.svg)](https://github.com/WesleyBLDC/overnote/actions/workflows/ci.yml) <!-- store:remove-line -->
 
 A floating Markdown notepad for Raycast.
 One hotkey opens a panel over whatever you are doing, without stealing focus from the app underneath.
@@ -144,6 +145,9 @@ npm run verify           # full local gate
 | Doc | Contents |
 |---|---|
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, layout, testing, clean room |
+| [`SUPPORT.md`](SUPPORT.md) | Where to get help |
+| [`SECURITY.md`](SECURITY.md) | Report a vulnerability privately |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | How we treat each other |
 | [`docs/architecture.md`](docs/architecture.md) | Protocol and parts |
 | [`docs/install.md`](docs/install.md) | Install, update, backups |
 | [`docs/releasing.md`](docs/releasing.md) | Release packaging |

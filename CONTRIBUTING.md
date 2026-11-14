@@ -2,6 +2,17 @@
 
 Thanks for your interest in Overnote!
 This guide covers how to set up the project, how it is organized, and the few rules that keep it healthy.
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
+## Before you start
+
+- **Bugs:** open an issue with the Bug form, with steps to reproduce.
+- **Ideas:** open an issue with the Feature idea form, and check the roadmap in the README first.
+- **Security problems:** report them privately, as [`SECURITY.md`](SECURITY.md) describes, never in a public issue.
+- **Questions:** [`SUPPORT.md`](SUPPORT.md) lists where to look.
+
+For code, discuss anything bigger than a small fix in an issue first, so the work fits the plan before you spend time on it.
+Keep pull requests small and focused, one change each, and fill in the pull request template.
 
 ## Development setup
 
@@ -66,6 +77,7 @@ Add `?seed=empty` to the URL to start with no notes.
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
 | `metadata/` | Raycast Store screenshots, used by `scripts/prepare-store.sh` |
 | `assets/` | The extension icon (`extension-icon.png`, 512 px), the logo master (`brand/overnote-logo-1024.png`), and the menu bar template (`brand/menubar/`); the editor and helper builds are generated, not committed |
+| `.github/` | CI (`workflows/ci.yml`, the fast checks), the tag release (`workflows/release.yml`), issue forms, the pull request template, and Dependabot for the action pins |
 | `media/` | README product shots (`npm run shots:readme`; see Screenshots below) |
 | `scripts/readme-shots.mjs` | Regenerates `media/*.png` from the editor harness at 2× |
 
@@ -99,6 +111,7 @@ Overnote has few unit tests and many end-to-end tests.
   Serialization is covered by the fixture runner over `packages/core/tests/fixtures/`.
   Beyond that, unit tests are only for logic end-to-end tests cannot reach cheaply, such as fold rules, ordering and cursor math, trash purge, and the launcher's restart and version logic.
   Do not add a unit test for every function, and remove redundant ones when you touch an area.
+  Aim for broad coverage of behaviour, not line counts: one test per rule, not one per input.
 - Every feature closes with end-to-end tests that exercise it the way a person does:
   - editor behavior through Playwright against the real editor UI in the browser harness (`editor/tests/`), plus the shipped editor build against the real helper (`editor/tests/real-helper.spec.ts`);
   - helper and extension behavior through the real helper binary over its socket (`scripts/smoke-helper.sh`), and the Raycast commands with their data layer against it (`src/__tests__/commands.e2e.test.ts`);
@@ -106,7 +119,8 @@ Overnote has few unit tests and many end-to-end tests.
 - A feature is done when its end-to-end test passes, not when its unit tests pass.
 
 Testing targets macOS on Apple silicon only; Intel Macs and other platforms are not tested.
-Checks run locally and there is no CI gate for now, so `npm run verify` is the only gate.
+`npm run verify` is the gate, and it runs locally.
+CI (`.github/workflows/ci.yml`) runs only the fast subset, `npm run verify:fast`, on every pull request and every push to `main`, on a GitHub macOS runner; a green CI run does not replace the full local gate.
 Run the whole suite with one command:
 
 ```sh
@@ -177,5 +191,5 @@ If user-visible behavior changes, update `README.md` too, and describe the chang
 
 ## Questions
 
-Open an issue on [GitHub](https://github.com/WesleyBLDC/overnote/issues).
+See [`SUPPORT.md`](SUPPORT.md), or [open an issue](https://github.com/WesleyBLDC/overnote/issues/new/choose).
 Thank you for helping out!
