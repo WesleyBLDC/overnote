@@ -15,10 +15,12 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
     testTimeout: 15000,
-    // A helper started by a test never writes into the real backups folder.
+    // A helper started by a test never writes into the real backups folder, and the extension's
+    // shared data folder (src/domain/paths.ts) is never the real one.
     // TZ: a zone with daylight saving, so the Search Notes sections test covers a 23 hour day.
     env: {
       OVERNOTE_BACKUP_DIR: path.join(os.tmpdir(), `overnote-vitest-backups-${process.pid}`),
+      OVERNOTE_SUPPORT_DIR: path.join(os.tmpdir(), `overnote-vitest-support-${process.pid}`),
       TZ: "America/Los_Angeles",
     },
   },

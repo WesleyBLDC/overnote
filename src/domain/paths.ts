@@ -11,13 +11,18 @@ export interface HelperPaths {
   launchLock: string;
   supportDir: string;
   database: string;
+  /** The extension's old data folder, copied into `supportDir` once by the helper; null when none. */
+  legacySupportDir: string | null;
   binary: string;
   binaryChecksum: string;
   editorDir: string;
 }
 
 export interface PathInputs {
+  /** The shared data folder (`sharedSupportDir()` in the extension). */
   supportPath: string;
+  /** The extension's old data folder (Raycast's `environment.supportPath`), passed as `--legacy-support-dir`. */
+  legacySupportPath?: string;
   assetsPath: string;
   /** Defaults to the current user's uid. */
   uid?: number;
@@ -31,6 +36,25 @@ export function runtimeDirFor(uid: number, runtimeRoot = "/tmp"): string {
 
 export function databasePath(supportPath: string): string {
   return path.join(supportPath, "notes.sqlite");
+}
+
+/**
+ * The one data folder the extension and Overnote.app share: `~/Library/Application Support/Overnote`.
+ * `OVERNOTE_SUPPORT_DIR` moves it, as in scripts/update-extension.sh; every test sets it to a
+ * temporary folder (vitest.config.mts), so tests never reach the real notes.
+ */
+export function sharedSupportDir(): string {
+  return process.env.OVERNOTE_SUPPORT_DIR || path.join(os.homedir(), "Library", "Application Support", "Overnote");
+}
+
+/**
+ * The database a read-only reader should open while no helper runs: the shared one, or the
+ * legacy one when no helper has copied it over yet.
+ */
+export function readableDatabase(paths: HelperPaths): string {
+  if (existsSync(paths.database) || paths.legacySupportDir === null) return paths.database;
+  const legacy = databasePath(paths.legacySupportDir);
+  return existsSync(legacy) ? legacy : paths.database;
 }
 
 export function resolvePaths(inputs: PathInputs): HelperPaths {
@@ -49,6 +73,10 @@ export function resolvePaths(inputs: PathInputs): HelperPaths {
     launchLock: path.join(runtimeDir, "launch.lock"),
     supportDir: inputs.supportPath,
     database: databasePath(inputs.supportPath),
+    legacySupportDir:
+      inputs.legacySupportPath && path.resolve(inputs.legacySupportPath) !== path.resolve(inputs.supportPath)
+        ? inputs.legacySupportPath
+        : null,
     binary,
     binaryChecksum: `${binary}.sha256`,
     editorDir: path.join(inputs.assetsPath, "editor"),

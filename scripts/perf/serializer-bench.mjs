@@ -14,7 +14,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const sizesArg = (process.argv.indexOf("--sizes") >= 0 ? process.argv[process.argv.indexOf("--sizes") + 1] : "1024,51200,512000");
+const sizesArg =
+  process.argv.indexOf("--sizes") >= 0 ? process.argv[process.argv.indexOf("--sizes") + 1] : "1024,51200,512000";
 const sizes = sizesArg.split(",").map(Number).filter(Boolean);
 
 const esbuild = path.join(root, "node_modules", ".bin", "esbuild");
@@ -26,14 +27,23 @@ if (!fs.existsSync(esbuild)) {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "overnote-serializer-bench-"));
 try {
   const bundle = path.join(tmp, "core.mjs");
-  execFileSync(esbuild, [
-    path.join(root, "packages/core/src/index.ts"),
-    "--bundle", "--format=esm", "--platform=node", `--outfile=${bundle}`, "--log-level=error",
-  ], { stdio: "inherit" });
+  execFileSync(
+    esbuild,
+    [
+      path.join(root, "packages/core/src/index.ts"),
+      "--bundle",
+      "--format=esm",
+      "--platform=node",
+      `--outfile=${bundle}`,
+      "--log-level=error",
+    ],
+    { stdio: "inherit" },
+  );
   const core = await import(pathToFileURL(bundle).href);
 
   function markdownOfSize(target) {
-    const para = "The quick brown fox jumps over the lazy dog while a very long note keeps growing with ordinary prose, a few numbers 12345, and punctuation. ";
+    const para =
+      "The quick brown fox jumps over the lazy dog while a very long note keeps growing with ordinary prose, a few numbers 12345, and punctuation. ";
     let md = "# Large bench note\n\n";
     let i = 0;
     while (Buffer.byteLength(md, "utf8") < target) {
@@ -79,14 +89,27 @@ try {
     const twice = core.noteContentFromMarkdown(once.markdown);
     row.roundTripStable = twice.markdown === once.markdown;
     results.push(row);
-    console.error(`[perf] serializer ${size} bytes: parse+build median ${row.noteContentFromMarkdown.medianMs} ms, build from doc median ${row.buildNoteContentFromDoc.medianMs} ms`);
+    console.error(
+      `[perf] serializer ${size} bytes: parse+build median ${row.noteContentFromMarkdown.medianMs} ms, build from doc median ${row.buildNoteContentFromDoc.medianMs} ms`,
+    );
   }
-  console.log(JSON.stringify({
-    kind: "serializer",
-    generatedAt: new Date().toISOString(),
-    machine: { platform: os.platform(), arch: os.arch(), cpu: os.cpus()[0]?.model ?? "unknown", node: process.version },
-    results,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        kind: "serializer",
+        generatedAt: new Date().toISOString(),
+        machine: {
+          platform: os.platform(),
+          arch: os.arch(),
+          cpu: os.cpus()[0]?.model ?? "unknown",
+          node: process.version,
+        },
+        results,
+      },
+      null,
+      2,
+    ),
+  );
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

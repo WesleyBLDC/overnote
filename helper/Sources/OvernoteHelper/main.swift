@@ -29,7 +29,11 @@ if runtime.acquire() == .alreadyRunning {
 }
 
 if arguments.headless {
-    let host = RecordingHost(onShutdown: { runtime.scheduleShutdown() })
+    // With --test-hooks, a page that stands in for the panel's editor takes the shutdown flush.
+    let flushRelay = HeadlessFlushRelay()
+    let host = RecordingHost(
+        onShutdown: { runtime.scheduleShutdown() },
+        onFlush: { timeout in arguments.testHooks ? await flushRelay.request(timeout: timeout) : true })
     // With --test-hooks, smoke tests can read what a window host would have received.
     let hooks: RPCDispatcher.ExtensionHandler? =
         arguments.testHooks
@@ -47,6 +51,17 @@ if arguments.headless {
                     throw RPCError.internal("No dispatcher")
                 }
                 return try await dispatcher.handle(method: try p.string("method"), params: p.values["params"], source: .bridge)
+            case "test.awaitFlush":
+                // A page standing in for the panel long polls here; the answer is a flush
+                // request's number, or null when none came within waitMs.
+                let p = try Params(params)
+                let waitMs = Int(try p.optionalInt("waitMs") ?? 1000)
+                return await flushRelay.next(waitMs: waitMs).map { .int(Int64($0)) } ?? .null
+            case "test.flushDone":
+                let p = try Params(params)
+                guard let request = try p.optionalInt("request") else { throw RPCError.badParams("request is required") }
+                await flushRelay.done(Int(request))
+                return [:]
             default:
                 return nil
             }
@@ -59,4 +74,50 @@ if arguments.headless {
     let delegate = AppDelegate(runtime: runtime)
     app.delegate = delegate
     app.run()
+}
+
+/// Headless with `--test-hooks`: relays the shutdown flush to a page that runs the shipped
+/// editor over `test.asBridge` (editor/tests/real-helper.spec.ts), the way the panel's
+/// `callAsyncJavaScript` reaches the page in a window host. The page long polls
+/// `test.awaitFlush`, calls `window.overnoteBridge.flush()`, and reports `test.flushDone`.
+/// With no page polling, there is no editor to flush and a request answers true at once.
+actor HeadlessFlushRelay {
+    private var requested = 0
+    private var handedOut = 0
+    private var completed = 0
+    private var polls = 0
+    private var lastPollEnd = Date.distantPast
+
+    private var hasEditor: Bool { polls > 0 || Date().timeIntervalSince(lastPollEnd) < 1 }
+
+    func request(timeout: TimeInterval) async -> Bool {
+        guard hasEditor else { return true }
+        requested += 1
+        let number = requested
+        let deadline = Date().addingTimeInterval(timeout)
+        while completed < number {
+            if Date() > deadline { return false }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return true
+    }
+
+    func next(waitMs: Int) async -> Int? {
+        polls += 1
+        defer {
+            polls -= 1
+            lastPollEnd = Date()
+        }
+        let deadline = Date().addingTimeInterval(Double(waitMs) / 1000)
+        while handedOut >= requested {
+            if Date() > deadline { return nil }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        handedOut = requested
+        return requested
+    }
+
+    func done(_ number: Int) {
+        completed = max(completed, number)
+    }
 }

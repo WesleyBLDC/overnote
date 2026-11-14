@@ -37,6 +37,7 @@ const REASON_LABEL: Record<BackupReason, string> = {
   "pre-migration": "Before a database upgrade",
   "pre-update": "Before an update",
   "pre-restore": "Before a restore",
+  "pre-import": "Before importing older notes",
 };
 
 export function backupReasonLabel(reason: BackupReason): string {

@@ -16,8 +16,12 @@
 #
 # Environment (the end-to-end test points every one of these at temporary folders):
 #   OVERNOTE_RELEASES_API  releases API base, default https://api.github.com/repos/WesleyBLDC/overnote/releases
-#   OVERNOTE_SUPPORT_DIR   the extension's support folder (environment.supportPath), default
-#                          ~/Library/Application Support/com.raycast.macos/extensions/<name>
+#   OVERNOTE_SUPPORT_DIR   the data folder the extension and Overnote.app share, default
+#                          ~/Library/Application Support/Overnote
+#   OVERNOTE_LEGACY_SUPPORT_DIR  where earlier releases kept the notes (Raycast's support folder
+#                          for the extension, environment.supportPath), default
+#                          ~/Library/Application Support/com.raycast.macos/extensions/<name>;
+#                          read only, when the shared folder has no database yet
 #   OVERNOTE_RUNTIME_DIR   the helper's socket and pid folder, default /tmp/overnote-<uid>
 #   OVERNOTE_BACKUP_DIR    the backups folder, default ~/Library/Application Support/Overnote/backups
 set -euo pipefail
@@ -131,12 +135,16 @@ main() {
   # Only HTTPS, redirects included, unless a test points the API at a local server.
   CURL=(curl -fsSL --retry 2 --connect-timeout 15)
   [[ -n "${OVERNOTE_RELEASES_API:-}" ]] || CURL+=(--proto "=https" --proto-redir "=https")
-  local SUPPORT="${OVERNOTE_SUPPORT_DIR:-$HOME/Library/Application Support/com.raycast.macos/extensions/$NAME}"
+  local SUPPORT="${OVERNOTE_SUPPORT_DIR:-$HOME/Library/Application Support/Overnote}"
+  local LEGACY="${OVERNOTE_LEGACY_SUPPORT_DIR:-$HOME/Library/Application Support/com.raycast.macos/extensions/$NAME}"
   local RUNTIME="${OVERNOTE_RUNTIME_DIR:-/tmp/overnote-$(id -u)}"
   SOCKET="$RUNTIME/helper.sock"
   local PIDFILE="$RUNTIME/helper.pid"
   local BACKUP_DIR="${OVERNOTE_BACKUP_DIR:-$HOME/Library/Application Support/Overnote/backups}"
+  # The shared database, or the legacy one while no helper has copied it over yet. The helper
+  # this script starts gets both folders and copies it itself.
   local DB="$SUPPORT/notes.sqlite"
+  [[ -f "$DB" || ! -f "$LEGACY/notes.sqlite" ]] || DB="$LEGACY/notes.sqlite"
   # A helper this script starts writes to the same backups folder.
   export OVERNOTE_BACKUP_DIR="$BACKUP_DIR"
   local dir
@@ -221,7 +229,7 @@ main() {
   local BIN="$ROOT/assets/bin/OvernoteHelper" BACKUP_PATH=""
   if [[ -f "$DB" ]]; then
     if ! rpc system.ping >/dev/null 2>&1; then
-      start_helper "$BIN" "$SUPPORT" "$RUNTIME" "$PIDFILE" "$ROOT/assets/editor" || true
+      start_helper "$BIN" "$SUPPORT" "$LEGACY" "$RUNTIME" "$PIDFILE" "$ROOT/assets/editor" || true
     fi
     local result
     if result="$(rpc system.backup '{"reason":"pre-update"}' 120)"; then
@@ -266,13 +274,14 @@ main() {
 # Starts the installed helper headless, the way the extension's launcher does: checksum, then
 # the same arguments, then a ping.
 start_helper() {
-  local bin="$1" support="$2" runtime="$3" pidfile="$4" editor="$5"
+  local bin="$1" support="$2" legacy="$3" runtime="$4" pidfile="$5" editor="$6"
   [[ -x "$bin" && -f "$bin.sha256" ]] || return 1
   [[ "$(shasum -a 256 "$bin" | cut -d' ' -f1)" == "$(cut -d' ' -f1 "$bin.sha256")" ]] || return 1
   mkdir -p "$runtime"
   chmod 700 "$runtime"
   log "Starting the helper headless to back up the notes"
-  "$bin" --support-dir "$support" --socket "$SOCKET" --pid-file "$pidfile" --editor-dir "$editor" --headless >/dev/null 2>&1 &
+  "$bin" --support-dir "$support" --legacy-support-dir "$legacy" --socket "$SOCKET" --pid-file "$pidfile" \
+    --editor-dir "$editor" --headless >/dev/null 2>&1 &
   STARTED_PID=$!
   disown "$STARTED_PID" 2>/dev/null || true
   local _
@@ -309,11 +318,16 @@ sqlite_backup() {
   echo "$dest"
 }
 
-# Stops the helper: system.shutdown, then SIGTERM to the pid in its pid file.
+# Stops the helper: system.shutdown, then SIGTERM to the pid in its pid file. Never stops Overnote.app.
 stop_helper() {
   local pidfile="$1" pid="" ping _
   if ping="$(rpc system.ping 2>/dev/null)"; then
     pid="$(node -p 'JSON.parse(process.argv[1]).pid' "$ping")"
+    # Overnote.app runs the same helper but owns its own lifetime: the update never stops it.
+    if [[ "$(node -p 'JSON.parse(process.argv[1]).host ?? "extension"' "$ping")" == "app" ]]; then
+      log "Overnote.app is running (pid $pid); leaving it running"
+      return 0
+    fi
     log "Stopping the helper (pid $pid)"
     rpc system.shutdown '{}' 10 >/dev/null 2>&1 || true
   else

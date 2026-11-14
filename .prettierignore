@@ -11,3 +11,10 @@ packages/core/tests/fixtures/
 
 # Markdown docs keep one sentence per line and are not formatted by Prettier
 *.md
+
+# Benchmark output, regenerated per run and never committed
+scripts/perf/results/
+
+# Local agent state
+.claude/settings.local.json
+.claude/worktrees/

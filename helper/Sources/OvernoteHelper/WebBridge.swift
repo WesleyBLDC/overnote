@@ -85,6 +85,37 @@ final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, W
         call("emit", JSONValue.string(event).serialized(), payload.serialized())
     }
 
+    /// The page saves its pending edits through the bridge and resolves once the dispatcher has
+    /// answered the save (docs/architecture.md section 3, Flush before shutdown). Waits at most
+    /// `timeout` seconds; a page with no editor loaded yet answers right away. Returns false on a
+    /// timeout, a failed save, or a script error.
+    func flush(timeout: TimeInterval) async -> Bool {
+        guard let webView else { return true }
+        let script = """
+            const bridge = window.overnoteBridge;
+            if (!bridge || typeof bridge.flush !== "function") return true;
+            return await bridge.flush();
+            """
+        let once = FlushOnce()
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            once.continuation = continuation
+            webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { [logger] result in
+                switch result {
+                case .success(let value):
+                    once.finish((value as? Bool) ?? (value as? NSNumber)?.boolValue ?? false)
+                case .failure(let error):
+                    logger.log("Editor flush failed: \(error.localizedDescription)")
+                    once.finish(false)
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [logger] in
+                MainActor.assumeIsolated {
+                    if once.finish(false) { logger.log("The editor did not confirm its save within \(timeout) s") }
+                }
+            }
+        }
+    }
+
     /// JSON text is valid JavaScript, so arguments are embedded as JSON literals.
     private func call(_ function: String, _ first: String, _ second: String) {
         guard let webView else { return }
@@ -133,6 +164,20 @@ final class WebBridge: NSObject, WKScriptMessageHandler, WKNavigationDelegate, W
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         logger.log("Web content process terminated; reloading the editor")
         webView.reload()
+    }
+}
+
+/// Resumes a flush once, with whichever comes first: the page's answer or the timeout.
+@MainActor
+private final class FlushOnce {
+    var continuation: CheckedContinuation<Bool, Never>?
+
+    @discardableResult
+    func finish(_ value: Bool) -> Bool {
+        guard let continuation else { return false }
+        self.continuation = nil
+        continuation.resume(returning: value)
+        return true
     }
 }
 

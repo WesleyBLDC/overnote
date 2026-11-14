@@ -44,7 +44,9 @@ describe("Raycast commands against the real helper", () => {
     fs.writeFileSync(wrapper, `#!/bin/sh\nexec '${REAL_HELPER}' "$@" --headless --test-hooks\n`, { mode: 0o755 });
     const sum = createHash("sha256").update(fs.readFileSync(wrapper)).digest("hex");
     fs.writeFileSync(`${wrapper}.sha256`, `${sum}  OvernoteHelper\n`);
-    environment.supportPath = path.join(root, "support");
+    // The shared folder the notes live in, and Raycast's support folder as the legacy one.
+    process.env.OVERNOTE_SUPPORT_DIR = path.join(root, "support");
+    environment.supportPath = path.join(root, "raycast-support");
     environment.assetsPath = path.join(root, "assets");
     process.env.OVERNOTE_RUNTIME_DIR = path.join(root, "run");
   });
