@@ -2,6 +2,7 @@
 import type { NodeViewRendererProps } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import type { NodeView } from "@tiptap/pm/view";
+import { focusEditorNow } from "./commands";
 import { CODE_LANGUAGES } from "./lowlight";
 
 export interface CodeBlockViewOptions {
@@ -58,7 +59,7 @@ export function createCodeBlockView(options: CodeBlockViewOptions) {
       const pos = typeof getPos === "function" ? getPos() : undefined;
       if (pos === undefined) return;
       editor.view.dispatch(editor.state.tr.setNodeAttribute(pos, "language", select.value || null));
-      editor.commands.focus();
+      focusEditorNow(editor);
     });
     copy.addEventListener("mousedown", (event) => event.preventDefault());
     copy.addEventListener("click", () => {

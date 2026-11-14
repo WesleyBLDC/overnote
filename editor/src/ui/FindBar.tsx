@@ -1,6 +1,7 @@
 /** Find and replace bar. */
 import type { Editor } from "@tiptap/core";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { focusEditorNow } from "../editor/commands";
 import { findKey, findMatches, replaceAll, replaceOne, selectMatch } from "../editor/find";
 import { Icon } from "./icons";
 
@@ -69,7 +70,7 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
 
   const close = () => {
     onClose();
-    editor.commands.focus();
+    focusEditorNow(editor);
   };
 
   const replaceCurrent = () => {

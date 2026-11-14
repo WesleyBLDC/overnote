@@ -378,6 +378,7 @@ test("an export waits for the save panel longer than the usual request timeout",
   await page.keyboard.press("Meta+Shift+e");
   await expect(page.getByTestId("command-panel")).toHaveAttribute("data-view", "export");
   await page.keyboard.type("markdown");
+  await expect(page.locator(".panel-row.is-selected")).toContainText("Markdown");
   await page.keyboard.press("Enter");
   await expect.poll(async () => (await calls(page, "file.saveAs")).length).toBe(1);
   // Well past the 3 s timeout of ordinary requests, the export has not failed.

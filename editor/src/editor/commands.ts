@@ -1,6 +1,7 @@
 /** Formatting actions shared by the slash menu, the format bar, and the Format action. */
 import { toggleListKind, type ListKind } from "@overnote/core";
 import type { Editor } from "@tiptap/core";
+import { Selection } from "@tiptap/pm/state";
 import { liftTarget } from "@tiptap/pm/transform";
 
 export type FormatId =
@@ -36,8 +37,20 @@ function liftOutOfList(editor: Editor): void {
   }
 }
 
+/**
+ * Focuses the note at once, optionally moving the caret to the end first.
+ * Use it instead of Tiptap's focus command, which focuses again a frame later: a panel opened in
+ * that frame (⌘K right after a format bar click) would lose its focus to the note.
+ */
+export function focusEditorNow(editor: Editor, position?: "end"): void {
+  if (editor.isDestroyed) return;
+  if (position === "end") editor.view.dispatch(editor.state.tr.setSelection(Selection.atEnd(editor.state.doc)));
+  editor.view.focus();
+}
+
 export function runFormat(editor: Editor, id: FormatId, openLink: () => void): boolean {
-  const chain = editor.chain().focus();
+  focusEditorNow(editor);
+  const chain = editor.chain();
   switch (id) {
     case "h1":
     case "h2":
@@ -59,15 +72,12 @@ export function runFormat(editor: Editor, id: FormatId, openLink: () => void): b
       return chain.toggleCodeBlock().run();
     case "blockquote":
       if (!editor.isActive("blockquote")) liftOutOfList(editor);
-      return editor.chain().focus().toggleBlockquote().run();
+      return editor.chain().toggleBlockquote().run();
     case "ordered":
-      editor.commands.focus();
       return toggleList(editor, "ordered");
     case "bullet":
-      editor.commands.focus();
       return toggleList(editor, "bullet");
     case "task":
-      editor.commands.focus();
       return toggleList(editor, "task");
     case "link":
       openLink();
