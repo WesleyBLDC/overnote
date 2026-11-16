@@ -209,7 +209,7 @@ The helper stores `NoteContent` verbatim.
 | `window.resize` (bridge) | `{ contentHeight: number, temporary?: boolean }` | `{}` | Content-driven height, clamped from the minimum size (see `window.setMinimumSize`) to 860 pt times zoom. `temporary: true` (confirmation dialogs; panels and dropdowns stay inside the panel instead) applies even when windowAutoSize is off and is restored by the next non-temporary report |
 | `window.setMinimumSize` (bridge) | `{ width: number, height: number }` | `{}` | The smallest the panel may be, in points: the editor's toolbar (its controls plus 6rem for the title), one line of note text with the room kept below it for the overlaid count pill, and the format island with its side margins while it shows, at the current zoom. The helper rounds up and never goes below 405 by 197 pt, applies it to user resizing, auto-sizing, temporary growth, and restored frames, and grows a smaller panel at once, keeping its top edge. `-32602` unless both are positive numbers |
 | `window.resignFocus` (bridge) | `{}` | `{}` | For the escapeLosesFocus setting: hands focus back to the previous app without hiding |
-| `window.setDrawer` (bridge) | `{ height: number }` | `{}` | The terminal drawer's height in points, 0 when closed, at most 1000 (the editor sends 260). See [The terminal drawer](#the-terminal-drawer) |
+| `window.setDrawer` (bridge) | `{ height: number }` | `{}` | The terminal drawer's height in points, 0 when closed, at most 1000 (the editor sends the height of 24 terminal rows at the current zoom, at most half the screen). See [The terminal drawer](#the-terminal-drawer) |
 | `term.open` (bridge) | `{ cols: number, rows: number }` | `{ backend: "herdr" \| "shell" }` | Starts the drawer's terminal at that grid (whole numbers from 1 to 1000), or resizes the one already running: one terminal per helper |
 | `term.resize` (bridge) | `{ cols: number, rows: number }` | `{}` | The drawer's grid changed (`TIOCSWINSZ`) |
 | `term.close` (bridge) | `{}` | `{}` | Ends the drawer's program: for Herdr only the attach, and the kept shell keeps running |
@@ -337,7 +337,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 
 ### The terminal drawer
 
-- A fixed 260 pt drawer under the note, the panel's width, drawn by xterm.js inside the editor's web view (loaded lazily, in its own chunk, also preloaded 1.5 s after boot).
+- A drawer under the note, the panel's width, sized to 24 rows at the current zoom (fewer when that would take more than half the screen, never fewer than 8), so a full screen program such as an agent keeps its header in view, drawn by xterm.js inside the editor's web view (loaded lazily, in its own chunk, also preloaded 1.5 s after boot).
   The toolbar's Terminal button, ⌘K's Open Terminal or Close Terminal, and ⌃` toggle it; from the note ⌃` opens the drawer (or focuses an open one) and focuses the terminal, and from the terminal it closes the drawer and puts the caret back in the note.
   The open state is the `terminal.open` setting, so the drawer comes back after a reload or restart, without taking focus from the note.
 - Geometry: `window.setDrawer` grows the panel down by the drawer, or up when that would leave the screen, and shrinks it back on close.

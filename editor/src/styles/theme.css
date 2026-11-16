@@ -175,8 +175,8 @@
   --terminal-cursor: var(--cursor);
   --terminal-selection: var(--selection);
   --terminal-divider: var(--border-strong);
-  /* Fixed in points, not zoomed: the drawer is 260 pt tall at every zoom, and its text follows the zoom. */
-  --terminal-height: 260px;
+  /* The drawer's height: 24 rows at the current zoom, set by terminal/controller.ts before the drawer shows. */
+  --terminal-height: 360px;
 
   /* ---- window layout ---- */
   --drag-strip: 12px;

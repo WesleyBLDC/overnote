@@ -50,14 +50,24 @@ async function openWithButton(page: Page): Promise<void> {
   await expect.poll(() => focusInTerminal(page)).toBe(true);
 }
 
-test("the Terminal button opens the drawer below the note and the panel grows by 260 points", async ({ page }) => {
+test("the Terminal button opens a 24 row drawer below the note and the panel grows by its height", async ({ page }) => {
   await openHarness(page, ["# Weekend project\n\nBuild a tiny CLI."]);
   const before = { root: await rootHeight(page), app: await appHeight(page) };
   await expect(drawer(page)).toBeHidden();
   await openWithButton(page);
 
-  expect(await calls(page, "window.setDrawer")).toMatchObject([{ params: { height: 260 } }]);
-  expect(await rootHeight(page)).toBe(before.root + 260);
+  const height = ((await calls(page, "window.setDrawer")).at(-1)?.params as { height: number }).height;
+  expect(await rootHeight(page)).toBe(before.root + height);
+  // The drawer fits its 24 rows with no row cut off and no spare row's worth of space.
+  const drawerBox = await drawer(page).boundingBox();
+  expect(drawerBox?.height).toBe(height);
+  const rows = await page.evaluate(() => {
+    const screen = document.querySelector(".terminal-drawer .xterm-screen")!.getBoundingClientRect();
+    const host = document.querySelector(".terminal-drawer")!.getBoundingClientRect();
+    return { top: screen.top - host.top, bottom: host.bottom - screen.bottom };
+  });
+  expect(rows.top).toBeGreaterThanOrEqual(0);
+  expect(rows.bottom).toBeGreaterThanOrEqual(0);
   // The note keeps its size: the drawer takes only the space the panel grew by.
   expect(await appHeight(page)).toBe(before.app);
   await expect(page.getByTestId("terminal")).toHaveAttribute("aria-pressed", "true");
@@ -65,7 +75,7 @@ test("the Terminal button opens the drawer below the note and the panel grows by
   expect(opened).toHaveLength(1);
   const size = opened[0]?.params as { cols: number; rows: number };
   expect(size.cols).toBeGreaterThanOrEqual(40);
-  expect(size.rows).toBeGreaterThanOrEqual(10);
+  expect((await terminalMock(page)).size?.rows).toBe(24);
   expect((await calls(page, "settings.set")).at(-1)?.params).toEqual({ terminal: { open: true } });
 
   // The same button closes it, gives the space back, and puts the caret in the note.
@@ -163,6 +173,19 @@ test("an open drawer comes back after a reload without taking focus from the not
   await expect(page.locator(".terminal-drawer .xterm-rows")).toContainText("overnote-mock $");
   expect(await calls(page, "term.open")).toHaveLength(1);
   await expect(editor(page)).toBeFocused();
+});
+
+test("zooming keeps 24 rows: the drawer grows with the text instead of cutting rows", async ({ page }) => {
+  await page.goto(
+    `/?seed=${encodeURIComponent(JSON.stringify(["Note"]))}&settings=${encodeURIComponent('{"zoom":1.2,"terminal":{"open":true}}')}`,
+  );
+  await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator(".terminal-drawer .xterm-rows")).toContainText("overnote-mock $");
+  await expect.poll(async () => (await terminalMock(page)).size?.rows).toBe(24);
+  const zoomed = (await terminalMock(page)).drawer;
+  await page.keyboard.press("Meta+0");
+  await expect.poll(async () => (await terminalMock(page)).drawer).toBeLessThan(zoomed);
+  await expect.poll(async () => (await terminalMock(page)).size?.rows).toBe(24);
 });
 
 test("a closed drawer ends its attach after five idle minutes, and reopening attaches again", async ({ page }) => {

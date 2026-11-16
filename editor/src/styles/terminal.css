@@ -1,5 +1,5 @@
 /*
- * The terminal drawer: a fixed 260 pt well hung below the note. While it shows, the note (.app) gives up that
+ * The terminal drawer: a well 24 rows tall (terminal/controller.ts) hung below the note. While it shows, the note (.app) gives up that
  * height at its bottom and the drawer draws in the space the helper added to the panel (window.setDrawer),
  * so the note keeps its size and its footer, notices, and dialogs stay inside the note.
  */

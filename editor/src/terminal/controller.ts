@@ -12,8 +12,17 @@ import { reachesOvernote } from "./keys";
 import { terminalFont, terminalTheme } from "./theme";
 import type { FitAddon, Terminal } from "./xterm";
 
-/** The drawer's height in points, fixed at every zoom (--terminal-height in theme.css). */
-export const DRAWER_HEIGHT = 260;
+/**
+ * The drawer is sized in rows, not points: 24 rows (a standard terminal's height) at every zoom, so a full screen
+ * program such as an agent's prompt keeps its header in view. The height follows the measured row height.
+ */
+export const DRAWER_ROWS = 24;
+/** The most of the screen's height the drawer may take; fewer rows show on a short screen. */
+const MAX_SCREEN_SHARE = 0.5;
+/** The fewest rows the drawer shows, even on a short screen. */
+const MIN_ROWS = 8;
+/** xterm.js's line height, a multiple of the font size. */
+const LINE_HEIGHT = 1.2;
 /** How long a closed drawer keeps its attach before it ends it. */
 export const IDLE_CLOSE_MS = 5 * 60_000;
 /** The terminal's font size at 100% zoom, in points. */
@@ -26,6 +35,11 @@ let xtermModule: Promise<typeof import("./xterm")> | null = null;
 export function preloadTerminal(): Promise<typeof import("./xterm")> {
   xtermModule ??= import("./xterm");
   return xtermModule;
+}
+
+/** The space the note gives up for the drawer (terminal.css). */
+function setDrawerVar(height: number): void {
+  document.documentElement.style.setProperty("--terminal-height", `${height}px`);
 }
 
 export class TerminalController {
@@ -77,10 +91,13 @@ export class TerminalController {
     if (open) {
       if (this.idle) clearTimeout(this.idle);
       this.idle = null;
-      await this.sendHeight(DRAWER_HEIGHT);
+      await this.sendHeight(this.drawerHeight());
       if (!this.wanted) return;
       this.setVisible(true);
       await this.ensureTerminal();
+      if (!this.wanted) return;
+      // The first open sized the drawer from an estimated row height; now the real one is known.
+      await this.sendHeight(this.drawerHeight());
       if (!this.wanted) return;
       this.refit();
       this.ensureSession();
@@ -94,10 +111,38 @@ export class TerminalController {
     this.idle = setTimeout(() => this.endSession(), IDLE_CLOSE_MS);
   }
 
+  /**
+   * Sends the drawer's height and sets --terminal-height, the space the note gives up. Growing waits for the panel
+   * before the note gives up the space, and shrinking hands it back first, so the note never squeezes.
+   */
   private async sendHeight(height: number): Promise<void> {
     if (height === this.sentHeight) return;
+    const growing = height > this.sentHeight;
     this.sentHeight = height;
+    if (!growing && height > 0) setDrawerVar(height);
     await this.api.window.setDrawer(height).catch(() => undefined);
+    if (growing && this.sentHeight === height) setDrawerVar(height);
+  }
+
+  /** The height of DRAWER_ROWS rows plus the drawer's padding and divider, at most MAX_SCREEN_SHARE of the screen. */
+  private drawerHeight(): number {
+    const cell = this.cellHeight();
+    const host = this.host;
+    const style = host ? getComputedStyle(host) : null;
+    const chrome =
+      (style ? parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) : 0) +
+      (host?.parentElement ? parseFloat(getComputedStyle(host.parentElement).borderTopWidth) || 0 : 0);
+    const fit = Math.floor((window.screen.availHeight * MAX_SCREEN_SHARE - chrome) / cell);
+    const rows = Math.max(MIN_ROWS, Math.min(DRAWER_ROWS, fit));
+    return Math.ceil(rows * cell + chrome);
+  }
+
+  /** One row's height in CSS pixels: measured from xterm.js once it has drawn, else estimated from the font. */
+  private cellHeight(): number {
+    const screen = this.host?.querySelector<HTMLElement>(".xterm-screen");
+    const measured =
+      screen && this.term && this.term.rows > 0 ? screen.getBoundingClientRect().height / this.term.rows : 0;
+    return measured > 0 ? measured : Math.ceil(Math.round(FONT_SIZE * this.zoom) * LINE_HEIGHT);
   }
 
   focus(): void {
@@ -108,7 +153,9 @@ export class TerminalController {
     this.zoom = zoom;
     if (!this.term) return;
     this.term.options.fontSize = Math.round(FONT_SIZE * zoom);
-    this.refit();
+    // The rows grew or shrank with the font: resize the drawer so it still shows DRAWER_ROWS of them.
+    if (this.wanted && this.visible) void this.sendHeight(this.drawerHeight()).then(() => this.refit());
+    else this.refit();
   }
 
   // ---- xterm.js ----
@@ -128,7 +175,7 @@ export class TerminalController {
     const term = new Terminal({
       fontFamily: font,
       fontSize: Math.round(FONT_SIZE * this.zoom),
-      lineHeight: 1.2,
+      lineHeight: LINE_HEIGHT,
       cursorBlink: true,
       scrollback: 5000,
       // ⌥ keeps typing characters such as @ and €, as in Terminal.app by default.
