@@ -348,7 +348,7 @@ public final class RPCDispatcher: Sendable {
             title: try p.optionalString("title") ?? "")
     }
 
-    /// The tallest drawer `window.setDrawer` accepts, in points (the editor sends 260).
+    /// The tallest drawer `window.setDrawer` accepts, in points (the editor sends 24 rows' height).
     static let maxDrawerHeight = 1000.0
 
     /// Validates `{ cols, rows }`: whole numbers from 1 to 1000.
