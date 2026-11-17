@@ -85,6 +85,7 @@ ALL_STEPS=(
   "Typecheck: core"
   "Lint: Raycast lint, extension"
   "Lint: ESLint, editor and core"
+  "Lint: Stylelint, editor styles"
   "Lint: Prettier"
   "Build: editor"
   "Build: helper"
@@ -109,6 +110,7 @@ FAST_STEPS=(
   "Typecheck: editor"
   "Typecheck: core"
   "Lint: ESLint, editor and core"
+  "Lint: Stylelint, editor styles"
   "Lint: Prettier"
   "Unit: core"
   "Unit: editor"
@@ -126,6 +128,7 @@ step_body() {
     "Typecheck: core") npx tsc --noEmit -p packages/core ;;
     "Lint: Raycast lint, extension") npx ray lint ;;
     "Lint: ESLint, editor and core") npx eslint --max-warnings 0 editor packages/core ;;
+    "Lint: Stylelint, editor styles") npx stylelint --max-warnings 0 "editor/src/styles/**/*.css" ;;
     "Lint: Prettier") npx prettier --check . ;;
     "Build: editor") npm run build:editor ;;
     "Build: helper") bash scripts/build-helper.sh ;;

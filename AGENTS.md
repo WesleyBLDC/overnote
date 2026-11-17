@@ -44,7 +44,7 @@ Turn every mistake or better way into a durable fix, so the next agent does not 
 
 - When a guard blocks you, a review finds a bug, a test was flaky, or you find a faster workflow, add one line to the right place in the same pull request: a rule here, a step in a skill under `.claude/skills/`, or a check in `scripts/verify.sh` when it can be automated.
 - Prefer automating the lesson (a script, a test, a lint) over writing it down.
-- Repo skills: `.claude/skills/ship-feature` (branch to merged PR with docs) and `.claude/skills/ui-change` (editor UI work, screenshots, and baselines).
+- Repo skills: `.claude/skills/ship-feature` (branch to merged PR with docs), `.claude/skills/ui-change` (editor UI work, screenshots, and baselines), and `.claude/skills/editor-change` (Tiptap schema, extensions, and plugins, built-ins first).
   Update a skill when its steps go stale; create a new one when a workflow repeats a third time.
 
 ## Lead sessions
