@@ -1,5 +1,6 @@
 /** The slash menu trigger and items. */
 import type { EditorState } from "@tiptap/pm/state";
+import { BLOCK_LABELS } from "./commands";
 
 export interface SlashQuery {
   /** Position of the `/`. */
@@ -26,30 +27,48 @@ export function slashQueryAt(state: EditorState): SlashQuery | null {
   return { from: $from.start() + slash, to: $from.pos, query };
 }
 
-export type SlashSection = "Headings" | "Inline" | "Blocks" | "Lists";
+export type SlashSection = "Text" | "Lists" | "Blocks";
 
 export interface SlashItem {
-  id: string;
+  id: SlashFormat;
   title: string;
   section: SlashSection;
-  shortcut: string;
+  /** The Markdown that makes the same block as you type, shown on the right of the row. */
+  markdown: string;
+  /** The row's tile: a short glyph, or "check" for the checklist icon. */
+  glyph: string;
   keywords: string[];
 }
 
+type SlashFormat = keyof typeof BLOCK_LABELS;
+
+const item = (
+  id: SlashFormat,
+  section: SlashSection,
+  glyph: string,
+  markdown: string,
+  keywords: string[],
+): SlashItem => ({
+  id,
+  title: BLOCK_LABELS[id],
+  section,
+  glyph,
+  markdown,
+  keywords,
+});
+
+/** Blocks only: inline marks live on the format island and their shortcuts. */
 export const SLASH_ITEMS: readonly SlashItem[] = [
-  { id: "h1", title: "Heading 1", section: "Headings", shortcut: "⌥⌘1", keywords: ["title", "h1"] },
-  { id: "h2", title: "Heading 2", section: "Headings", shortcut: "⌥⌘2", keywords: ["subtitle", "h2"] },
-  { id: "h3", title: "Heading 3", section: "Headings", shortcut: "⌥⌘3", keywords: ["h3"] },
-  { id: "bold", title: "Bold", section: "Inline", shortcut: "⌘B", keywords: ["strong"] },
-  { id: "italic", title: "Italic", section: "Inline", shortcut: "⌘I", keywords: ["emphasis"] },
-  { id: "strike", title: "Strikethrough", section: "Inline", shortcut: "⇧⌘S", keywords: ["strike"] },
-  { id: "underline", title: "Underline", section: "Inline", shortcut: "⌘U", keywords: [] },
-  { id: "code", title: "Code", section: "Inline", shortcut: "⌘E", keywords: ["inline"] },
-  { id: "codeBlock", title: "Code Block", section: "Blocks", shortcut: "⌥⌘C", keywords: ["pre", "snippet"] },
-  { id: "blockquote", title: "Blockquote", section: "Blocks", shortcut: "⇧⌘B", keywords: ["quote"] },
-  { id: "ordered", title: "Ordered List", section: "Lists", shortcut: "⇧⌘7", keywords: ["numbered"] },
-  { id: "bullet", title: "Bullet List", section: "Lists", shortcut: "⇧⌘8", keywords: ["unordered"] },
-  { id: "task", title: "Task List", section: "Lists", shortcut: "⇧⌘9", keywords: ["todo", "check"] },
+  item("paragraph", "Text", "T", "", ["paragraph", "body", "plain"]),
+  item("h1", "Text", "H1", "#", ["heading 1", "h1"]),
+  item("h2", "Text", "H2", "##", ["heading 2", "h2"]),
+  item("h3", "Text", "H3", "###", ["heading 3", "h3"]),
+  item("bullet", "Lists", "•", "-", ["bullet", "unordered"]),
+  item("ordered", "Lists", "1.", "1.", ["ordered"]),
+  item("task", "Lists", "check", "[ ]", ["todo", "task", "checkbox"]),
+  item("blockquote", "Blocks", "\u201d", ">", ["blockquote"]),
+  item("codeBlock", "Blocks", "{}", "```", ["pre", "snippet"]),
+  item("divider", "Blocks", "\u2014", "---", ["rule", "line", "separator", "hr"]),
 ];
 
 /** Fuzzy subsequence score; higher is better, -1 means no match. */

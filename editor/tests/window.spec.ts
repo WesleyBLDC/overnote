@@ -860,7 +860,7 @@ test("the corner: a words or characters count, only the selection while selectin
   await expect(editor(page).locator("code")).toHaveText("Hello world");
   await expect(bar.getByRole("button", { name: "Code (⌘E)" })).toHaveAttribute("aria-pressed", "true");
   await bar.getByRole("button", { name: "List" }).click();
-  await page.getByRole("menuitemcheckbox", { name: /Task List/ }).click();
+  await page.getByRole("menuitemcheckbox", { name: /Checklist/ }).click();
   await expect(bar.getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
   // ⌘K reaches the same toggle.
   await page.keyboard.press("Meta+k");
@@ -877,22 +877,21 @@ test("slash menu and link popover", async ({ page }) => {
   await page.keyboard.type("/");
   const menu = page.getByTestId("slash-menu");
   await expect(menu.getByRole("option")).toHaveText([
-    "Heading 1⌥⌘1",
-    "Heading 2⌥⌘2",
-    "Heading 3⌥⌘3",
-    "Bold⌘B",
-    "Italic⌘I",
-    "Strikethrough⇧⌘S",
-    "Underline⌘U",
-    "Code⌘E",
-    "Code Block⌥⌘C",
-    "Blockquote⇧⌘B",
-    "Ordered List⇧⌘7",
-    "Bullet List⇧⌘8",
-    "Task List⇧⌘9",
+    "TText",
+    "H1Title#",
+    "H2Heading##",
+    "H3Subheading###",
+    "•Bulleted list-",
+    "1.Numbered list1.",
+    "Checklist[ ]",
+    "”Quote>",
+    "{}Code block```",
+    "—Divider---",
   ]);
+  await expect(menu.locator(".menu-section")).toHaveText(["Text", "Lists", "Blocks"]);
   await page.keyboard.type("todo");
-  await expect(menu.getByRole("option").first()).toContainText("Task List");
+  await expect(menu.locator(".menu-section")).toHaveText(["Best match"]);
+  await expect(menu.getByRole("option").first()).toContainText("Checklist");
   await page.keyboard.press("Enter");
   await expect(menu).toHaveCount(0);
   await expect(editor(page).locator("[data-list-kind=task]")).toHaveCount(1);

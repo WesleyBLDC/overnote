@@ -169,7 +169,7 @@ test("a dropdown near the bottom of a short panel opens upward and scrolls to it
     });
   // The menu scrolls smoothly, so wait for it to arrive.
   await expect.poll(selectedInView).toBe(true);
-  await expect(menu.locator(".is-selected")).toHaveText(/Code Block/);
+  await expect(menu.locator(".is-selected")).toHaveText(/Code block/);
 });
 
 test("at the minimum size the command panels show at least two settings or notes rows and three actions", async ({
