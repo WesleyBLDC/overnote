@@ -220,6 +220,45 @@ async function controls(page: Page) {
 
 // The light mode pass (board 12) as a guard: every text colour keeps 4.5:1 on every surface it sits on, in both
 // modes, translucent text composited over its surface first.
+test("numbered list markers line up: 1. to 9. share both edges, start at the text edge, and leave a gap", async ({
+  page,
+}) => {
+  const items = Array.from({ length: 10 }, (_, i) => `${i + 1}. item ${i + 1}`).join("\n");
+  for (const font of ["geist", "system"]) {
+    await page.goto(
+      `/?seed=${encodeURIComponent(JSON.stringify([`Title\n\n${items}`]))}&settings=${encodeURIComponent(JSON.stringify({ font }))}`,
+    );
+    await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
+    // A pseudo-element has no box to measure, so each marker is laid out in a probe with the ::before font.
+    const rows = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>(".note-editor > [data-list-kind=ordered]")].map((li) => {
+        const before = getComputedStyle(li, "::before");
+        const probe = document.createElement("span");
+        probe.textContent = li.getAttribute("data-list-marker");
+        probe.style.cssText = `position:absolute;white-space:nowrap;font:${before.font};font-variant-numeric:${before.fontVariantNumeric}`;
+        document.body.append(probe);
+        const width = probe.getBoundingClientRect().width;
+        probe.remove();
+        const box = li.getBoundingClientRect();
+        const right = box.right - parseFloat(before.right);
+        const text = li.querySelector(":scope > .list-content > p")!.getBoundingClientRect().left;
+        return { left: right - width, right, text, edge: box.left };
+      }),
+    );
+    expect(rows).toHaveLength(10);
+    const [first, ...rest] = rows;
+    const single = [first!, ...rest.slice(0, 8)];
+    for (const row of single) {
+      expect(Math.abs(row.left - first!.left), font).toBeLessThan(0.5);
+      expect(Math.abs(row.right - first!.right), font).toBeLessThan(0.5);
+      expect(row.left, font).toBeGreaterThanOrEqual(row.edge - 0.5);
+      expect(row.text - row.right, font).toBeGreaterThanOrEqual(4);
+    }
+    // 10. keeps the same right edge and grows to the left.
+    expect(Math.abs(rows[9]!.right - first!.right)).toBeLessThan(0.5);
+  }
+});
+
 test("every text token keeps 4.5:1 contrast on every surface, light and dark", async ({ page }) => {
   await openHarness(page, ["Contrast"]);
   for (const scheme of ["light", "dark"] as const) {
