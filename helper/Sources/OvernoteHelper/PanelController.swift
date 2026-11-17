@@ -38,12 +38,8 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     /// The app that was frontmost when the panel was shown; focus returns to it.
     private var previousApp: NSRunningApplication?
     private(set) var settings: Settings
-    /// The latest content height the editor reported, nil until the first report.
-    private var contentHeight: CGFloat?
-    /// A temporary height (⌘K, browse, dialogs) that wins until the next normal report.
-    private var temporaryHeight: CGFloat?
-    /// The height before a temporary growth, restored when no user height is stored.
-    private var heightBeforeTemporary: CGFloat?
+    /// The editor's content height and any temporary growth (`PanelHeightState`).
+    private var heightMode = PanelHeightState()
     private var saveFrameWork: DispatchWorkItem?
     /// True while the helper itself sets the frame, so the window delegate can tell its own
     /// changes from the system's (tiling, a window manager).
@@ -76,8 +72,10 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     private var pendingShow: DispatchWorkItem?
     /// How long a show waits for that first report before it orders the panel in anyway.
     static let firstReportTimeout: TimeInterval = 3
+    /// Hidden, waiting for the first height report, or visible (`PanelShowState`).
+    var showState: PanelShowState { PanelShowState(visible: panel.isVisible, awaitingFirstReport: pendingShow != nil) }
     /// Whether a show is waiting for the editor's first height report.
-    var isShowPending: Bool { pendingShow != nil }
+    var isShowPending: Bool { showState == .awaitingFirstReport }
     /// Development only (`--watch-editor`): reloads the page when a new editor build lands.
     private var buildWatcher: EditorBuildWatcher?
     /// Reloads the page itself when the editor did not reload after `editor.willReload`.
@@ -245,10 +243,17 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         {
             previousApp = frontmost
         }
-        if !panel.isVisible, settings.windowAutoSize, contentHeight == nil, temporaryHeight == nil, webView != nil {
-            guard pendingShow == nil else { return }
+        let state = showState
+        if state.showWaits(
+            autoSize: settings.windowAutoSize, knowsHeight: heightMode.knowsHeight, hasEditor: webView != nil)
+        {
+            guard state == .hidden else { return }
             let work = DispatchWorkItem { [weak self] in
-                MainActor.assumeIsolated { self?.completePendingShow() }
+                MainActor.assumeIsolated {
+                    guard let self, self.completePendingShow(on: .timedOut) else { return }
+                    self.logger.log(
+                        "No height report from the editor within \(Self.firstReportTimeout) s; showing the panel anyway")
+                }
             }
             pendingShow = work
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.firstReportTimeout, execute: work)
@@ -257,13 +262,14 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         present()
     }
 
-    /// The first report never came in time (a slow first load, or a page that does not report):
-    /// show at the default height rather than not at all.
-    private func completePendingShow() {
-        guard pendingShow != nil else { return }
-        pendingShow = nil
-        logger.log("No height report from the editor within \(Self.firstReportTimeout) s; showing the panel anyway")
-        present()
+    /// Orders the panel in when `event` ends a show that waits for the first height report
+    /// (`PanelShowState.completesShow`), and says whether it did. A placement already set the
+    /// frame, so it orders the panel in where it is; every other event places it first.
+    @discardableResult
+    private func completePendingShow(on event: PanelShowState.Event) -> Bool {
+        guard showState.completesShow(on: event) else { return false }
+        present(placing: event != .placed)
+        return true
     }
 
     private func cancelPendingShow() {
@@ -271,11 +277,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         pendingShow = nil
     }
 
-    /// Orders the panel in at its target height and makes it key; ends any pending show.
-    private func present() {
+    /// Orders the panel in and makes it key; ends any pending show. With `placing`, a panel
+    /// that was hidden is placed first, at its target height.
+    private func present(placing: Bool = true) {
         let wasVisible = panel.isVisible
         cancelPendingShow()
-        if !wasVisible {
+        if !wasVisible, placing {
             placePanel()
         }
         makeVisible(wasAlready: wasVisible)
@@ -375,22 +382,14 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     /// The height the panel should have now, before keeping it on screen.
-    private func targetHeight(on screen: NSScreen) -> CGFloat {
-        let minimum = minimumSize.height
-        var height: CGFloat
-        if let temporaryHeight {
-            height = PanelSizing.autoHeight(temporaryHeight, minimum: minimum, zoom: settings.zoom)
-        } else if settings.windowAutoSize {
-            let content = contentHeight ?? (panel.isVisible ? noteFrame.height : NotesPanel.defaultHeight)
-            height = PanelSizing.autoHeight(content, minimum: minimum, zoom: settings.zoom)
-        } else if let saved = settings.panelFrame?.height {
-            height = CGFloat(saved)
-        } else {
-            // No stored height yet: the first open size, or whatever the panel had before a
-            // temporary growth.
-            height = heightBeforeTemporary ?? noteFrame.height
-        }
-        return min(max(height, minimum), noteArea(screen).height).rounded()
+    /// `restoring` is the height from before a temporary growth that just ended, which a note
+    /// with no stored height goes back to.
+    private func targetHeight(on screen: NSScreen, restoring: CGFloat? = nil) -> CGFloat {
+        heightMode.target(
+            autoSize: settings.windowAutoSize, storedHeight: settings.panelFrame?.height.map { CGFloat($0) },
+            current: restoring ?? noteFrame.height,
+            beforeFirstReport: panel.isVisible ? noteFrame.height : NotesPanel.defaultHeight,
+            minimum: minimumSize.height, zoom: settings.zoom, available: noteArea(screen).height)
     }
 
     /// Grows the frame to the minimum size, clamps it to the display, and nudges it fully onto
@@ -420,13 +419,13 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     }
 
     /// Applies the current target height with the top edge fixed.
-    private func applyHeight(force: Bool = false) {
+    private func applyHeight(force: Bool = false, restoring: CGFloat? = nil) {
         guard !panel.isUserResizing, !panel.inLiveResize, let screen = panel.screen ?? screenUnderPointer else { return }
-        let height = targetHeight(on: screen)
-        guard force || abs(height - noteFrame.height) > Self.heightTolerance else { return }
+        let target = targetHeight(on: screen, restoring: restoring)
+        guard force || abs(target - noteFrame.height) > Self.heightTolerance else { return }
         var frame = noteFrame
-        frame.origin.y = frame.maxY - height
-        frame.size.height = height
+        frame.origin.y = frame.maxY - target
+        frame.size.height = target
         setFrame(keepOnScreen(frame, visible: noteArea(screen)))
     }
 
@@ -455,7 +454,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         guard let screen = panel.screen else { return }
         let saved = PanelGeometry.recording(
             noteFrame, displayKey: screen.positionKey, in: settings.panelFrame, autoSize: settings.windowAutoSize,
-            temporary: temporaryHeight != nil, keepsPlacement: decision.keepsPlacement)
+            temporary: heightMode.isTemporary, keepsPlacement: decision.keepsPlacement)
         guard saved != settings.panelFrame else { return }
         do {
             settings = try repository.setSettings(["panelFrame": saved.json])
@@ -478,7 +477,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         let autoSize = patch["windowAutoSize"]?.boolValue ?? settings.windowAutoSize
         let saved = PanelGeometry.placing(
             placement, frame: frame, displayKey: displayKey, in: settings.panelFrame, autoSize: autoSize,
-            temporary: temporaryHeight != nil)
+            temporary: heightMode.isTemporary)
         guard saved != settings.panelFrame || !patch.isEmpty else { return }
         var values = patch
         values["panelFrame"] = saved.json
@@ -501,8 +500,7 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         let heightChanged = PanelGeometry.changesHeight(from: start, to: end, tolerance: Self.heightTolerance)
         if heightChanged {
             // The user's height wins over a temporary growth that was in effect.
-            temporaryHeight = nil
-            heightBeforeTemporary = nil
+            heightMode.endTemporary()
         }
         if heightChanged && settings.windowAutoSize {
             var frame = settings.panelFrame ?? PanelFrame(x: end.minX, y: end.maxY, width: end.width)
@@ -628,22 +626,15 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         saveFrameWork?.cancel()
         saveFrameWork = nil
         clearsPlacementOnSave = false
-        if placement.setsSize {
-            temporaryHeight = nil
-            heightBeforeTemporary = nil
-        }
+        if placement.setsSize { heightMode.endTemporary() }
         let current = panel.isVisible ? noteFrame.size : CGSize(width: noteFrame.width, height: targetHeight(on: screen))
         let frame = PanelGeometry.placed(placement, current: current, visible: noteArea(screen), minimum: minimumSize)
         setFrame(frame)
         storePlacement(
             placement, frame: frame, displayKey: screen.positionKey,
             patch: placement.setsSize ? ["windowAutoSize": false] : [:])
-        if pendingShow != nil {
-            // show, then place (the menu bar): the waiting show opens at this frame.
-            let wasVisible = panel.isVisible
-            cancelPendingShow()
-            makeVisible(wasAlready: wasVisible)
-        }
+        // show, then place (the menu bar): the waiting show opens at this frame.
+        completePendingShow(on: .placed)
         emitEvent("settings.changed", settings.json)
         return frame
     }
@@ -652,30 +643,20 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
     /// A temporary report grows the panel even with auto-sizing off; the next normal report
     /// clears it, which restores the content height (auto-sizing on) or the user's stored
     /// height (auto-sizing off).
-    func resizeWindow(contentHeight height: Double, temporary: Bool) async {
-        if recordEvents { resizeReports.append(height) }
-        let rounded = CGFloat(height).rounded(.up)
+    func resizeWindow(contentHeight reported: Double, temporary: Bool) async {
+        if recordEvents { resizeReports.append(reported) }
+        let rounded = CGFloat(reported).rounded(.up)
         if temporary {
-            // Temporary growth only grows: a panel that is already tall enough stays as it is,
-            // and so does an earlier, taller temporary growth.
             let wanted = PanelSizing.autoHeight(rounded, minimum: minimumSize.height, zoom: settings.zoom)
-            guard noteFrame.height < wanted.rounded() - Self.heightTolerance else { return }
-            if temporaryHeight == nil { heightBeforeTemporary = noteFrame.height }
-            temporaryHeight = wanted
+            guard heightMode.growTemporarily(to: wanted, current: noteFrame.height, tolerance: Self.heightTolerance)
+            else { return }
             applyHeight(force: true)
         } else {
-            let wasTemporary = temporaryHeight != nil
-            temporaryHeight = nil
-            contentHeight = rounded
-            if pendingShow != nil {
-                // The report a waiting show was for: order the panel in, placed at this height.
-                heightBeforeTemporary = nil
-                present()
-                return
-            }
-            // Restoring after a temporary growth still needs the height from before it.
-            applyHeight(force: wasTemporary)
-            heightBeforeTemporary = nil
+            let before = heightMode.report(content: rounded)
+            // The report a waiting show was for: order the panel in, placed at this height.
+            guard !completePendingShow(on: .heightReport(temporary: false)) else { return }
+            // Restoring after a temporary growth goes back to the height from before it.
+            applyHeight(force: before != nil, restoring: before)
         }
     }
 
@@ -798,16 +779,12 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         settings = newSettings
         applyWindowSettings()
         if frameForgotten {
-            temporaryHeight = nil
-            heightBeforeTemporary = nil
+            heightMode.endTemporary()
             restoreDefaultFrame()
             return
         }
-        if pendingShow != nil, !settings.windowAutoSize {
-            // Auto-sizing went off while a show waited for a height report: nothing to wait for.
-            present()
-            return
-        }
+        // Auto-sizing went off while a show waited for a height report: nothing to wait for.
+        if completePendingShow(on: .settingsChanged(autoSize: settings.windowAutoSize)) { return }
         if geometryChanged {
             applyHeight(force: true)
         }
