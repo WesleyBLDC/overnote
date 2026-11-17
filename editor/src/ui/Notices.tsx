@@ -1,4 +1,4 @@
-import type { Notice } from "./hooks";
+import type { Notice } from "./noticeState";
 import { Icon } from "./icons";
 
 /**
