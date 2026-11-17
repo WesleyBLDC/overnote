@@ -100,7 +100,7 @@
 .note-editor blockquote {
   position: relative;
   padding-left: calc(17em / 15);
-  color: var(--text-quote);
+  color: var(--text-soft);
 }
 
 .note-editor blockquote::before {

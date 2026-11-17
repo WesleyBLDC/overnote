@@ -292,7 +292,7 @@ test.describe("chrome sizing", () => {
       });
     expect(await scroller()).toEqual({ lines: 1, scrolls: false, overflowX: "auto" });
     const fitted = await minimumWidth();
-    await page.evaluate(() => (document.getElementById("root")!.style.width = "480px"));
+    await page.evaluate(() => (document.getElementById("root")!.style.width = "320px"));
     await expect.poll(scroller).toEqual({ lines: 1, scrolls: true, overflowX: "auto" });
     // The minimum is the bar's full width, not the narrower box it scrolls in.
     expect(await minimumWidth()).toBe(fitted);

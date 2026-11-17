@@ -352,7 +352,7 @@ test("⌘, opens Settings: controls write through settings.set and follow settin
   for (const id of ["escapeLosesFocus", "windowAutoSize", "hideWhileScreenSharing", "showFormatBar"]) {
     await expect(sw(id)).toHaveAttribute("aria-checked", "false");
   }
-  await expect(page.getByTestId("format-bar")).toHaveCount(0);
+  await expect(page.getByTestId("format-bar")).toBeHidden();
   await expect(page.getByRole("status").getByText("Settings reset to defaults")).toBeVisible();
   await expect(page.getByTestId("zoom-value")).toHaveText("100%");
 
