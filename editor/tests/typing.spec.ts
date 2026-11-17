@@ -122,6 +122,34 @@ test("undo reverts an input rule, then single characters", async ({ page }) => {
   await expect(editor(page)).toHaveText("ab");
 });
 
+test("slash menu: keys reach the open menu first, and Escape keeps the text and the menu closed until a new /", async ({
+  page,
+}) => {
+  const menu = page.getByTestId("slash-menu");
+  await page.keyboard.type("- item /quo");
+  await expect(menu.getByRole("option").first()).toContainText("Quote");
+  // Enter runs the menu item instead of splitting the list item.
+  await page.keyboard.press("Enter");
+  await expect(menu).toHaveCount(0);
+  await expect(editor(page).locator("[data-list-kind=bullet]")).toHaveCount(1);
+  expect(JSON.stringify(await docJSON(page))).not.toContain("/quo");
+
+  await page.keyboard.type(" /hea");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("option", { selected: true })).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  expect(await calls(page, "window.hide")).toHaveLength(0);
+  expect(JSON.stringify(await docJSON(page))).toContain("/hea");
+  // Still the same trigger: it stays dismissed.
+  await page.keyboard.type("d");
+  await expect(menu).toHaveCount(0);
+  // A new trigger opens it again.
+  await page.keyboard.type(" /");
+  await expect(menu).toBeVisible();
+});
+
 test("emoji picker inserts Unicode emoji", async ({ page }) => {
   await page.keyboard.type("a:");
   await expect(page.getByTestId("emoji-picker")).toHaveCount(0);

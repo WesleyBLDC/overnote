@@ -24,8 +24,9 @@ import { undoDepth } from "@tiptap/pm/history";
 import { createEditorExtensions, setSmartTypography } from "../editor/extensions";
 import { createNoteLowlight, loadGrammars } from "../editor/lowlight";
 import { chooseLinkTarget, type LinkTarget } from "../editor/linkRange";
-import { filterSlashItems, slashQueryAt, type SlashItem } from "../editor/slash";
-import { emojiQueryAt, recordEmojiUse } from "../editor/emoji";
+import { filterSlashItems, type SlashItem } from "../editor/slash";
+import { recordEmojiUse } from "../editor/emoji";
+import { setTriggerKeys, type TriggerMatch } from "../editor/triggers";
 import { EmojiPicker, type EmojiPickerHandle } from "./EmojiPicker";
 import { noteDeeplink } from "../lib/deeplink";
 import { exportFileName } from "../lib/fileName";
@@ -146,8 +147,9 @@ export function App({ api }: { api: Api }) {
   const findRef = useRef<FindBarHandle>(null);
   const slashRef = useRef<SlashMenuHandle>(null);
   const emojiRef = useRef<EmojiPickerHandle>(null);
-  const [emojiDismissed, setEmojiDismissed] = useState<number | null>(null);
-  const [slashDismissed, setSlashDismissed] = useState<number | null>(null);
+  // The open slash or emoji trigger, reported by Tiptap's Suggestion utility (editor/triggers.ts).
+  const [slashMatch, setSlashMatch] = useState<TriggerMatch | null>(null);
+  const [emojiMatch, setEmojiMatch] = useState<TriggerMatch | null>(null);
   // Bumped on every transaction: the editor state is read while rendering (shouldRerenderOnTransaction is off).
   const [, setTick] = useState(0);
 
@@ -196,6 +198,7 @@ export function App({ api }: { api: Api }) {
           if (target) setLinkTarget({ ...target, from, to });
         },
         copy: (text) => copyText(text),
+        triggers: { onChange: { slash: setSlashMatch, emoji: setEmojiMatch } },
       }),
     [copyText, openUrl, openLinkIn, lowlight],
   );
@@ -216,11 +219,17 @@ export function App({ api }: { api: Api }) {
         "data-testid": "editor",
         spellcheck: String(spellcheckRef.current),
       }),
-      handleKeyDown: (_view, event) =>
-        emojiRef.current?.onKeyDown(event) || slashRef.current?.onKeyDown(event) || false,
     },
     onTransaction: () => setTick((t) => t + 1),
   });
+
+  // Keys for an open slash menu or emoji picker reach it through Suggestion (editor/triggers.ts).
+  useEffect(() => {
+    setTriggerKeys(editor, {
+      slash: (event) => slashRef.current?.onKeyDown(event) ?? false,
+      emoji: (event) => emojiRef.current?.onKeyDown(event) ?? false,
+    });
+  }, [editor]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -373,10 +382,10 @@ export function App({ api }: { api: Api }) {
     doc.content?.length === 1 &&
     doc.content[0]?.type === "paragraph" &&
     !(doc.content[0].content?.length ?? 0);
-  const slash = editor.isFocused ? slashQueryAt(editor.state) : null;
-  const slashItems = slash && slash.from !== slashDismissed ? filterSlashItems(slash.query) : [];
-  const emojiQuery = editor.isFocused ? emojiQueryAt(editor.state) : null;
-  const showEmoji = emojiQuery !== null && emojiQuery.from !== emojiDismissed;
+  const slash = editor.isFocused ? slashMatch : null;
+  const slashItems = slash ? filterSlashItems(slash.query) : [];
+  const emojiQuery = editor.isFocused ? emojiMatch : null;
+  const showEmoji = emojiQuery !== null;
   // Only a dialog grows a short panel; panels and dropdowns stay inside it and scroll (useDropdownPlacement).
   const overlayRem = confirm ? 34 : null;
   const hasSelection = !editor.state.selection.empty;
@@ -1133,10 +1142,9 @@ export function App({ api }: { api: Api }) {
           query={slash.query}
           from={slash.from}
           onRun={runSlash}
-          onDismiss={() => setSlashDismissed(slash.from)}
         />
       ) : null}
-      {emojiQuery && showEmoji ? (
+      {emojiQuery ? (
         <EmojiPicker
           ref={emojiRef}
           editor={editor}
@@ -1147,7 +1155,6 @@ export function App({ api }: { api: Api }) {
             editor.chain().insertContentAt({ from: emojiQuery.from, to: emojiQuery.to }, emoji).run();
             recordEmojiUse(emoji);
           }}
-          onDismiss={() => setEmojiDismissed(emojiQuery.from)}
         />
       ) : null}
       {linkTarget ? (

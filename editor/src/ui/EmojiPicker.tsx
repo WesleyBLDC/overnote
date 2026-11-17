@@ -14,7 +14,6 @@ interface EmojiPickerProps {
   from: number;
   query: string;
   onPick: (emoji: string) => void;
-  onDismiss: () => void;
 }
 
 const COLUMNS = 9;
@@ -26,7 +25,7 @@ interface Cell {
 }
 
 export const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(function EmojiPicker(
-  { editor, from, query, onPick, onDismiss },
+  { editor, from, query, onPick },
   ref,
 ) {
   const [entries, setEntries] = useState<EmojiEntry[] | null>(null);
@@ -86,8 +85,7 @@ export const EmojiPicker = forwardRef<EmojiPickerHandle, EmojiPickerProps>(funct
 
   useImperativeHandle(ref, () => ({
     onKeyDown(event) {
-      if (event.key === "Escape") onDismiss();
-      else if (event.key === "Enter" || event.key === "Tab") {
+      if (event.key === "Enter" || event.key === "Tab") {
         if (loading) return true;
         if (event.key === "Tab") return true;
         if (index === quickButtonIndex) setExpanded(true);

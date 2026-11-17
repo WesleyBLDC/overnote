@@ -1,5 +1,5 @@
-/** Emoji picker data and trigger. The emoji database loads lazily. */
-import type { EditorState } from "@tiptap/pm/state";
+/** Emoji picker data and trigger rule. The emoji database loads lazily; the trigger runs on Suggestion (triggers.ts). */
+import type { ResolvedPos } from "@tiptap/pm/model";
 
 export interface EmojiEntry {
   emoji: string;
@@ -15,11 +15,8 @@ export interface EmojiQuery {
   query: string;
 }
 
-/** `:` at the start of a text block or after a space, followed by the query up to the caret. */
-export function emojiQueryAt(state: EditorState): EmojiQuery | null {
-  const { selection } = state;
-  if (!selection.empty) return null;
-  const { $from } = selection;
+/** `:` at the start of a text block or after a space, followed by the query up to the caret at `$from`. */
+export function emojiQueryAt($from: ResolvedPos): EmojiQuery | null {
   const parent = $from.parent;
   if (!parent.isTextblock || parent.type.spec.code) return null;
   if ($from.marks().some((mark) => mark.type.name === "code")) return null;

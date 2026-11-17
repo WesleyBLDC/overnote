@@ -1,5 +1,5 @@
-/** The slash menu trigger and items. */
-import type { EditorState } from "@tiptap/pm/state";
+/** The slash menu's trigger rule and items. The trigger runs on Tiptap's Suggestion utility (triggers.ts). */
+import type { ResolvedPos } from "@tiptap/pm/model";
 import { BLOCK_LABELS } from "./commands";
 
 export interface SlashQuery {
@@ -9,11 +9,8 @@ export interface SlashQuery {
   query: string;
 }
 
-/** The active `/query` before the caret, if the rules allow a menu there. */
-export function slashQueryAt(state: EditorState): SlashQuery | null {
-  const { selection } = state;
-  if (!selection.empty) return null;
-  const { $from } = selection;
+/** The active `/query` before the caret at `$from`, if the rules allow a menu there. */
+export function slashQueryAt($from: ResolvedPos): SlashQuery | null {
   const parent = $from.parent;
   if (!parent.isTextblock || parent.type.spec.code) return null;
   if ($from.marks().some((mark) => mark.type.name === "code")) return null;
