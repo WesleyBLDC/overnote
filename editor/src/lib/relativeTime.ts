@@ -31,11 +31,3 @@ export function relativeTime(then: number, now: number = Date.now()): string {
   const years = Math.floor(days / 365);
   return years <= 1 ? "last year" : plural(years, "year");
 }
-
-export function characterLabel(count: number): string {
-  return `${count} ${count === 1 ? "character" : "characters"}`;
-}
-
-export function wordLabel(count: number): string {
-  return `${count} ${count === 1 ? "word" : "words"}`;
-}

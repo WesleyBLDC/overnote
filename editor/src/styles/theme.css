@@ -274,8 +274,8 @@
   --terminal-height: 360px;
 
   /* ---- window layout ---- */
-  /* The helper's resize zones: 10 pt along edges, 24 pt squares at corners; controls stay outside. */
-  --corner-clearance: 24px;
+  /* The helper's resize zones: 10 pt along edges, 12 pt squares at corners; controls stay outside. */
+  --corner-clearance: 12px;
   --edge-zone: 10px;
   /* Dropdowns keep this far from the panel's sides and bottom: clear of the edge zones, and never touching. */
   --dropdown-inset: max(var(--edge-zone), var(--space-2));
@@ -337,8 +337,6 @@
   /* Task 10 (find): the current match becomes solid --find-current with --bg-panel text. */
   --find-active: color-mix(in srgb, var(--warning) 40%, transparent);
   --find-active-outline: var(--warning);
-  /* Tasks 4 and 5 (bottom row): room for the old count pill and island; the design's is --note-padding-bottom. */
-  --content-bottom: calc(60rem / 14);
   /* Task 5 (format island): the old island's side clearance; the design centres it on the panel instead. */
   --count-room: calc(max(var(--corner-clearance), var(--corner-inset)) + 6rem);
 }

@@ -1010,6 +1010,7 @@ export function App({ api }: { api: Api }) {
         countMode={settings.countMode}
         showFormatBar={settings.showFormatBar && !preview}
         onToggleCount={() => updateSettings({ countMode: settings.countMode === "words" ? "characters" : "words" })}
+        onToggleFormatBar={() => updateSettings({ showFormatBar: !settings.showFormatBar })}
         openLink={openLink}
       />
       {slash && slashItems.length ? (

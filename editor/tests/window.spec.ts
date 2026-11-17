@@ -14,13 +14,13 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await settle(page);
   expect(await reports()).toEqual([]);
 
-  // With auto-sizing on, a one-line note is about 143 points (one 120% line between the bars), so
-  // the panel rests at the 197 point minimum, footer at the bottom.
+  // With auto-sizing on, a one-line note is about 124 points (the 46 point bar, 6 above the text, one
+  // 24 point line, and the 48 point bottom row), so the panel rests at the 197 point minimum.
   await page.keyboard.press("Meta+Shift+Slash");
   await expect.poll(async () => (await reports()).length).toBeGreaterThan(0);
   const start = (await last())?.contentHeight ?? 0;
-  expect(start).toBeGreaterThanOrEqual(134);
-  expect(start).toBeLessThanOrEqual(146);
+  expect(start).toBeGreaterThanOrEqual(122);
+  expect(start).toBeLessThanOrEqual(130);
   const resting = Math.max(197, start);
   await expect.poll(appHeight).toBe(resting);
   const footerGap = await page
@@ -618,8 +618,8 @@ test("the top bar follows the editor board: a 46 point bar, the Close dot, and 3
     expect(w).toBeCloseTo(30, 1);
     expect(h).toBeCloseTo(30, 1);
   }
-  // What you aim at stays clear of the helper's resize zones (10 points along edges, 24 point squares at the
-  // bottom corners, 12 point squares at the top corners): the top bar's visible glyphs, and the footer's buttons.
+  // What you aim at stays clear of the helper's resize zones (10 points along edges, 12 point squares at the
+  // corners): the top bar's visible glyphs, and the corner chips.
   // The top bar's hit areas may reach a point or two into the top edge zone, where the helper takes the pointer.
   const clearance = await page.evaluate(() => {
     const app = document.querySelector("[data-testid=app]")!.getBoundingClientRect();
@@ -632,7 +632,7 @@ test("the top bar follows the editor board: a 46 point bar, the Close dot, and 3
       const top = r.top - app.top;
       const right = app.right - r.right;
       const bottom = app.bottom - r.bottom;
-      const corner = top < bottom ? 12 : 24;
+      const corner = 12;
       return {
         name: el.closest("button")?.getAttribute("aria-label") ?? el.textContent,
         edge: Math.min(left, top, right, bottom),
@@ -792,29 +792,56 @@ test("the top bar shows at rest, centred in 46 points, and Close hides the panel
   await expect.poll(async () => (await calls(page, "window.hide")).length).toBe(1);
 });
 
-test("the count pill: characters or words, selected of total, and the format island beside it", async ({ page }) => {
+test("the corner: a words or characters count, only the selection while selecting, Aa, and the format island", async ({
+  page,
+}) => {
   await openHarness(page);
   await page.keyboard.type("Hello world");
   const counter = page.getByTestId("counter");
-  await expect(counter).toHaveText("11");
-  await expect(counter).toHaveAccessibleName("11 characters");
-  await counter.click();
-  await expect(counter).toHaveText("2");
+  const value = counter.locator(".corner-count-value");
+  // Words by default; the icon says which, and a click switches and remembers.
+  await expect(value).toHaveText("2");
   await expect(counter).toHaveAccessibleName("2 words");
-  await expect.poll(async () => (await calls(page, "settings.set")).at(-1)?.params).toEqual({ countMode: "words" });
-  // With a selection the pill shows the selected count over the total.
+  await counter.click();
+  await expect(value).toHaveText("11");
+  await expect(counter).toHaveAccessibleName("11 characters");
+  await expect
+    .poll(async () => (await calls(page, "settings.set")).at(-1)?.params)
+    .toEqual({ countMode: "characters" });
+  // With a selection the corner shows only the selected count, brighter.
   await page.keyboard.press("Shift+Alt+ArrowLeft");
-  await expect(counter).toHaveText("1/2");
-  await expect(counter).toHaveAccessibleName("1 of 2 words selected");
+  await expect(value).toHaveText("5");
+  await expect(counter).toHaveAccessibleName("5 characters selected");
+  await expect(counter).toHaveClass(/is-selection/);
   await page.keyboard.press("ArrowRight");
-  await expect(counter).toHaveText("2");
-  // Bottom right, 24 points tall on screen, clear of the corner resize square.
-  const place = await counter.evaluate((el) => {
+  await expect(value).toHaveText("11");
+  // Board 05: the corner sits 12 points from the right and bottom edges, its chips 24 points tall, 4 apart.
+  const place = await page.getByTestId("corner").evaluate((el) => {
     const app = el.closest(".app")!.getBoundingClientRect();
     const r = el.getBoundingClientRect();
-    return { right: app.right - r.right, pill: parseFloat(getComputedStyle(el, "::before").height) };
+    const pills = [...el.children].map((c) => {
+      const box = c.getBoundingClientRect();
+      const pill = parseFloat(getComputedStyle(c, "::before").height);
+      return { box, pill, bottom: box.bottom - (box.height - pill) / 2 };
+    });
+    const [count, aa] = pills;
+    return {
+      right: app.right - r.right,
+      bottom: app.bottom - aa!.bottom,
+      chips: [count!.pill, aa!.pill],
+      gap: aa!.box.left - count!.box.right,
+    };
   });
-  expect(place).toEqual({ right: 24, pill: 24 });
+  expect(place).toEqual({ right: 12, bottom: 12, chips: [24, 24], gap: 4 });
+
+  // Aa pins the format island and shows it is pinned; a second click unpins it.
+  const aa = page.getByTestId("pin-format");
+  await aa.click();
+  await expect(page.getByTestId("format-bar")).toBeVisible();
+  await expect(aa).toHaveAttribute("aria-pressed", "true");
+  await aa.click();
+  await expect(page.getByTestId("format-bar")).toBeHidden();
+  await expect(aa).toHaveAttribute("aria-pressed", "false");
 
   await page.keyboard.press("Alt+Meta+Comma");
   const bar = page.getByTestId("format-bar");
@@ -827,7 +854,7 @@ test("the count pill: characters or words, selected of total, and the format isl
   await bar.getByRole("button", { name: "List" }).click();
   await page.getByRole("menuitemcheckbox", { name: /Task List/ }).click();
   await expect(bar.getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
-  // ⌘K keeps the toggle reachable now that the footer has no button for it.
+  // ⌘K reaches the same toggle.
   await page.keyboard.press("Meta+k");
   await expect(page.getByTestId("command-panel")).toBeVisible();
   await page.keyboard.type("Toggle Format Bar");

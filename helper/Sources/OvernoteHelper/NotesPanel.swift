@@ -224,10 +224,9 @@ struct ResizeEdge: OptionSet, Hashable {
 
     /// Along each edge.
     static let edgeThickness: CGFloat = 10
-    /// The square at each bottom corner.
-    static let cornerSize: CGFloat = 24
-    /// The square at each top corner: smaller, so the top bar's last button, 12 pt from the edge, stays clickable.
-    static let topCornerSize: CGFloat = 12
+    /// The square at each corner: small enough that the top bar's last button and the bottom row's corner chips,
+    /// 12 pt from the edges, stay clickable.
+    static let cornerSize: CGFloat = 12
 
     var name: String {
         let parts: [(ResizeEdge, String)] = [(.top, "top"), (.bottom, "bottom"), (.left, "left"), (.right, "right")]
@@ -237,12 +236,10 @@ struct ResizeEdge: OptionSet, Hashable {
     /// The zone at `point` (bottom left origin) in a view of `size`, or nil in the interior.
     static func zone(at point: NSPoint, in size: NSSize) -> ResizeEdge? {
         guard point.x >= 0, point.y >= 0, point.x <= size.width, point.y <= size.height else { return nil }
-        let inBottomCorner = point.y < cornerSize && (point.x < cornerSize || point.x > size.width - cornerSize)
-        let inTopCorner =
-            point.y > size.height - topCornerSize
-            && (point.x < topCornerSize || point.x > size.width - topCornerSize)
-        if inBottomCorner || inTopCorner {
-            return [point.x < size.width / 2 ? .left : .right, inTopCorner ? .top : .bottom]
+        let nearLeft = point.x < cornerSize, nearRight = point.x > size.width - cornerSize
+        let nearBottom = point.y < cornerSize, nearTop = point.y > size.height - cornerSize
+        if (nearLeft || nearRight) && (nearTop || nearBottom) {
+            return [nearLeft ? .left : .right, nearTop ? .top : .bottom]
         }
         var edge: ResizeEdge = []
         if point.x < edgeThickness { edge.insert(.left) }

@@ -5,8 +5,9 @@ const paths: Record<string, ReactElement> = {
   plus: <path d="M8 3v10M3 8h10" />,
   minus: <path d="M3 8h10" />,
   browse: <path d="M3 4h10M3 8h10M3 12h6" />,
-  /* The word count glyph from the editor board (16 point grid, 1.5 point stroke). */
+  /* The corner count glyphs (design icons words.svg and chars.svg, 16 point grid, 1.5 point stroke). */
   words: <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7" />,
+  characters: <path d="M4.5 12.5 8 3.5l3.5 9M5.8 9.5h4.4" />,
   format: <path d="M4 12 7.5 3h1L12 12M5.3 9h5.4" />,
   heading: <path d="M4 3v10M12 3v10M4 8h8" />,
   link: (

@@ -120,7 +120,7 @@ public struct Settings: Equatable, Sendable {
     public var hideWhileScreenSharing = false
     public var zoom = 1.0
     public var showFormatBar = false
-    public var countMode = CountMode.characters
+    public var countMode = CountMode.words
     /// Off by default: the first open uses a roomy fixed size instead.
     public var windowAutoSize = false
     public var panelFrame: PanelFrame?
