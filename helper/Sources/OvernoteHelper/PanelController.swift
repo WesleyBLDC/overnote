@@ -737,6 +737,10 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         NSWorkspace.shared.open(url)
     }
 
+    func quit() async {
+        NSApp.terminate(nil)
+    }
+
     func revealInFinder(path: String) async {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }

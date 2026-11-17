@@ -140,6 +140,8 @@ export function App({ api }: { api: Api }) {
   // Search's views, or the Settings page (⌘,), which covers the note instead of floating over it.
   const [panel, setPanel] = useState<PanelViewName | "settings" | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  // Overnote.app or the extension's helper (system.ready); only the app offers Quit.
+  const [host, setHost] = useState<"app" | "extension">("extension");
   const [find, setFind] = useState<{ term: string } | null>(null);
   const findRef = useRef<FindBarHandle>(null);
   const slashRef = useRef<SlashMenuHandle>(null);
@@ -287,6 +289,7 @@ export function App({ api }: { api: Api }) {
       .then(async (ready) => {
         if (cancelled) return;
         setSettings(ready.settings);
+        setHost(ready.host);
         await session.applyBoot(ready.windowData);
         focusEditorNow(editor);
       })
@@ -456,7 +459,13 @@ export function App({ api }: { api: Api }) {
       });
   }, [api, session]);
 
-  /** The red close dot: always hides, whatever Escape is set to do. */
+  /** Quit Overnote (⌘Q in the native menu, or All actions): the helper saves pending edits, then exits. */
+  const quitApp = useCallback(() => {
+    session.saveInBackground();
+    void api.app.quit().catch(() => notify("Could not quit Overnote. Try again.", "error"));
+  }, [api, session, notify]);
+
+  /** The red dot and ⌘M: always hide, whatever Escape is set to do (with no Dock icon, minimize means hide). */
   const closeWindow = useCallback(() => {
     session.saveInBackground();
     void api.window.hide().catch(() => undefined);
@@ -742,6 +751,21 @@ export function App({ api }: { api: Api }) {
           destructive: true,
           run: deleteAll,
         },
+        // Only Overnote.app quits: the Raycast extension owns its helper and starts it on demand.
+        ...(host === "app"
+          ? [
+              {
+                id: "quit",
+                title: "Quit Overnote",
+                shortcut: "⌘Q",
+                section: "danger",
+                icon: "power",
+                destructive: true,
+                keywords: ["exit", "close app"],
+                run: quitApp,
+              } satisfies PanelAction,
+            ]
+          : []),
       ],
       format: [
         { id: "heading", title: "Heading…", section: "Inline", push: "heading" },
@@ -816,6 +840,8 @@ export function App({ api }: { api: Api }) {
       })),
     };
   }, [
+    host,
+    quitApp,
     hasSelection,
     inList,
     blank,
@@ -845,6 +871,7 @@ export function App({ api }: { api: Api }) {
   // ---- window level shortcuts ----
 
   const handlers = useLatest({
+    closeWindow,
     createQuicklink,
     lists,
     session,
@@ -922,6 +949,7 @@ export function App({ api }: { api: Api }) {
         return;
       }
       if (matches(event, { code: "KeyN", meta: true })) return run(() => void h.session.newNote());
+      if (matches(event, { code: "KeyM", meta: true })) return run(h.closeWindow);
       if (matches(event, { code: "KeyX", ctrl: true })) return run(() => void h.session.deleteCurrent());
       if (matches(event, { code: "KeyX", ctrl: true, shift: true })) return run(h.deleteAll);
       if (matches(event, { code: "KeyP", meta: true, shift: true })) return run(() => void h.session.togglePin());

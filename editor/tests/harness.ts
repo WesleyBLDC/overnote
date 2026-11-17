@@ -8,9 +8,10 @@ export interface RecordedCall {
 }
 
 /** Opens the dev harness with the given notes (Markdown, newest last), or none. */
-export async function openHarness(page: Page, notes: string[] = []): Promise<void> {
+/** `extra` adds mock options to the URL, for example `host=app` to stand in for Overnote.app. */
+export async function openHarness(page: Page, notes: string[] = [], extra = ""): Promise<void> {
   const seed = notes.length ? encodeURIComponent(JSON.stringify(notes)) : "empty";
-  await page.goto(`/?seed=${seed}`);
+  await page.goto(`/?seed=${seed}${extra ? `&${extra}` : ""}`);
   await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
   await page.locator(".note-editor").focus();
   // For 200 ms after a focus, ProseMirror takes a caret that lands on the document start for a
