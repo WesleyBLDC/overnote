@@ -42,6 +42,7 @@ const SCHEMES = {
     quote: "rgb(58, 61, 67)",
     quoteBar: "rgba(0, 0, 0, 0.18)",
     ring: "rgb(180, 182, 187)",
+    ghost: "rgb(180, 181, 186)",
   },
   dark: {
     panel: "rgb(24, 24, 26)",
@@ -56,6 +57,7 @@ const SCHEMES = {
     quote: "rgb(212, 212, 216)",
     quoteBar: "rgba(255, 255, 255, 0.22)",
     ring: "rgb(90, 90, 96)",
+    ghost: "rgb(90, 90, 96)",
   },
 } as const;
 
@@ -113,9 +115,9 @@ for (const scheme of ["light", "dark"] as const) {
       expect(await style(page, `${checked} code`, "opacity")).toBe("1");
     });
 
-    test("normal state: placeholder in tertiary text, snapshot", async ({ page }) => {
+    test("normal state: the empty note's ghost title, snapshot", async ({ page }) => {
       await openHarness(page);
-      expect(await style(page, ".note-editor .is-empty", "color", "::before")).toBe(SCHEMES[scheme].tertiary);
+      expect(await style(page, ".note-editor .is-empty", "color", "::before")).toBe(SCHEMES[scheme].ghost);
       await openHarness(page, NOTE);
       await page.mouse.move(5, 5);
       await expect(editor(page)).toHaveScreenshot(`note-${scheme}.png`, { maxDiffPixelRatio: 0.01 });

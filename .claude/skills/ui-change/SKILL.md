@@ -13,7 +13,7 @@ description: Change the Overnote editor or panel UI and prove it visually. Use f
    Text keeps 4.5:1 contrast on its surface in both modes.
 3. Icons: 17 pt on a 24 grid, stroke 1.6, round caps and joins, in `editor/src/ui/icons.tsx`.
 4. Check dark and light at 2x with Playwright WebKit, and look at every screenshot yourself before claiming the change works.
-5. Update the visual baselines for `editor/tests/visual.spec.ts` (run only that spec with `--update-snapshots`), and refresh README shots with `npm run shots:readme` when the README shows the changed chrome.
+5. Update the visual baselines for `editor/tests/visual.spec.ts` (run only that spec with `--update-snapshots`; for a screen the change redesigns, pass `--update-snapshots=all` with `-g`, because a lenient `maxDiffPixelRatio` can pass the old picture against the new look), and refresh README shots with `npm run shots:readme` when the README shows the changed chrome.
    Never copy Playwright baselines into `media/`.
 6. Keep anything the change displaces reachable from Search's All actions (⌘K), and say in the PR what moved.
    In tests, move the pointer off a list (`page.mouse.move(0, 0)`) before keyboard checks: WebKit fires `mouseenter` on the row that a re-render puts under a resting pointer, and hover selects rows.

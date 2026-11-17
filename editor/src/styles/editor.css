@@ -135,6 +135,21 @@
   pointer-events: none;
 }
 
+/*
+ * An empty note's one line is the title line (SPEC §9): it is drawn at title size with the ghost "Untitled", so the
+ * caret is title height and the first keystroke (titleLine.ts makes the line a Title) changes nothing in the layout.
+ */
+.note-editor > p.is-editor-empty:only-child {
+  font-size: var(--font-size-title);
+  line-height: var(--line-height-title);
+  font-weight: var(--font-weight-title);
+  letter-spacing: var(--tracking-title);
+}
+
+.note-editor > :is(p, h1).is-empty:only-child::before {
+  color: var(--text-ghost);
+}
+
 /* ---- flat lists ---- */
 
 /*

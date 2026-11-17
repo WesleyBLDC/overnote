@@ -267,9 +267,9 @@ test("the first line renders exactly like body text and still names the note", a
   await expect(page.getByTestId("title")).toHaveText("Say Hello");
   await expect.poll(async () => String((await lastSave(page)).title)).toBe("Say Hello");
 
-  // An empty note shows the placeholder in plain body style and names itself "Untitled".
+  // An empty note shows the ghost title and names itself "Untitled".
   await openHarness(page);
-  await expect(editor(page).locator(":scope > p")).toHaveAttribute("data-placeholder", "Start writing…");
+  await expect(editor(page).locator(":scope > p")).toHaveAttribute("data-placeholder", "Untitled");
   await expect(page.getByTestId("title")).toHaveText("Untitled");
   await page.keyboard.type("T");
   await expect(page.getByTestId("title")).toHaveText("T");
@@ -777,8 +777,8 @@ test("the top bar shows at rest, centred in 46 points, and Close hides the panel
 test("the corner: a words or characters count, only the selection while selecting, Aa, and the format island", async ({
   page,
 }) => {
-  await openHarness(page);
-  await page.keyboard.type("Hello world");
+  await openHarness(page, ["Hello world"]);
+  await page.keyboard.press("Meta+ArrowDown");
   const counter = page.getByTestId("counter");
   const value = counter.locator(".corner-count-value");
   // Words by default; the icon says which, and a click switches and remembers.

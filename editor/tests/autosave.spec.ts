@@ -17,7 +17,7 @@ test("an empty store gets a note, typing saves after about 300 ms with derived f
   expect(await contentSaves()).toHaveLength(0);
   await page.clock.runFor(100);
   const save = await lastSave(page);
-  expect(save).toMatchObject({ title: "Groceries", text: "Groceries\n\neggs", markdown: "Groceries\n\n- eggs" });
+  expect(save).toMatchObject({ title: "Groceries", text: "Groceries\n\neggs", markdown: "# Groceries\n\n- eggs" });
   expect(typeof save.expectedUpdatedAt).toBe("number");
   expect(JSON.parse(String(save.rawContent)).type).toBe("doc");
   expect(await contentSaves()).toHaveLength(1);

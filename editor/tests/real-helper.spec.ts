@@ -230,7 +230,7 @@ test("a socket write that lands while the person types is merged into their edit
     await pauseClock(page);
     await page.keyboard.type("Draft");
     await page.clock.runFor(400);
-    type Stored = { id: string; updatedAt: number; text: string };
+    type Stored = { id: string; updatedAt: number; text: string; rawContent: string };
     const note = async () => {
       const { items } = (await helper.call("notes.list", {})) as { items: { id: string }[] };
       return (await helper.call("notes.get", { id: items[0]?.id })) as Stored;
@@ -238,18 +238,18 @@ test("a socket write that lands while the person types is merged into their edit
     await expect.poll(async () => (await note()).text).toBe("Draft");
 
     await page.keyboard.type(" mine");
-    // overnote-axi appends a paragraph through the socket, guarded by the version it read.
+    // overnote-axi appends a paragraph to the blocks it read through the socket, guarded by that version.
     const before = await note();
-    const paragraphs = ["Draft", "From outside"];
+    const stored = JSON.parse(before.rawContent) as { content: unknown[] };
     const written = (await helper.call("notes.update", {
       id: before.id,
       expectedUpdatedAt: before.updatedAt,
       rawContent: JSON.stringify({
         type: "doc",
-        content: paragraphs.map((text) => ({ type: "paragraph", content: [{ type: "text", text }] })),
+        content: [...stored.content, { type: "paragraph", content: [{ type: "text", text: "From outside" }] }],
       }),
-      markdown: paragraphs.join("\n\n"),
-      text: paragraphs.join("\n\n"),
+      markdown: "# Draft\n\nFrom outside",
+      text: "Draft\n\nFrom outside",
       title: "Draft",
     })) as { status: string };
     expect(written.status).toBe("ok");
