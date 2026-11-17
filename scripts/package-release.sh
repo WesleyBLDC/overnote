@@ -99,7 +99,7 @@ FILES="$(cd "$STAGE" && find overnote -type f | sort)"
 cat > "$OUT/release-notes.md" <<EOF
 ## Install
 
-Overnote is a Raycast extension (not a standalone app).
+This zip is the Raycast extension. The standalone menu bar app, \`Overnote.app\`, has no prebuilt download yet: build it from a source checkout with \`npm run app:install\` (see docs/install.md).
 
 1. Download \`overnote-$VERSION.zip\` below, unzip it, and move the \`overnote\` folder to a stable path, for example \`~/Applications/Overnote\`.
 2. In Terminal: \`cd ~/Applications/Overnote\` (or that folder) and run \`npm run install-extension\`.
