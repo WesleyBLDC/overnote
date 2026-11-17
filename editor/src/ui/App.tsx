@@ -694,7 +694,14 @@ export function App({ api }: { api: Api }) {
           keywords: ["preferences"],
           push: "settings",
         },
-        { id: "deleted", title: "Show Recently Deleted Notes", section: "danger", icon: "trash", push: "deleted" },
+        {
+          id: "deleted",
+          title: "Recently Deleted",
+          section: "danger",
+          icon: "restore",
+          keywords: ["show", "trash", "deleted notes", "recover"],
+          push: "deleted",
+        },
         {
           id: "delete",
           title: "Delete Note",
@@ -1066,6 +1073,7 @@ export function App({ api }: { api: Api }) {
           }
           onClose={closePanel}
           onOpenNote={(id: NoteId) => void session.open(id)}
+          onCreateNote={(title) => void session.newNote(title)}
           onTogglePin={(id, pin) =>
             attempt(pin ? "pin the note" : "unpin the note", async () => {
               if (pin) await api.notes.pin(id);

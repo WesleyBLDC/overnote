@@ -277,6 +277,16 @@
   /* ---- window layout ---- */
   /* The helper's resize zones: 10 pt along edges, 12 pt squares at corners; controls stay outside. */
   --corner-clearance: 12px;
+  /* Search (board 07): the box, its field, key action chips, and rows. */
+  --search-width: calc(700rem / 14);
+  --search-max-height: calc(520rem / 14);
+  --search-list-width: calc(270rem / 14);
+  --search-field-height: calc(56rem / 14);
+  --font-size-search: calc(21rem / 14);
+  --search-chip-height: calc(30rem / 14);
+  --radius-search-chip: calc(9rem / 14);
+  --radius-search-row: calc(10rem / 14);
+  --search-chip-fill: rgba(24, 24, 27, 0.05);
   --edge-zone: 10px;
   /* Dropdowns keep this far from the panel's sides and bottom: clear of the edge zones, and never touching. */
   --dropdown-inset: max(var(--edge-zone), var(--space-2));
@@ -305,7 +315,6 @@
   /* Panels (⌘K, browse, settings): row heights and widths. */
   --row-height: 2.4rem;
   --row-height-tall: 3.2rem;
-  --panel-width: 22.8rem;
   --harness-backdrop: linear-gradient(135deg, #e9e9ec, #d6d6da);
   --harness-material: rgba(236, 236, 239, 0.7);
   --scrollbar-thumb: rgba(0, 0, 0, 0.22);
@@ -325,6 +334,7 @@
     --tooltip-bg: #2a2a2e;
     --panel-shadow: 0 14px 40px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(255, 255, 255, 0.14);
     --shadow-island: 0 6px 18px rgba(0, 0, 0, 0.35), 0 0 0 0.5px var(--border-strong);
+    --search-chip-fill: rgba(255, 255, 255, 0.07);
 
     --harness-backdrop: linear-gradient(135deg, #34343a, #111113);
     --harness-material: rgba(52, 52, 56, 0.62);

@@ -142,47 +142,44 @@ test("Recently Deleted shows skeletons on its first load and retries after a fai
   await expect(page.getByTestId("panel-error")).toHaveCount(0);
 });
 
-test("browse reads Pinned and Notes with aligned titles, the Current label, and the panel width", async ({ page }) => {
+test("Search reads Pinned then Recent with aligned titles, the Current label, and a preview of the highlighted note", async ({
+  page,
+}) => {
   await openHarness(page, NOTES);
   await page.keyboard.press("Meta+Shift+p");
   await page.keyboard.press("Meta+p");
   await expect(page.getByTestId("browse-row")).toHaveCount(2);
   const surface = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>("[data-testid=command-panel]")!;
+    const app = document.querySelector<HTMLElement>("[data-testid=app]")!;
     const rows = [...panel.querySelectorAll<HTMLElement>("[data-testid=browse-row]")];
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const width = getComputedStyle(document.documentElement).getPropertyValue("--panel-width");
     return {
       sections: [...panel.querySelectorAll(".menu-section")].map((el) => el.textContent?.trim()),
-      leadingPin: rows.map((row) => row.querySelector(".panel-row-leading svg") !== null),
       titleLefts: rows.map((row) => row.querySelector(".panel-row-title")!.getBoundingClientRect().left),
-      // Layout width: the entrance animation scales the bounding box.
-      panelWidthRem: panel.offsetWidth / rem,
-      tokenRem: parseFloat(width),
+      // Layout width: the entrance animation scales the bounding box. 700 points, or the panel less 12 a side.
+      width: panel.offsetWidth,
+      expected: Math.min((700 / 14) * rem, app.offsetWidth - 24),
     };
   });
-  expect(surface.sections).toEqual(["Pinned", "Notes"]);
-  expect(surface.leadingPin).toEqual([true, false]);
+  expect(surface.sections).toEqual(["Pinned", "Recent"]);
   expect(surface.titleLefts[0]).toBe(surface.titleLefts[1]);
-  expect(Math.abs(surface.panelWidthRem - surface.tokenRem)).toBeLessThan(0.05);
+  expect(Math.abs(surface.width - surface.expected)).toBeLessThan(1);
   await expect(page.getByTestId("browse-row").first()).toContainText("Current");
 
-  // Only the selected row has its buttons; pointing at a row selects it.
-  await expect(page.locator(".panel-row-buttons")).toHaveCount(1);
+  // Pointing at a row selects it, and the preview follows.
   const second = page.getByTestId("browse-row").nth(1);
   await second.hover();
   await expect(second).toHaveClass(/is-selected/);
-  await expect(second.getByRole("button", { name: "Pin Note" })).toBeVisible();
-  await expect(second.getByRole("button", { name: "Delete Note" })).toBeVisible();
-  await expect(page.locator(".panel-row-buttons")).toHaveCount(1);
+  const secondTitle = (await second.locator(".panel-row-title").textContent()) ?? "";
+  await expect(page.getByTestId("search-preview").locator(".search-preview-title")).toHaveText(secondTitle);
 
-  // With nothing pinned there is no leading slot, so titles start where the search text does.
+  // With nothing pinned, every note is under Recent.
   await page.keyboard.press("Escape");
   await page.keyboard.press("Meta+Shift+p");
   await page.keyboard.press("Meta+p");
   await expect(page.getByTestId("browse-row")).toHaveCount(2);
-  await expect(page.locator(".panel-row-leading")).toHaveCount(0);
-  await expect(page.locator(".panel .menu-section")).toHaveText(["Notes"]);
+  await expect(page.locator(".panel .menu-section")).toHaveText(["Recent"]);
 });
 
 test("roving tabindex: one tabbable row, no tabbable row buttons, Tab reaches the selected row", async ({ page }) => {
@@ -222,7 +219,7 @@ test("roving tabindex: one tabbable row, no tabbable row buttons, Tab reaches th
   await expect(search).toBeFocused();
   expect(await tabbable(page)).toEqual({ options: 1, selectedIsTabbable: true, rowButtons: 0 });
   await page.keyboard.press("Tab");
-  await expect(page.getByTestId("action-new")).toBeFocused();
+  await expect(page.getByTestId("action-duplicate")).toBeFocused();
   expect((await ring(page)).shadow).not.toBe("none");
   await page.keyboard.press("ArrowDown");
   await expect(page.locator("[data-testid=command-panel] [role=option].is-selected")).toBeFocused();
@@ -281,25 +278,35 @@ test("roving tabindex in the format menu, slash menu, and emoji picker", async (
   await expect(picker.locator(".emoji-cell[tabindex='0']")).toHaveCount(0);
 });
 
-test("every root action carries one icon before its title, placement actions included", async ({ page }) => {
+test("every action in All actions carries one icon before its title, submenus and placement included", async ({
+  page,
+}) => {
   await openHarness(page, NOTES);
   await page.keyboard.press("Meta+k");
-  await expect(page.getByTestId("action-new")).toBeVisible();
-  const rows = await page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>("[data-testid=command-panel] [data-testid^=action-]")].map((row) => {
-      const first = row.firstElementChild!;
-      return {
-        id: row.dataset.testid,
-        leadingIcon: first.matches("svg.icon"),
-        before:
-          first.getBoundingClientRect().right <= row.querySelector(".panel-row-title")!.getBoundingClientRect().left,
-      };
-    }),
-  );
-  expect(rows.length).toBeGreaterThan(20);
+  await expect(page.getByTestId("action-duplicate")).toBeVisible();
+  const collect = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>("[data-testid=command-panel] [role=option]")].map((row) => {
+        const first = row.firstElementChild!;
+        return {
+          id: row.dataset.testid,
+          leadingIcon: first.matches("svg.icon"),
+          before:
+            first.getBoundingClientRect().right <= row.querySelector(".panel-row-title")!.getBoundingClientRect().left,
+        };
+      }),
+    );
+  // Each submenu fills the right pane while it is highlighted.
+  const rows = new Map<string, { leadingIcon: boolean; before: boolean }>();
+  for (const id of ["share", "go", "window", "zoom"]) {
+    await page.getByTestId(`submenu-${id}`).hover();
+    await expect(page.getByTestId("search-submenu")).toBeVisible();
+    for (const row of await collect()) rows.set(row.id ?? "", row);
+  }
+  expect(rows.size).toBeGreaterThan(20);
   for (const id of ["action-fillLeft", "action-fillRight", "action-fillScreen", "action-centre"])
-    expect(rows.map((row) => row.id)).toContain(id);
-  expect(rows.filter((row) => !row.leadingIcon || !row.before)).toEqual([]);
+    expect([...rows.keys()]).toContain(id);
+  expect([...rows].filter(([, row]) => !row.leadingIcon || !row.before)).toEqual([]);
 
   // The placement actions still run from the panel.
   await page.locator(".panel-search").fill("Fill Left");

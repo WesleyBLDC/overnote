@@ -31,7 +31,8 @@ Press it again and it is gone.
 - Floating panel over full-screen apps and every Space; typing without stealing focus
 - Markdown as you type, `/` slash menu, emoji picker, a format island you can pin with Aa (⌥⌘,), and a corner count that switches between words and characters
 - Tasks (⌘↩), nested lists, syntax-highlighted code, find and replace (⌘F)
-- Pins (⇧⌘P, ⌘1–⌘9), browse (⌘P), history (⌘[ / ⌘])
+- Search (⌘P): notes with a live preview, key actions, and every action behind ⌘K or `>`
+- Pins (⇧⌘P, ⌘1–⌘9), history (⌘[ / ⌘])
 - Window placement: Fill Left / Right / Screen / Centre (⌃⌥ arrows, ⌘K, or the menu bar)
 - Terminal drawer under the note (⌃` or the toolbar), backed by a kept Herdr terminal when `hc` is installed, else your login shell
 - Export and copy as Markdown, HTML, or plain text; Recently Deleted for 60 days
@@ -39,8 +40,8 @@ Press it again and it is gone.
 - Deeplinks and quicklinks to open a specific note
 
 <p align="center">
-  <img src="media/actions-dark.png" width="420" alt="⌘K action panel showing Fill Left, Fill Right, Fill Screen, and Centre" />
-  <img src="media/browse-dark.png" width="420" alt="Browse Notes with pinned notes above the rest" />
+  <img src="media/actions-dark.png" width="420" alt="All actions (⌘K) with the Window submenu: Fill Left, Fill Right, Fill Screen, and Centre" />
+  <img src="media/browse-dark.png" width="420" alt="Search (⌘P) with pinned notes above recent ones and a preview of the highlighted note" />
 </p>
 
 <!-- store:remove -->
@@ -67,15 +68,15 @@ From source: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Press your hotkey to show or hide the panel.
 Everything saves automatically.
-⌘K lists every action and shortcut.
+⌘P searches your notes; ⌘K (or typing `>` in Search) lists every action and shortcut.
 
 <details>
 <summary>Panel shortcuts</summary>
 
 | Shortcut | Action |
 |---|---|
-| ⌘K | Action panel |
-| ⌘P | Browse notes |
+| ⌘P | Search notes (⌘↩ makes a note from the query, ⌘⌫ deletes the highlighted one) |
+| ⌘K | All actions |
 | ⌘N / ⌘D | New / duplicate |
 | ⇧⌘P | Pin or unpin |
 | ⌘1–⌘9 | Open pinned 1–9 |

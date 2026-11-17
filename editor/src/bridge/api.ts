@@ -37,6 +37,7 @@ export function createApi(client: BridgeClient) {
     },
     notes: {
       create: (params: P<"notes.create">) => call(M.NotesCreate, params),
+      get: (id: string) => call(M.NotesGet, { id }),
       update: (params: P<"notes.update">) => call(M.NotesUpdate, params),
       delete: (id: string) => call(M.NotesDelete, { id }),
       deleteAll: () => call(M.NotesDeleteAll, {}),

@@ -47,17 +47,30 @@ html[data-harness] body {
   overflow: auto;
 }
 
-/* The harness stands in for the panel: 640 points wide, a translucent material, and the editor's tint on top. */
+/*
+ * The harness stands in for the panel: 640 points wide, a translucent material, and the editor's tint on top.
+ * The material's blur sits on a layer behind the app rather than on #root itself: WebKit does not blur a backdrop
+ * inside another backdrop filter, so Search and the island blur the note here as they do in the panel.
+ */
 html[data-harness] #root {
+  position: relative;
+  isolation: isolate;
   max-width: 640px;
   height: 9.65rem;
   margin: 0 auto;
   border-radius: var(--radius-panel);
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
+}
+
+html[data-harness] #root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: var(--harness-material);
   -webkit-backdrop-filter: blur(30px) saturate(1.4);
   backdrop-filter: blur(30px) saturate(1.4);
-  box-shadow: var(--panel-shadow);
-  overflow: hidden;
 }
 
 button {
@@ -957,25 +970,39 @@ html[data-high-zoom="true"] .find-bar {
   animation: fade-in var(--duration-fast) var(--ease-out);
 }
 
-/* ---- the command panel (⌘K, browse, recently deleted, settings) ---- */
+/* ---- Search (board 07): notes (⌘P), all actions (⌘K), and the pushed list views ---- */
 
 /*
- * Right aligned under the toolbar buttons, and grown out of the button that opened it
- * (--origin-x, set by CommandPanel), the way a menu drops from its button.
+ * Centred over the note, 15% down, frosted, 18 point corners. Inside the panel whatever its size: the top moves up
+ * and the box gets shorter before anything is cut off.
  */
 .panel {
-  --panel-gap: 0.6rem;
-  top: calc(var(--topbar-button-bottom) + var(--panel-gap));
-  right: var(--topbar-inset-right);
+  --search-top: min(15%, max(var(--corner-inset), calc((100% - var(--search-max-height)) / 2)));
+  top: var(--search-top);
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
-  width: min(var(--panel-width), calc(100% - 2 * var(--topbar-inset-right)));
-  /* Inside the panel, whatever its size: the list scrolls when the panel is short. */
-  max-height: min(30rem, calc(100% - var(--topbar-button-bottom) - var(--panel-gap) - var(--dropdown-inset)));
-  padding: 0 var(--space-2) var(--space-2);
+  width: min(var(--search-width), calc(100% - 2 * var(--corner-inset)));
+  max-height: min(var(--search-max-height), calc(100% - var(--search-top) - var(--corner-inset)));
+  margin-inline: auto;
   overflow: hidden;
-  transform-origin: var(--origin-x, calc(100% - 3rem)) 0;
+  border-radius: var(--radius-search);
+  /*
+   * The design's glass over the panel colour: what the frosted box looks like over the note, without the note's
+   * text bleeding through where the blur cannot render (headless WebKit draws none).
+   */
+  background: linear-gradient(var(--search-glass), var(--search-glass)), var(--bg-panel);
+  -webkit-backdrop-filter: blur(var(--search-blur)) saturate(1.4);
+  backdrop-filter: blur(var(--search-blur)) saturate(1.4);
+  box-shadow: var(--shadow-search);
+  transform-origin: 50% 0;
   animation: panel-in var(--duration-slide) var(--ease-out);
+}
+
+/* Notes and All actions keep their height while the list narrows, so the box never jumps as you type. */
+.panel.is-split {
+  height: min(var(--search-max-height), calc(100% - var(--search-top) - var(--corner-inset)));
 }
 
 /* The closing panel: a static, inert copy that fades out while focus is already back in the note. */
@@ -995,21 +1022,247 @@ html[data-high-zoom="true"] .find-bar {
   animation: none;
 }
 
-.panel-search {
+/* The field: 56 tall, a 20 point search icon (or the Actions token), and 21 point type. */
+.search-field {
+  display: flex;
   flex: none;
-  height: max(2.75rem, var(--hit-floor));
-  margin: 0 calc(-1 * var(--space-2)) var(--space-1);
-  /* Text lines up with the row titles below: the panel inset plus the row inset. */
-  padding: 0 calc(var(--space-2) + var(--space-3));
-  border-radius: 0;
-  background: transparent;
-  box-shadow: inset 0 calc(-1 * var(--hairline)) 0 var(--border);
-  font-size: var(--font-size-body);
+  align-items: center;
+  gap: calc(12rem / 14);
+  height: var(--search-field-height);
+  padding: 0 calc(18rem / 14);
 }
 
-/* Section titles and the banner start on the same line as the row titles. */
+.search-field > .icon {
+  width: calc(20rem / 14);
+  height: calc(20rem / 14);
+  color: var(--text-tertiary);
+}
+
+.search-token {
+  flex: none;
+  padding: calc(3rem / 14) var(--space-2);
+  border-radius: var(--radius-chip);
+  background: var(--accent-soft);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  color: var(--text);
+}
+
+.panel-search,
+.panel-search:focus {
+  height: 100%;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--font-size-search);
+}
+
+/* The key actions row: five chips, then the outlined All actions chip on the right. */
+.search-chips {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: calc(6rem / 14);
+  padding: 0 calc(14rem / 14) calc(12rem / 14);
+}
+
+.search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7rem / 14);
+  height: max(var(--search-chip-height), var(--hit-floor));
+  padding: 0 calc(10rem / 14);
+  border: 0;
+  border-radius: var(--radius-search-chip);
+  background: var(--search-chip-fill);
+  color: var(--text);
+  font-size: var(--font-size-caption);
+  white-space: nowrap;
+  transition: background-color var(--duration-pop) var(--ease-out);
+}
+
+.search-chip:hover {
+  background: linear-gradient(var(--accent-soft-hover), var(--accent-soft-hover)), var(--search-chip-fill);
+}
+
+.search-chip[aria-disabled="true"] {
+  opacity: 0.45;
+}
+
+.search-chip .icon {
+  width: calc(14rem / 14);
+  height: calc(14rem / 14);
+  color: var(--text-secondary);
+}
+
+.search-chip kbd,
+.search-footer kbd {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-micro);
+  color: var(--text-tertiary);
+}
+
+.search-chip.is-outlined {
+  margin-left: auto;
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--hairline) var(--border-strong);
+  color: var(--text-secondary);
+}
+
+/* The body: the list on the left, the preview or submenu on the right, under one hairline. */
+.search-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  box-shadow: inset 0 var(--hairline) 0 var(--border);
+}
+
+.search-body > .panel-list {
+  flex: 1;
+  padding: calc(6rem / 14);
+}
+
+.panel.is-split .search-body > .panel-list {
+  flex: none;
+  width: var(--search-list-width);
+  box-shadow: inset calc(-1 * var(--hairline)) 0 0 var(--border);
+}
+
+.search-side {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* A narrow panel drops the right pane first; the list takes the width. */
+@container panel (max-width: 559px) {
+  .panel.is-split .search-body > .panel-list {
+    flex: 1;
+    width: auto;
+    box-shadow: none;
+  }
+
+  .search-side {
+    display: none;
+  }
+
+  /* The key action chips keep their icons; the names stay as their accessible labels. */
+  .search-chip:not(.is-outlined) .search-chip-label {
+    display: none;
+  }
+
+  /* An open submenu takes the list's place; ← or Esc goes back to the list. */
+  .panel.is-in-submenu .search-body > .panel-list {
+    display: none;
+  }
+
+  .panel.is-in-submenu .search-side {
+    display: flex;
+  }
+}
+
+.search-submenu {
+  padding: calc(6rem / 14);
+  overflow-y: auto;
+}
+
+.search-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+  padding: calc(20rem / 14) calc(24rem / 14);
+  font-size: var(--font-size-secondary);
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.search-preview-title {
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-heading);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.search-preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.search-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(14rem / 14);
+  font-size: var(--font-size-small);
+  color: var(--text-tertiary);
+}
+
+.search-match {
+  border-radius: calc(2rem / 14);
+  background: var(--find-match);
+  color: inherit;
+}
+
+/* The footer: 34 tall, the keys on the left and the count on the right. */
+.search-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-4);
+  height: calc(34rem / 14);
+  padding: 0 calc(18rem / 14);
+  box-shadow: inset 0 var(--hairline) 0 var(--border);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+  color: var(--text-tertiary);
+}
+
+.search-footer kbd {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Shortcuts in Search are quiet text (Geist Mono 10.5, tertiary), not keycaps. */
+.panel .keys {
+  gap: calc(1rem / 14);
+}
+
+.panel .keycap {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-micro);
+  color: var(--text-tertiary);
+}
+
+/* Under the design's 700 point box the chips drop their shortcuts first, so the row stays one line. */
+@container panel (max-width: 739px) {
+  .search-chip kbd {
+    display: none;
+  }
+}
+
+.search-footer-count {
+  margin-left: auto;
+}
+
+/* Section titles in sentence case, on the same line as the row titles. */
 .panel .menu-section {
-  padding-inline: var(--space-3);
+  padding: var(--space-2) calc(10rem / 14) var(--space-1);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .panel-list {
@@ -1022,25 +1275,30 @@ html[data-high-zoom="true"] .find-bar {
 .panel-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: calc(10rem / 14);
   width: 100%;
   min-height: max(var(--row-height), var(--hit-floor));
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-2) calc(10rem / 14);
   border: 0;
-  border-radius: var(--radius-m);
+  border-radius: var(--radius-search-row);
   background: transparent;
   text-align: left;
   font-size: var(--font-size-secondary);
-  font-weight: var(--font-weight-secondary);
   transition: background-color var(--duration-pop) var(--ease-out);
 }
 
 .panel-row > .icon {
+  width: calc(15rem / 14);
+  height: calc(15rem / 14);
   color: var(--text-tertiary);
 }
 
 .panel-row.is-selected {
-  background: var(--accent-soft);
+  background: var(--row-selected);
+}
+
+.panel-row.is-selected .panel-row-title {
+  font-weight: var(--font-weight-secondary);
 }
 
 .panel-row.is-selected > .icon {
@@ -1078,9 +1336,9 @@ html[data-high-zoom="true"] .find-bar {
   color: var(--text-tertiary);
 }
 
-/* On the soft fill of a selected row, tertiary text would fall under 4.5:1, so the subtitle steps up. */
+/* On the selected fill, tertiary text would fall under 4.5:1, so the subtitle steps up. */
 .panel-row.is-selected .panel-row-subtitle {
-  color: var(--text);
+  color: var(--text-secondary);
 }
 
 /* At high zoom titles and subtitles wrap to two lines instead of being cut off. */
@@ -1590,18 +1848,17 @@ html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrol
 }
 
 /*
- * A short panel (the 197 point minimum, up to 260): the command panel starts right under the toolbar,
- * reaches down over the footer, and packs its search field, section titles, and rows tighter, so at
- * least two settings or notes rows and three actions show.
+ * A short panel (the 197 point minimum, up to 260): Search drops its key actions and footer, and packs its field,
+ * section titles, and rows tighter, so at least two settings or notes rows and three actions show.
  */
 @container panel (max-height: 260px) {
-  .panel {
-    --panel-gap: var(--space-0);
-    padding-bottom: var(--space-1);
+  .search-field {
+    height: max(2.5rem, var(--hit-floor));
   }
 
-  .panel-search {
-    height: max(2.25rem, var(--hit-floor));
+  .search-chips,
+  .search-footer {
+    display: none;
   }
 
   .panel .menu-section {

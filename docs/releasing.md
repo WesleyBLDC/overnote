@@ -75,7 +75,7 @@ Before submitting, take real Window Captures of Search Notes in Raycast and add 
 ## README screenshots
 
 Before a release whose UI chrome changed, refresh `media/` with `npm run shots:readme` against the tag commit's editor harness (see CONTRIBUTING).
-Confirm the README still matches the shots (Features, ⌘K Fill actions, Browse).
+Confirm the README still matches the shots (Features, the Window submenu in All actions, Search).
 Store `metadata/` shots are a separate pass from README `media/`.
 
 ## Signing

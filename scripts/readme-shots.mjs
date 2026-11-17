@@ -18,8 +18,8 @@
  * Default base: http://127.0.0.1:5299
  * Run against origin/main UI (or a worktree at the commit you are documenting).
  *
- * Refresh when any of these change: accent, toolbar chrome, ⌘K row icons,
- * window placement actions, Browse section badges, hero note content, or
+ * Refresh when any of these change: accent, toolbar chrome, action row icons,
+ * Search, its All actions and Window submenu, hero note content, or
  * panel geometry that README alt text describes.
  */
 import { execFileSync } from "node:child_process";
@@ -167,17 +167,15 @@ await shot("note-light", null, { scheme: "light" });
 await shot("actions-dark", async (page) => {
   await page.keyboard.press("Meta+k");
   await page.getByTestId("command-panel").waitFor();
-  // Bring window placements into view so icons and Fill actions show in the README shot.
-  const fill = page.getByTestId("action-fillLeft");
-  await fill.waitFor({ state: "attached" });
-  await fill.evaluate((el) => {
-    const list = el.closest(".panel-list");
-    if (list) el.scrollIntoView({ block: "center" });
-  });
+  // Open Window so its Fill actions show (beside the list, or in its place on a narrow panel).
+  await page.getByTestId("submenu-window").click();
+  await page.getByTestId("action-fillLeft").waitFor();
   await page.waitForTimeout(200);
 });
 
 await shot("browse-dark", async (page) => {
+  // Off the list, so the current note keeps the selection rather than the row under the pointer.
+  await page.mouse.move(0, 0);
   await page.keyboard.press("Meta+p");
   await page.waitForSelector("[data-testid=browse-row]");
 });
