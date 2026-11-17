@@ -148,7 +148,7 @@ Writing tips: [`docs/writing-notes.md`](docs/writing-notes.md).
 Notes live in `~/Library/Application Support/Overnote`, with backups in its `backups` folder.
 No account, no analytics; the panel cannot make network connections.
 Check for Updates is the only network call (GitHub releases). <!-- store:remove-line -->
-Backup and restore actions are in Search Notes and the menu bar; see [`docs/install.md`](docs/install.md).
+Back up now is in Settings (⌘,); with the extension, Search Notes and its menu bar also back up and restore. See [`docs/install.md`](docs/install.md).
 
 <!-- store:remove -->
 ## Agents and development

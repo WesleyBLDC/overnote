@@ -1,17 +1,60 @@
-# Installing Overnote from a release
+# Installing Overnote
 
-Overnote is a Raycast extension: the floating panel is a helper process the extension starts.
-Overnote is not in the Raycast Store yet.
-Each GitHub release carries a zip with everything prebuilt, so you install it without building anything.
-You can also build Overnote as a standalone menu bar app on your own Mac, from source (see [The local app](#the-local-app-overnoteapp)).
-Both are named Overnote, and both open the same notes.
+Overnote is a floating Markdown notepad for macOS.
+It runs as `Overnote.app`, a menu bar app, and it can also run as a Raycast extension.
+Use either one, or both: they share the same notes and the same panel.
 
-You need an Apple silicon Mac on macOS 14 Sonoma or later, [Raycast](https://www.raycast.com) installed and signed in, and [Node.js](https://nodejs.org) 22 or later.
-Release zips ship an arm64 helper only.
+Both need an Apple silicon Mac on macOS 14 Sonoma or later and [Node.js](https://nodejs.org) 22 or later.
 Intel Macs need a source build with `OVERNOTE_HELPER_ARCHES="arm64 x86_64"` (see [CONTRIBUTING.md](../CONTRIBUTING.md)).
-You do not need Xcode or the Xcode Command Line Tools for a release install.
 
-## Install
+## Overnote.app
+
+`Overnote.app` lives in the menu bar, has no Dock icon, and shows or hides the panel with its own hotkey, ⌃⌥N.
+It does not need Raycast.
+
+### Install the app
+
+There is no prebuilt app download yet, so you build it from a source checkout.
+That needs the Xcode Command Line Tools (`xcode-select --install`); full Xcode is not required.
+
+```sh
+git clone https://github.com/WesleyBLDC/overnote.git
+cd overnote
+npm install
+npm run app:install    # builds dist-app/Overnote.app and copies it to /Applications
+open /Applications/Overnote.app
+```
+
+`npm run build:app` builds `dist-app/Overnote.app` without installing it.
+The app is signed ad hoc, not notarized, so it is meant for the Mac that built it.
+Turn on Launch at Login from its menu bar item to start it with your Mac.
+
+### Update the app
+
+Quit the app first, since `app:install` refuses to replace a running app, then in your checkout:
+
+```sh
+git pull --ff-only
+npm install
+npm run app:install
+open /Applications/Overnote.app
+```
+
+### Show, hide, and quit
+
+- The menu bar item offers Show or Hide Overnote, New Note, Launch at Login, About Overnote, and Quit Overnote.
+- ⌃⌥N, ⎋, ⌘W, ⌘M, and the red dot hide the panel; the app keeps running.
+- ⌘Q, or Quit Overnote in All actions (⌘K), quits the app.
+  Text you typed is saved first.
+
+## Raycast extension (optional)
+
+Overnote also installs as a Raycast extension, for people who prefer Raycast or want its commands (Search Notes, Create Note, the menu bar, and the rest).
+It is not in the Raycast Store yet.
+Each GitHub release carries a zip with everything prebuilt, so you install it without building anything.
+Besides a Mac and Node.js, it needs [Raycast](https://www.raycast.com) installed and signed in, and no Xcode tools.
+
+### Install the extension
 
 1. Download `overnote-<version>.zip` from the latest release on the [Releases page](https://github.com/WesleyBLDC/overnote/releases).
 2. Unzip it and move the `overnote` folder to a stable path, renaming it if you like, for example to `~/Applications/Overnote`.
@@ -26,7 +69,7 @@ You do not need Xcode or the Xcode Command Line Tools for a release install.
 
    It installs the dependencies, checks the prebuilt helper against its checksum, and registers the extension with Raycast.
    It takes about a minute, once.
-4. Open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it (for example ⌥N).
+4. Open Raycast Settings, go to Extensions, find **Toggle Overnote**, and record a hotkey for it (for example ⌥N, which does not clash with the app's ⌃⌥N).
 5. Press your hotkey to open the panel.
 
 macOS marks downloaded files with a quarantine attribute, and Gatekeeper refuses to start a quarantined helper that is not notarized.
@@ -35,7 +78,7 @@ A helper that does not match its checksum is never started.
 
 To check a download yourself, compare `shasum -a 256 overnote-<version>.zip` with the line in the release's `SHA256SUMS`.
 
-## Update
+### Update the extension
 
 Run **Check for Updates** in Raycast to see whether a newer release exists.
 If one does, it copies the update command to the clipboard; paste it into Terminal:
@@ -58,28 +101,14 @@ npm run update-extension -- --version v0.3.0
 
 A rollback is refused when your notes already use a newer database format than that release understands, because Overnote never downgrades a database.
 
-## The local app (Overnote.app)
-
-`Overnote.app` runs the same panel and editor as the extension, without Raycast: it lives in the menu bar, has no Dock icon, and opens the panel with its own hotkey, ⌃⌥N.
-There is no prebuilt app yet, so you build it from a source checkout (see [CONTRIBUTING.md](../CONTRIBUTING.md) for the setup; it needs the Xcode Command Line Tools):
-
-```sh
-npm run build:app      # builds dist-app/Overnote.app, signed for this Mac only
-npm run app:install    # builds it and copies it to /Applications
-open /Applications/Overnote.app
-```
-
-`app:install` refuses to replace a running app: quit it first from its menu bar item.
-The menu bar item offers Show or Hide Overnote, New Note, Launch at Login, About Overnote, and Quit Overnote.
-With the panel open, ⌘Q quits too, as does Quit Overnote in All actions (⌘K); the red dot and ⌘M only hide the panel.
-The app is signed ad hoc, not notarized, so it is meant for the Mac that built it.
+## Using the app and the extension together
 
 The app and the extension share one database and one running panel:
+
 - While the app runs, the extension's commands (Toggle Overnote, Search Notes, the menu bar, and the rest) use the app's panel and never restart it.
 - When the app starts while the extension's panel runs, the app takes over.
 - When you quit the app, the extension starts its own panel again on its next command.
 
-If you used the extension before this version, update it; your notes move to the shared folder the first time you run any of its commands, even when the app started first (see below).
 Text you typed just before a takeover, a quit, or an update is saved before the panel closes.
 
 ## Back up and restore
@@ -92,28 +121,28 @@ Backups are kept in `~/Library/Application Support/Overnote/backups`.
 - It keeps the latest 10 backups, plus the newest one from each of the last 4 weeks.
 - Each backup is a complete, ordinary SQLite file named like `notes-20261015T093000.000Z-v0.3.0-daily.sqlite`: the time in UTC, the Overnote version, and why it was written.
 
-In Search Notes (any note's action panel) and in the menu bar:
+In Settings (⌘,), **Back up now** writes a backup and **Show in Finder** opens the data folder.
+With the extension, Search Notes (any note's action panel) and its menu bar also offer:
 
 - **Back Up Notes Now** writes a backup right away.
 - **Restore Notes from Backup** lists the backups, newest first.
   Restoring one replaces every note, after Overnote backs up the current notes, so a restore can itself be undone.
 - **Reveal Backups Folder** opens the folder in Finder.
 
-Removing the extension leaves your notes in the shared folder, so installing it again finds them.
-If `notes.sqlite` is gone but backups exist, Overnote starts with no notes, never overwrites anything, and Search Notes shows **Restore Notes from Backup** as the first item until you restore or dismiss it.
+Removing the app or the extension leaves your notes in the shared folder, so installing again finds them.
+If `notes.sqlite` is gone but backups exist, Overnote starts with no notes and never overwrites anything; with the extension, Search Notes shows **Restore Notes from Backup** as the first item until you restore or dismiss it.
 
 ## Uninstall
 
-1. Open Raycast Settings, go to Extensions, select Overnote, and remove it.
-2. Delete the folder you installed from.
-
-3. If you installed the app, quit it from its menu bar item, turn off Launch at Login there first if you turned it on, and move `/Applications/Overnote.app` to the Trash.
+- **The app:** turn off Launch at Login in its menu bar item if you turned it on, quit it, and move `/Applications/Overnote.app` to the Trash.
+- **The extension:** open Raycast Settings, go to Extensions, select Overnote, and remove it; then delete the folder you installed from.
 
 Your notes and backups stay in `~/Library/Application Support/Overnote`, and installing again finds them.
 To remove every trace, delete that folder too, along with the extension's support folder, `~/Library/Application Support/com.raycast.macos/extensions/overnote`, if Raycast left it behind.
 
 ## Troubleshooting
 
+- **"Overnote.app is running"** from `npm run app:install`: quit the app from its menu bar item, then run it again.
 - **"Node.js 22 or later is required"**: install the current Node.js LTS from [nodejs.org](https://nodejs.org) and run the installer again.
 - **"The prebuilt helper is missing or does not match"**: the download was damaged or changed; download the zip again.
 - **Overnote does not show up in Raycast**: make sure Raycast is running and signed in, then run `npm run install-extension` again.

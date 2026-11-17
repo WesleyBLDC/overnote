@@ -14,7 +14,7 @@ Once a fix ships, the advisory is published, with credit to you if you want it.
 ## Supported versions
 
 Only the latest release is supported.
-Fixes ship as a new release; update with Check for Updates and `npm run update-extension` ([docs/install.md](docs/install.md#update)).
+Fixes ship as a new release; update the app with `git pull` and `npm run app:install` ([docs/install.md](docs/install.md#update-the-app)), or the extension with Check for Updates and `npm run update-extension` ([docs/install.md](docs/install.md#update-the-extension)).
 
 ## How Overnote handles your data
 

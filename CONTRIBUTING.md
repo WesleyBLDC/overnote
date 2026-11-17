@@ -19,7 +19,7 @@ Keep pull requests small and focused, one change each, and fill in the pull requ
 You need:
 
 - macOS 14 Sonoma or later.
-- [Raycast](https://www.raycast.com), installed and signed in.
+- [Raycast](https://www.raycast.com), installed and signed in, for `npm run dev` and the extension (the app needs only `npm run app:install`).
 - [Node.js](https://nodejs.org) 22 or later.
 - The Xcode Command Line Tools (`xcode-select --install`); full Xcode is not required.
 
@@ -43,7 +43,7 @@ The panel works on your real notes, as in any install.
 Stop with ⌃C: Raycast keeps the extension, still running this checkout's last build.
 To go back to a release, run `npm run install-extension` in the release folder.
 
-To try the standalone app instead, `npm run build:app` assembles `dist-app/Overnote.app` from the same editor and helper builds, and `npm run app:install` copies it to `/Applications` ([docs/install.md](docs/install.md#the-local-app-overnoteapp)).
+To try the app instead, `npm run build:app` assembles `dist-app/Overnote.app` from the same editor and helper builds, and `npm run app:install` copies it to `/Applications` ([docs/install.md](docs/install.md#overnoteapp)).
 The build takes about a second once the helper and editor are built, and `npm run verify` runs it with a headless check.
 
 For editor work you often do not need Raycast at all:
