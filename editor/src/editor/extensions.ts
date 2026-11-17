@@ -11,11 +11,14 @@ import { FindHighlight } from "./find";
 import { debouncedHighlightPlugin } from "./highlight";
 import type { NoteLowlight } from "./lowlight";
 import { TitleLine } from "./titleLine";
+import { NoteTriggers, type TriggerOptions } from "./triggers";
 
 export interface EditorExtensionOptions extends DomOptions, CodeBlockViewOptions {
   lowlight: NoteLowlight;
   /** ⌘L: open the link popover. */
   onLinkShortcut: (editor: Editor) => void;
+  /** The slash menu and emoji picker triggers. */
+  triggers: TriggerOptions;
 }
 
 function editorKeymap(options: EditorExtensionOptions) {
@@ -114,6 +117,7 @@ export function createEditorExtensions(options: EditorExtensionOptions): AnyExte
     codeBlockHighlight(codeBlock.name, options.lowlight),
     FindHighlight,
     NoteDomBehavior.configure(options),
+    NoteTriggers.configure(options.triggers),
     editorKeymap(options),
   ];
 }

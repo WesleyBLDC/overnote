@@ -17,11 +17,10 @@ interface SlashMenuProps {
   query: string;
   from: number;
   onRun: (item: SlashItem) => void;
-  onDismiss: () => void;
 }
 
 export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu(
-  { editor, items, query, from, onRun, onDismiss },
+  { editor, items, query, from, onRun },
   ref,
 ) {
   const [index, setIndex] = useState(0);
@@ -41,8 +40,7 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
       else if (event.key === "Enter") {
         const item = items[selected];
         if (item) onRun(item);
-      } else if (event.key === "Escape") onDismiss();
-      else if (event.key === "Tab") {
+      } else if (event.key === "Tab") {
         // swallowed while the menu is open
       } else return false;
       return true;
