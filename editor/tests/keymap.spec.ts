@@ -109,13 +109,16 @@ test("⌘P browses, pins work with ⇧⌘P and ⌘1, ⌃X deletes", async ({ pag
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
 
-  // Recently Deleted: a read-only preview with a Restore banner.
+  // Recently Deleted (board 11): rows say how long they are kept; a click shows a read-only preview with a Restore banner.
   const openDeleted = async () => {
     await page.keyboard.press("Meta+k");
     await page.keyboard.type("recently deleted");
     await page.keyboard.press("Enter");
+    await expect(page.getByTestId("search-token")).toHaveText("Recently Deleted");
     await expect(page.getByTestId("deleted-row")).toHaveCount(1);
-    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("deleted-row")).toContainText(/Deleted .* · \d+ days left/);
+    await expect(page.getByTestId("search-footer")).toContainText("Kept 60 days");
+    await page.getByTestId("deleted-row").click();
     await expect(page.getByTestId("preview-banner")).toBeVisible();
     await expect(title(page)).toHaveText("One");
   };
@@ -147,10 +150,30 @@ test("⌘P browses, pins work with ⇧⌘P and ⌘1, ⌃X deletes", async ({ pag
   await page.keyboard.press("Meta+BracketLeft");
   await expect(title(page)).toHaveText(currentTitle ?? "");
 
+  // ↩ in Recently Deleted restores the highlighted note and opens it.
+  await page.keyboard.press("Control+x");
+  await expect(page.locator(".notice")).toContainText("Note deleted");
+  await page.keyboard.press("Meta+k");
+  await page.keyboard.type("recently deleted");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("deleted-row")).toHaveCount(1);
+  const restoring = await page.getByTestId("deleted-row").locator(".panel-row-title").textContent();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("command-panel")).toHaveCount(0);
+  await expect(title(page)).toHaveText(restoring ?? "");
+  expect((await storedNotes(page)).every((n) => n.deletedAt === null)).toBe(true);
+
   await page.keyboard.press("Control+Shift+x");
   const dialog = page.getByTestId("confirm-dialog");
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Delete" }).click();
+  // Board 11: it names the count, and the red button works only once DELETE is typed.
+  await expect(dialog.locator("h2")).toHaveText(/^Delete all \d+ notes?\?$/);
+  const confirm = dialog.getByRole("button", { name: "Delete all" });
+  await expect(confirm).toBeDisabled();
+  await page.getByTestId("dialog-input").fill("delete");
+  await expect(confirm).toBeDisabled();
+  await page.getByTestId("dialog-input").fill("DELETE");
+  await confirm.click();
   await expect(page.getByTestId("notices")).toContainText("All notes moved to Recently Deleted");
   const live = (await storedNotes(page)).filter((n) => n.deletedAt === null);
   expect(live).toHaveLength(1);
@@ -399,4 +422,27 @@ test("Enter in Browse Notes opens the match for what was typed, even before the 
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("title")).toHaveText("Long note");
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
+});
+
+test("a deleted note comes back with Undo: ⌘Z while its toast shows, or the toast's button", async ({ page }) => {
+  await openHarness(page, ["Other note", "Keep me"]);
+  await expect(editor(page)).toHaveText("Keep me");
+  const toast = page.locator(".notice");
+  const live = async () => (await storedNotes(page)).filter((n) => n.deletedAt === null).length;
+
+  await page.keyboard.press("Control+x");
+  await expect(toast).toContainText("Note deleted");
+  await expect(editor(page)).toHaveText("Other note");
+  await expect(page.getByTestId("notice-action")).toHaveText("Undo⌘Z");
+  // The note the delete opened has nothing to undo yet, so ⌘Z restores the deleted note.
+  await page.keyboard.press("Meta+z");
+  await expect(editor(page)).toHaveText("Keep me");
+  await expect.poll(live).toBe(2);
+
+  await page.keyboard.press("Control+x");
+  await expect(toast).toContainText("Note deleted");
+  await expect(editor(page)).toHaveText("Other note");
+  await page.getByTestId("notice-action").click();
+  await expect(editor(page)).toHaveText("Keep me");
+  await expect.poll(live).toBe(2);
 });

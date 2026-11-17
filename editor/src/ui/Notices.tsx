@@ -1,5 +1,9 @@
+import type { NoticeKind } from "../lib/notice";
 import type { Notice } from "./noticeState";
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
+
+/** The round status icon (SPEC §11): the tone's colour carries the meaning; a plain notice has none. */
+const STATUS: Partial<Record<NoticeKind, IconName>> = { success: "check", warning: "alert", error: "close" };
 
 /**
  * Two live regions that always exist, so screen readers notice what is added to them: one polite
@@ -10,10 +14,12 @@ export function Notices({
   notices,
   onExited,
   onDismiss,
+  onAction,
 }: {
   notices: Notice[];
   onExited: (id: number) => void;
   onDismiss: (id: number) => void;
+  onAction: (id: number) => void;
 }) {
   const render = (notice: Notice) => (
     <div
@@ -24,7 +30,24 @@ export function Notices({
         if (notice.leaving && event.target === event.currentTarget) onExited(notice.id);
       }}
     >
-      {notice.message}
+      {STATUS[notice.kind] ? (
+        <span className="notice-status" aria-hidden="true">
+          <Icon name={STATUS[notice.kind]!} />
+        </span>
+      ) : null}
+      <span className="notice-message">{notice.message}</span>
+      {notice.action ? (
+        <button
+          type="button"
+          className="notice-action"
+          data-testid="notice-action"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onAction(notice.id)}
+        >
+          {notice.action.label}
+          {notice.action.shortcut ? <span className="notice-shortcut">{notice.action.shortcut}</span> : null}
+        </button>
+      ) : null}
       {notice.kind === "error" ? (
         <button
           type="button"

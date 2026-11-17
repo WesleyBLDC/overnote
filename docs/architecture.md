@@ -386,8 +386,11 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   A note the editor creates (⌘N, or the first note when none exist) or duplicates (⌘D) is persisted with `notes.setCurrentNote` too, since `notes.create` without `show` and `notes.duplicate` leave the current note alone.
 - ⌘N on a note whose text is blank only shows a "You already have an empty note" notice.
 - When `current` is null the editor creates a note immediately from the empty document.
-- Deleting the current note opens `nextNoteId`, else `previousNoteId`, else creates a fresh empty note.
-  Delete All leaves one fresh empty note and clears history.
+- Deleting the current note opens `nextNoteId`, else `previousNoteId`, else creates a fresh empty note, and shows a "Note deleted" toast with Undo (`notes.recover`, then open it again).
+  ⌘Z runs that Undo while the toast shows, only when the open note has nothing to undo, so text undo is never taken.
+  Delete All asks first with the live count (`notes.count`) and works only once DELETE is typed; it leaves one fresh empty note and clears history.
+- Toasts show one at a time at the top of the note: 2.5 s (`--duration-toast`), 6 s with an action (`--duration-toast-action`), and errors until dismissed.
+- Recently Deleted (Search) shows each note's days left before the purge; ↩ restores and opens the note, ⌘⌫ deletes it forever, and a click shows it read only.
 - Content autosave and caret save are debounced 300 ms and flushed on switch, hide, and blur.
 - Every content save sends `expectedUpdatedAt`, the `updatedAt` of the version the editor last loaded or saved.
 - Outside changes are merged, never overwritten.

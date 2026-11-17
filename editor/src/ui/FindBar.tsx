@@ -104,15 +104,9 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
   return (
     <div className="find-bar" data-testid="find-bar" onKeyDown={onKeyDown}>
       <div className="find-row">
-        <button
-          type="button"
-          className={`icon-button chevron${showReplace ? " is-open" : ""}`}
-          aria-label="Show replace"
-          onClick={() => setShowReplace((v) => !v)}
-          tabIndex={-1}
-        >
-          <Icon name="chevron" />
-        </button>
+        <span className="find-icon" aria-hidden="true">
+          <Icon name="search" />
+        </span>
         <input
           ref={findRef}
           value={term}
@@ -136,7 +130,7 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
         </span>
         <button
           type="button"
-          className="icon-button"
+          className="icon-button find-step"
           aria-label="Previous match"
           onClick={() => goTo(index - 1)}
           disabled={!matches.length}
@@ -146,7 +140,7 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
         </button>
         <button
           type="button"
-          className="icon-button"
+          className="icon-button find-step"
           aria-label="Next match"
           onClick={() => goTo(index + 1)}
           disabled={!matches.length}
@@ -154,13 +148,24 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
         >
           <Icon name="down" />
         </button>
-        <button type="button" className="icon-button" aria-label="Close find" onClick={close} tabIndex={-1}>
+        <span className="find-divider" aria-hidden="true" />
+        <button
+          type="button"
+          className={`text-button find-toggle${showReplace ? " is-active" : ""}`}
+          aria-label="Show replace"
+          aria-pressed={showReplace}
+          onClick={() => setShowReplace((v) => !v)}
+          tabIndex={-1}
+        >
+          Replace
+        </button>
+        <button type="button" className="icon-button find-step" aria-label="Close find" onClick={close} tabIndex={-1}>
           <Icon name="close" />
         </button>
       </div>
       {showReplace ? (
         <div className="find-row">
-          <span className="chevron-spacer" />
+          <span className="find-icon" aria-hidden="true" />
           <input
             value={replacement}
             placeholder="Replace"

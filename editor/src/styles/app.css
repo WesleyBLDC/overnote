@@ -947,54 +947,89 @@ html[data-high-zoom="true"] .format-bar {
     0 0 0 calc(var(--focus-gap-width) + var(--focus-ring-width)) var(--focus-ring);
 }
 
+/* The find bar (SPEC §11): slides down under the top bar, 12 points in from each side, 34 tall with 9 point corners. */
+.find-bar {
+  flex: none;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  margin: 0 calc(12rem / 14) var(--space-1);
+  padding: 0 var(--space-1) 0 var(--space-2);
+  border-radius: var(--radius-find);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-menu);
+  animation: toast-in var(--duration-slide) var(--ease-out);
+}
+
 /* At high zoom the find bar docks to the full panel width so its controls keep their floor. */
 html[data-high-zoom="true"] .find-bar {
   margin-inline: 0;
   border-radius: 0;
 }
 
-.find-bar {
-  flex: none;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0 var(--space-3) var(--space-1);
-  padding: var(--space-1);
-  border-radius: var(--radius-l);
-  background: var(--bg-raised);
-  box-shadow: var(--shadow);
-  transform-origin: top center;
-  animation: pop-in var(--duration-slide) var(--ease-out);
-}
-
 .find-row {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: var(--space-1);
+  min-height: max(var(--find-height), var(--hit-floor));
+}
+
+.find-row + .find-row {
+  border-top: var(--hairline) solid var(--border);
+}
+
+.find-icon {
+  display: inline-flex;
+  flex: none;
+  width: calc(14rem / 14);
+  color: var(--text-tertiary);
+}
+
+.find-icon svg {
+  width: 100%;
+  height: auto;
 }
 
 .find-count {
-  min-width: 4.2rem;
+  padding: 0 var(--space-1);
   white-space: nowrap;
   font-size: var(--font-size-small);
-  font-weight: var(--font-weight-secondary);
   color: var(--text-tertiary);
-  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
-.chevron .icon {
-  transition: transform var(--duration-fast) var(--ease-out);
-}
-
-.chevron.is-open .icon {
-  transform: rotate(90deg);
-}
-
-.chevron-spacer {
-  width: var(--button-size);
+.find-divider {
   flex: none;
+  width: var(--hairline);
+  height: calc(14rem / 14);
+  margin: 0 var(--space-1);
+  background: var(--border-strong);
+}
+
+/* The bar is the field (like Search's): its inputs draw no box of their own, and the caret shows where focus is. */
+.find-bar .find-row input,
+.find-bar .find-row input:focus {
+  height: max(var(--find-height), var(--hit-floor));
+  padding: 0 var(--space-1);
+  background: none;
+  box-shadow: none;
+}
+
+/* Replace is quiet text that opens the replace row; it reads as on while that row shows. */
+.find-toggle {
+  padding: 0 var(--space-2);
+  background: none;
+  box-shadow: none;
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+.find-toggle:hover:not(:disabled) {
+  background: var(--accent-soft-hover);
+}
+
+.find-toggle.is-active {
+  color: var(--text);
 }
 
 .panel-backdrop,
@@ -1224,6 +1259,11 @@ html[data-high-zoom="true"] .find-bar {
 .search-submenu {
   padding: calc(6rem / 14);
   overflow-y: auto;
+}
+
+/* Recently Deleted's preview is dimmed: the note is gone until it is restored. */
+.search-preview.is-dimmed {
+  opacity: 0.55;
 }
 
 .search-preview {
@@ -1632,10 +1672,38 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   vertical-align: 0.05rem;
 }
 
+/* The confirm dialog (SPEC §11): 14 point corners, 18 points of padding, over a dimmed panel. */
 .dialog {
   width: min(20rem, calc(100% - 2rem));
-  padding: var(--space-4);
+  padding: calc(18rem / 14);
+  border-radius: var(--radius-dialog);
+  box-shadow: var(--shadow-menu);
   animation: pop-in var(--duration-slide) var(--ease-out);
+}
+
+.dialog-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: max(calc(30rem / 14), var(--hit-floor));
+  margin: 0 0 var(--space-4);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: var(--bg-sunken);
+  box-shadow: inset 0 0 0 var(--hairline) var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-secondary);
+  color: var(--text);
+  outline: none;
+}
+
+.dialog-input:focus {
+  box-shadow: inset 0 0 0 var(--hairline) var(--border-strong);
+}
+
+.dialog-buttons button:disabled {
+  opacity: 0.45;
+  filter: none;
 }
 
 .dialog h2 {
@@ -1689,12 +1757,13 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   filter: brightness(1.08);
 }
 
+/* Toasts (SPEC §11): top centre, 8 points under the top bar, one at a time; the bottom row belongs to the island and count. */
 .notices {
   position: absolute;
   left: 50%;
-  /* Above the count pill and the format island, so a notice never covers them. */
-  bottom: var(--note-padding-bottom);
-  z-index: 50;
+  top: calc(var(--topbar-height) + calc(8rem / 14));
+  /* Over the note, under Search and dialogs (40), which are modal and sit where a toast would. */
+  z-index: 35;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1709,17 +1778,22 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 }
 
 /*
- * A notice rises in, then fades out once the editor marks it as leaving (data-leaving, set by
- * useNotices in hooks.ts when its time is up); it is removed when this transition ends.
+ * A toast slides 6 points down as it fades in, and fades back up once the editor marks it as leaving (data-leaving,
+ * set by useNotices in hooks.ts when its time is up); it is removed when this transition ends.
  */
 .notice {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--toast-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-toast);
   background: var(--bg-raised);
-  box-shadow: var(--shadow);
-  font-size: var(--font-size-secondary);
+  box-shadow: var(--shadow-menu);
+  font-size: var(--font-size-toast);
   white-space: nowrap;
-  animation: rise-in var(--duration-slide) var(--ease-out);
+  pointer-events: auto;
+  animation: toast-in var(--duration-slide) var(--ease-out);
   transition:
     opacity var(--duration-slide) var(--ease-in),
     transform var(--duration-slide) var(--ease-in);
@@ -1727,11 +1801,66 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 
 .notice[data-leaving] {
   opacity: 0;
-  transform: translateY(0.15rem);
+  transform: translateY(calc(-6rem / 14));
 }
 
-.notice.is-error {
-  color: var(--danger);
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-6rem / 14));
+  }
+}
+
+/* A 16 point round status icon in the tone's colour, its glyph in the panel colour. */
+.notice-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: calc(16rem / 14);
+  height: calc(16rem / 14);
+  border-radius: 50%;
+  color: var(--bg-panel);
+}
+
+.notice.is-success .notice-status {
+  background: var(--success);
+}
+
+.notice.is-warning .notice-status {
+  background: var(--warning);
+}
+
+.notice.is-error .notice-status {
+  background: var(--danger);
+}
+
+.notice-status svg {
+  width: calc(10rem / 14);
+  height: calc(10rem / 14);
+  stroke-width: 2.2;
+}
+
+/* The action (Undo, Unpin, Retry): 24 tall on white 10% / ink 7%, with its shortcut in quiet mono. */
+.notice-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: calc(24rem / 14);
+  margin-right: calc(-1 * var(--space-2));
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: calc(7rem / 14);
+  background: var(--toast-action-fill);
+  font-weight: var(--font-weight-label);
+  color: var(--text);
+}
+
+.notice-shortcut {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-micro);
+  font-weight: normal;
+  color: var(--text-tertiary);
 }
 
 /* ---- emoji picker ---- */
@@ -2010,12 +2139,6 @@ html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrol
   font-size: var(--font-size-secondary);
   color: var(--text-tertiary);
   pointer-events: none;
-}
-
-.notice.is-error {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 .notice-dismiss {

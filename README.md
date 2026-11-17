@@ -35,7 +35,7 @@ Press it again and it is gone.
 - Pins (⇧⌘P, ⌘1–⌘9), history (⌘[ / ⌘])
 - Window placement: Fill Left / Right / Screen / Centre (⌃⌥ arrows, ⌘K, or the menu bar)
 - Terminal drawer under the note (⌃` or the toolbar), backed by a kept Herdr terminal when `hc` is installed, else your login shell
-- Export and copy as Markdown, HTML, or plain text; Recently Deleted for 60 days
+- Export and copy as Markdown, HTML, or plain text; Undo after deleting a note (⌘Z), and Recently Deleted for 60 days
 - Raycast commands: Search Notes, Create Note, Open Overnote, Recently Deleted, optional menu bar
 - Deeplinks and quicklinks to open a specific note
 

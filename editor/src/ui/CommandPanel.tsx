@@ -8,7 +8,7 @@ import {
   type BrowseItem,
   type Note,
   type NoteId,
-  type rpc,
+  rpc,
   type SearchSort,
   type Settings,
 } from "@overnote/core";
@@ -16,7 +16,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import type { Api } from "../bridge/api";
 import { fuzzyScore } from "../editor/slash";
 import { revealSelected } from "../lib/motion";
-import { characterLabel, wordLabel } from "../lib/count";
+import { wordLabel } from "../lib/count";
 import { relativeTime } from "../lib/relativeTime";
 import { allActionsMenu, leafActions, type MenuEntry } from "../search/menu";
 import { Highlight, snippetAround } from "../search/Highlight";
@@ -101,7 +101,7 @@ const PLACEHOLDERS: Record<PanelViewName, string> = {
   copyAs: "Copy as…",
   export: "Export as…",
   browse: "Search notes or type > for actions",
-  deleted: "Search deleted notes…",
+  deleted: "Search",
   settings: "Search settings…",
 };
 
@@ -123,7 +123,7 @@ export function CommandPanel(props: CommandPanelProps) {
   const { query } = state;
   const view = currentView(state);
   const { api, currentId } = props;
-  const split = view === "browse" || view === "root";
+  const split = view === "browse" || view === "root" || view === "deleted";
   const inSubmenu = state.submenu.open;
   const [version, setVersion] = useState(0);
   const refresh = () => setVersion((v) => v + 1);
@@ -330,17 +330,21 @@ export function CommandPanel(props: CommandPanelProps) {
       // The list still shows an older search; act on the answer for what was typed.
       else if (view === "browse" && notes.pending()) dispatch({ type: "openFirstWhenLoaded" });
       else if (view === "deleted") {
+        // ↩ restores the highlighted note and opens it (board 11); a click shows it read only first.
         const note = deletedRows[selected];
         if (deleted.status === "error") retryDeleted();
-        else if (note) {
-          props.onClose();
-          props.onPreview(note);
-        }
+        else if (note)
+          void props.onRecover(note.id).then(() => {
+            props.onClose();
+            props.onOpenNote(note.id);
+          });
       } else activate(selectedRow);
     } else if (event.key === "Escape") dispatch({ type: "escape" });
     else if (event.key === "Backspace" && view === "root" && !query && !event.metaKey) swap("browse");
     else if (view === "browse" && event.key === ">" && !query) swap("root");
-    else if (
+    else if (view === "deleted" && deletedRows[selected] && event.metaKey && event.key === "Backspace") {
+      void props.onPermanentlyDelete(deletedRows[selected].id).then(refresh);
+    } else if (
       view === "browse" &&
       previewNote &&
       ((event.metaKey && event.key === "Backspace") || (event.ctrlKey && !event.shiftKey && event.code === "KeyX"))
@@ -480,6 +484,18 @@ export function CommandPanel(props: CommandPanelProps) {
         </div>
       );
     }
+    if (view === "deleted") {
+      // Dimmed, so it is clear the note is gone until it is restored.
+      const item = deletedRows[selected];
+      if (!item) return null;
+      const lines = item.preview.split("\n");
+      return (
+        <div className="search-preview is-dimmed" data-testid="search-preview">
+          <div className="search-preview-title">{displayTitle({ title: item.title, text: item.preview })}</div>
+          <div className="search-preview-body">{lines.slice(1).join("\n").trim()}</div>
+        </div>
+      );
+    }
     if (!previewNote) return null;
     const full = fullNotes.get(previewNote.id);
     const title = displayTitle({ title: previewNote.title, text: previewNote.preview });
@@ -518,9 +534,9 @@ export function CommandPanel(props: CommandPanelProps) {
         onKeyDown={onKeyDown}
       >
         <div className="search-field">
-          {view === "root" ? (
+          {view === "root" || view === "deleted" ? (
             <span className="search-token" data-testid="search-token">
-              Actions
+              {view === "root" ? "Actions" : "Recently Deleted"}
             </span>
           ) : (
             <Icon name="search" />
@@ -611,11 +627,6 @@ export function CommandPanel(props: CommandPanelProps) {
             {view !== "deleted" && view !== "settings" ? rows.map(renderRow) : null}
             {view === "deleted" ? (
               <>
-                {!query && deletedRows.length ? (
-                  <div className="panel-banner">
-                    Notes in Recently Deleted will be permanently removed after 60 days.
-                  </div>
-                ) : null}
                 {deleted.status === "loading" && !deletedRows.length ? <SkeletonRows /> : null}
                 {deleted.status === "error" ? (
                   <EmptyState
@@ -633,7 +644,7 @@ export function CommandPanel(props: CommandPanelProps) {
                     <EmptyState
                       icon="trash"
                       title="No Recently Deleted Notes"
-                      hint="Deleted notes stay here for 60 days before they are removed."
+                      hint={`Deleted notes stay here for ${rpc.TRASH_RETENTION_DAYS} days before they are removed.`}
                     />
                   )
                 ) : null}
@@ -653,7 +664,7 @@ export function CommandPanel(props: CommandPanelProps) {
                   >
                     <div className="panel-row-text">
                       <span className="panel-row-title">{displayTitle({ title: note.title, text: note.preview })}</span>
-                      <span className="panel-row-subtitle">{`Deleted ${relativeTime(note.deletedAt ?? note.updatedAt)} · ${characterLabel(note.charCount)}`}</span>
+                      <span className="panel-row-subtitle">{deletedMeta(note.deletedAt ?? note.updatedAt)}</span>
                     </div>
                     {i === selected ? (
                       <span className="panel-row-buttons">
@@ -725,9 +736,28 @@ export function CommandPanel(props: CommandPanelProps) {
             </span>
           </div>
         ) : null}
+        {view === "deleted" ? (
+          <div className="search-footer" data-testid="search-footer">
+            <span>
+              <kbd>↩</kbd> Restore
+            </span>
+            <span>
+              <kbd>⌘⌫</kbd> Delete forever
+            </span>
+            <span className="search-footer-count">{`Kept ${rpc.TRASH_RETENTION_DAYS} days`}</span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A deleted row's meta line (board 11): when it was deleted, and the days left before the helper purges it. */
+function deletedMeta(deletedAt: number, now = Date.now()): string {
+  const left = Math.max(0, Math.ceil((deletedAt + rpc.TRASH_RETENTION_DAYS * DAY_MS - now) / DAY_MS));
+  return `Deleted ${relativeTime(deletedAt)} · ${left} ${left === 1 ? "day" : "days"} left`;
 }
 
 interface RowProps {

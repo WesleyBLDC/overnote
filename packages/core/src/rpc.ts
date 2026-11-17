@@ -31,6 +31,9 @@ export const SHUTDOWN_TIMEOUT_MS = 10000;
 /** `file.saveAs` waits for the person in a native save panel. */
 export const SAVE_AS_TIMEOUT_MS = 30 * 60 * 1000;
 
+/** Days a deleted note stays in Recently Deleted before the helper purges it (`NotesRepository.trashRetention`). */
+export const TRASH_RETENTION_DAYS = 60;
+
 export const Method = {
   SystemPing: "system.ping",
   SystemShutdown: "system.shutdown",

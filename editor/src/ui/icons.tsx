@@ -22,6 +22,7 @@ const paths: Record<string, ReactElement> = {
   ),
   task: <path d="M3 3h4v4H3zM3 9h4v4H3zM9 5h4M9 11h4M3.8 11l1 1 1.6-2" />,
   check: <path d="m3.5 8.5 3 3 6-7" />,
+  alert: <path d="M8 4v5M8 11.6v.1" />,
   trash: <path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" />,
   pin: <path d="M6 2.5h4l-.5 4 2 2v1H4.5v-1l2-2-.5-4ZM8 9.5V14" />,
   restore: <path d="M3.5 8a4.5 4.5 0 1 0 1.3-3.2L3.5 6M3.5 3v3h3" />,
