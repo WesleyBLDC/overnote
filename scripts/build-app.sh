@@ -9,8 +9,10 @@
 # assets/editor and assets/bin/OvernoteHelper), so this script only assembles and signs:
 #   Contents/MacOS/Overnote        the helper binary, which runs in app mode from this bundle
 #   Contents/Resources/editor/     the built editor
-#   Contents/Resources/Overnote.icns  made from assets/brand/overnote-logo-1024.png with sips and
-#                                     iconutil, every size from 16 to 512@2x (1024 px)
+#   Contents/Resources/Overnote.icns  made from assets/brand/overnote-logo-1024.png (the logo kit's
+#                                     png/macos/overnote-macos-1024.png) with sips and iconutil,
+#                                     every size from 16 to 512@2x (1024 px)
+#   Contents/Resources/OvernoteStatusTemplate.png and @2x  the menu bar template from assets/brand/menubar
 #   Contents/Info.plist            com.wesleybldc.overnote, version from helper/VERSION
 # The bundle is signed ad hoc (codesign --sign -) for this Mac only: no Developer ID, no
 # notarization.
@@ -86,7 +88,7 @@ for size in 16 32 128 256 512; do
   fi
 done
 iconutil -c icns "$ICONSET" -o "$STAGE/Contents/Resources/Overnote.icns"
-# Menu bar template (one colour, alpha only), made from the master by scripts/make-menubar-icon.swift.
+# Menu bar template (black with alpha; macOS tints it): the logo kit's png/menubar/overnoteTemplate.png and @2x.
 cp assets/brand/menubar/OvernoteStatusTemplate.png assets/brand/menubar/OvernoteStatusTemplate@2x.png "$STAGE/Contents/Resources/"
 
 cat >"$STAGE/Contents/Info.plist" <<EOF
