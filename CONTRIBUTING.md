@@ -73,8 +73,9 @@ Add `?seed=empty` to the URL to start with no notes.
 | `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository; the same binary runs as `Overnote.app` in app mode (`AppMode.swift`, plus `GlobalHotkey.swift`, `StatusMenu.swift`, and `LoginItem.swift`); the terminal drawer's pseudo terminal is `TerminalBridge.swift`, with `TerminalSession` and `TerminalLauncher` in `OvernoteCore` |
 | `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
 | `dist-app/` | `Overnote.app`, built by `scripts/build-app.sh` (`npm run build:app`); generated, not committed |
-| `scripts/` | Helper build, the app bundle build (`build-app.sh`, also behind `npm run app:install`), the menu bar template (`make-menubar-icon.swift`), the full local suite (`verify.sh`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, and `check-release.sh` |
+| `scripts/` | Helper build, the app bundle build (`build-app.sh`, also behind `npm run app:install`), the menu bar template (`make-menubar-icon.swift`), the full local suite (`verify.sh`), the colour token guard (`check-theme-tokens.mjs`), helper, window, and update end-to-end, the install and update scripts, release packaging and version checks, and the Raycast Store copy (`prepare-store.sh`), plus `dev.sh`, `prepare-assets.sh`, and `check-release.sh` |
 | `docs/` | Architecture and protocol reference, install and release guides, and the clean-room process |
+| `design/overnote/` | The finalized design handoff, kept as delivered: `SPEC.md`, the board images in `screens/`, the tokens in `tokens/`, reference HTML, icons, fonts, and the logo kit; the editor's `editor/src/styles/theme.css` carries its tokens |
 | `metadata/` | Raycast Store screenshots, used by `scripts/prepare-store.sh` |
 | `assets/` | The extension icon (`extension-icon.png`, 512 px), the logo master (`brand/overnote-logo-1024.png`), and the menu bar template (`brand/menubar/`); the editor and helper builds are generated, not committed |
 | `.github/` | CI (`workflows/ci.yml`, the fast checks), the tag release (`workflows/release.yml`), issue forms, the pull request template, and Dependabot for the action pins |
@@ -129,7 +130,7 @@ npm run verify
 ```
 
 `npm run verify` typechecks, lints, builds the editor and the helper, runs every unit and end-to-end suite, and builds the extension, stopping at the first failing step.
-For the editing loop, `npm run verify:fast` (alias `npm run check`) runs the three typechecks, ESLint, Prettier, the core fixtures, the editor unit tests, and the helper unit tests, with the independent checks running concurrently.
+For the editing loop, `npm run verify:fast` (alias `npm run check`) runs the theme token guard, the three typechecks, ESLint, Prettier, the core fixtures, the editor unit tests, and the helper unit tests, with the independent checks running concurrently.
 The fast mode reads the same step list as the full gate in `scripts/verify.sh`, so it is a strict subset by construction and never replaces the full gate before landing.
 Playwright needs only WebKit, the engine of the native panel.
 The panel window check (`scripts/e2e-window.sh`) shows the panel on screen and needs a logged in GUI session, so it is skipped for now and `npm run verify` does not run it.

@@ -9,7 +9,7 @@
 # The full mode is the single full gate and keeps the original step names and order.
 # The fast mode is a strict subset of the full gate by construction. Every step is defined
 # once in step_body below, the full gate lists every step name once in ALL_STEPS, and the
-# fast gate lists only names drawn from that same list in FAST_STEPS. Fast mode runs the
+# fast gate lists only names drawn from that same list in FAST_STEPS. Fast mode runs the theme token guard, the
 # three typechecks, ESLint, Prettier, the core fixtures, the editor unit tests, and the
 # helper unit tests. Independent read only checks (the typechecks, then the lints) run
 # concurrently in fast mode and their output is replayed in step order.
@@ -79,6 +79,7 @@ PARALLEL_TMP="$(mktemp -d /tmp/overnote-verify-parallel.XXXXXX)"
 ALL_STEPS=(
   "Check: version"
   "Check: schema copies"
+  "Check: theme tokens"
   "Typecheck: extension"
   "Typecheck: editor"
   "Typecheck: core"
@@ -103,6 +104,7 @@ ALL_STEPS=(
 # is what makes fast mode a strict subset of the full gate by construction.
 FAST_STEPS=(
   "Check: schema copies"
+  "Check: theme tokens"
   "Typecheck: extension"
   "Typecheck: editor"
   "Typecheck: core"
@@ -118,6 +120,7 @@ step_body() {
   case "$1" in
     "Check: version") bash scripts/check-version.sh "$(tr -d '[:space:]' <helper/VERSION)" ;;
     "Check: schema copies") node scripts/check-schema-copies.mjs ;;
+    "Check: theme tokens") node scripts/check-theme-tokens.mjs ;;
     "Typecheck: extension") npx tsc --noEmit ;;
     "Typecheck: editor") npx tsc --noEmit -p editor ;;
     "Typecheck: core") npx tsc --noEmit -p packages/core ;;

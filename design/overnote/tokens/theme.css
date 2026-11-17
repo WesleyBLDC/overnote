@@ -1,0 +1,59 @@
+/* Overnote · Graphite theme · editor/src/styles/theme.css */
+:root {
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* light */
+  --bg-panel: #FBFBFC;  --bg-raised: #FFFFFF;  --bg-sunken: #F1F1F3;  --bg-code: #EDEDF0;
+  --border: rgba(0,0,0,0.08);  --border-strong: rgba(0,0,0,0.14);
+  --text: #1A1A1D;  --text-secondary: #5F6168;  --text-tertiary: #6B6E75;
+  --accent: #27272A;  --accent-strong: #18181B;  --accent-soft: rgba(24,24,27,0.08);  --on-accent: #FFFFFF;
+  --selection: rgba(24,24,27,0.14);  --focus-ring: rgba(24,24,27,0.55);  --cursor: #27272A;  --link-underline: rgba(24,24,27,0.35);
+  --danger: #C9302C;  --success: #1F7A45;  --warning: #9A5B00;
+  --island: rgba(255,255,255,0.88);  --island-pinned: #FFFFFF;  --island-blur: 20px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-panel: #18181A;  --bg-raised: #232326;  --bg-sunken: #111113;  --bg-code: #26262A;
+    --border: rgba(255,255,255,0.08);  --border-strong: rgba(255,255,255,0.14);
+    --text: #EDEDEF;  --text-secondary: #A1A1A8;  --text-tertiary: #8E8E95;
+    --accent: #E4E4E7;  --accent-strong: #FFFFFF;  --accent-soft: rgba(255,255,255,0.12);  --on-accent: #18181A;
+    --selection: rgba(255,255,255,0.18);  --focus-ring: rgba(255,255,255,0.55);  --cursor: #E4E4E7;  --link-underline: rgba(255,255,255,0.35);
+    --danger: #FF7B72;  --success: #7DD69A;  --warning: #E6B673;
+    --island: rgba(35,35,38,0.88);  --island-pinned: #232326;  --island-blur: 20px;
+  }
+}
+/* Rules: no hard-coded colours in components. Links = --accent-strong + underline in --link-underline.
+   Active button = --accent-soft fill + --accent-strong icon; hover = --accent-soft at 2/3 strength.
+   Text under 14px never lighter than --text-tertiary. Terminal ANSI blue and magenta map to --accent-strong. */
+
+/* ---- Added for the finalized design (sizes, radii, motion) ---- */
+:root {
+  --font-size-title: 23px;  --font-weight-title: 600;  --tracking-title: -0.01em;
+  --font-size-heading: 18px; --font-size-subheading: 15px; --font-weight-heading: 600;
+  --font-size-body: 15px;   --line-height-body: 1.6;
+  --font-size-secondary: 13px; --font-size-small: 11.5px; --font-size-label: 11px; --tracking-label: 0.06em;
+  --font-size-code: 13px;   --font-size-terminal: 12px;
+  --topbar-height: 46px;    --topbar-button: 30px;  --topbar-icon: 17px;
+  --note-padding-x: 28px;   --note-padding-bottom: 48px;
+  --corner-chip-height: 24px; --corner-inset: 12px; --corner-max-width: 110px;
+  --island-height: 28px;    --island-button: 24px;  --island-bottom: 10px; --island-width: 176px;
+  --panel-min-width: 440px;
+  --radius-panel: 14px; --radius-menu: 12px; --radius-search: 18px; --radius-row: 8px; --radius-chip: 6px;
+  --row-selected: rgba(24,24,27,0.06);
+  --search-glass: rgba(255,255,255,0.82); --search-blur: 30px;
+  --shadow-menu: 0 16px 40px rgba(0,0,0,0.14), 0 0 0 0.5px rgba(0,0,0,0.14);
+  --shadow-search: 0 24px 60px rgba(0,0,0,0.16), 0 0 0 0.5px rgba(0,0,0,0.14);
+  --find-match: rgba(154,91,0,0.16); --find-current: #9A5B00;
+  --duration-fast: 150ms; --duration-toast: 2500ms; --duration-toast-action: 6000ms;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --row-selected: rgba(255,255,255,0.08);
+    --search-glass: rgba(38,38,42,0.80);
+    --shadow-menu: 0 16px 40px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.16);
+    --shadow-search: 0 24px 60px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.18);
+    --find-match: rgba(230,182,115,0.22); --find-current: #E6B673;
+  }
+}
+@font-face { font-family: "Geist"; src: url("../fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Geist Mono"; src: url("../fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }

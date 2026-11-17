@@ -20,7 +20,7 @@ export const NOTICE_MS = 2000;
 
 /**
  * Notices: JS decides when each one leaves (NOTICE_MS for a polite notice, the dismiss button for
- * an error), the stylesheet decides how (the .notice[data-leaving] transition on --motion-slow). A
+ * an error), the stylesheet decides how (the .notice[data-leaving] transition on --duration-slide). A
  * notice is removed when its exit transition ends, or by a fallback timer derived from the same
  * token when no transition runs (reduced motion). A timed exit and a dismissal share one path.
  */
@@ -31,7 +31,7 @@ export function useNotices() {
   const dismiss = useCallback(
     (id: number) => {
       setNotices((list) => list.map((notice) => (notice.id === id ? { ...notice, leaving: true } : notice)));
-      setTimeout(() => remove(id), exitFallbackMs("--motion-slow"));
+      setTimeout(() => remove(id), exitFallbackMs("--duration-slide"));
     },
     [remove],
   );

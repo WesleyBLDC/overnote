@@ -1,0 +1,118 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Overnote · Terminal</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#18181B}a:hover{color:#000000}
+</style>
+</head><body style="margin:0">
+
+<div style="width: 1440px; height: 1200px; box-sizing: border-box; padding: 64px 72px; background: #F7F7F8; color: #141416; font-family: 'Geist', -apple-system, 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column; gap: 28px">
+<svg width="0" height="0" style="position: absolute" aria-hidden="true"><defs>
+<symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="3" style="fill:none;stroke:currentColor;stroke-width:1.6"></rect><path d="M7.5 9.5l2.8 2.5-2.8 2.5M12.5 15h4" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"></path></symbol>
+<symbol id="i-notes" viewBox="0 0 24 24"><rect x="3.5" y="7.5" width="17" height="13" rx="3" style="fill:none;stroke:currentColor;stroke-width:1.6"></rect><path d="M6.5 4h11M7.5 12h9M7.5 16h5.5" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"></path></symbol>
+<symbol id="i-cmd" viewBox="0 0 24 24"><path d="M9 9V6.8A2.3 2.3 0 1 0 6.8 9H9Zm0 0h6m-6 0v6m6-6V6.8A2.3 2.3 0 1 1 17.2 9H15Zm0 0v6m0 0v2.2a2.3 2.3 0 1 0 2.2-2.2H15Zm0 0H9m0 0v2.2A2.3 2.3 0 1 1 6.8 15H9Z" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round"></path></symbol>
+<symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"></path></symbol>
+<symbol id="i-collapse" viewBox="0 0 24 24"><path d="M20 10h-6V4M4 14h6v6M14 10l6.5-6.5M10 14l-6.5 6.5" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"></path></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"></path></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6" style="fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"></path></symbol>
+<symbol id="i-words" viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7" style="fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round"></path></symbol>
+<symbol id="i-new" viewBox="0 0 24 24"><path d="M12 4.5H7a2.5 2.5 0 0 0-2.5 2.5v10A2.5 2.5 0 0 0 7 19.5h10a2.5 2.5 0 0 0 2.5-2.5v-5" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"></path><path d="M17.4 3.6l3 3-7.2 7.2-3.6.6.6-3.6z" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round"></path></symbol>
+</defs></svg>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: baseline; gap: 16px"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #5B5F66">Final · 6</span><h1 style="margin: 0; font-size: 44px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.05">Terminal drawer</h1></div>
+<p style="margin: 0; font-size: 17px; line-height: 1.55; color: #3A3D43; max-width: 980px">The drawer is a normal shell that lives under the note. An agent session is just that same shell running a coding agent such as Claude Code. When you need more room, the expand button in the drawer header turns the terminal into a full-panel view; “‹ Weekend project” at top left (or ⌘⇧↩) brings you back to the note with the drawer still open.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start">
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #5B5F66">Dark</span>
+<div style="height: 720px; box-sizing: border-box; background: #18181A; border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(255,255,255,0.14); overflow: hidden; color: #EDEDEF; display: flex; flex-direction: column">
+<div style="height: 46px; flex: none; display: flex; align-items: center; padding: 0 12px 0 16px; gap: 2px; color: #A1A1A8">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #EC6559"></span><span style="flex: 1; text-align: center; font-size: 12.5px; font-weight: 500; color: #8E8E95">Weekend project</span>
+<span style="width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.12); color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" aria-hidden="true"><use href="#i-term"></use></svg></span>
+<span style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" aria-hidden="true"><use href="#i-notes"></use></svg></span>
+<span style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" aria-hidden="true"><use href="#i-cmd"></use></svg></span>
+<span style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" aria-hidden="true"><use href="#i-new"></use></svg></span>
+</div>
+<div style="flex: 1; position: relative; padding: 4px 28px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.6">
+<div>Build a tiny CLI that turns a folder of <span style="font-family: 'Geist Mono', monospace; font-size: 13px; background: #26262A; border-radius: 5px; padding: 1px 5px">.md</span> files into a static site.</div>
+<div><span style="font-weight: 600">1.</span> Sketch the commands<br><span style="font-weight: 600">2.</span> Parse front matter</div>
+<div style="position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; align-items: center"><span style="height: 24px; padding: 0 8px; border-radius: 6px; font-weight: 500; display: flex; align-items: center; font-size: 11.5px; color: #8E8E95">214<svg width="13" height="13" role="img" aria-label="words" style="margin-left: 5px"><use href="#i-words"></use></svg></span><span style="height: 24px; padding: 0 7px; border-radius: 6px; display: flex; align-items: center; font-size: 11.5px; font-weight: 600; color: #A1A1A8; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14)">Aa</span></div>
+</div>
+<div style="height: 300px; flex: none; box-sizing: border-box; background: #111113; border-top: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column">
+<div style="height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8E8E95"><span style="width: 6px; height: 6px; border-radius: 50%; background: #E4E4E7"></span><span style="color: #D4D4D8">overnote</span><span>zsh</span><span style="flex: 1"></span><span title="Expand to full panel (⌘⇧↩)" style="width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px currentColor; opacity: 0.9"><svg width="13" height="13" role="img" aria-label="Expand to full panel"><use href="#i-expand"></use></svg></span><span title="Close drawer (⌃`)" style="width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" role="img" aria-label="Close drawer"><use href="#i-close"></use></svg></span></div>
+<div style="flex: 1; padding: 4px 14px 12px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.75; color: #E4E4E7">
+<div><span style="color: #8E8E95">~</span> <span style="color: #FFFFFF; font-weight: 600">❯</span> cd code/overnote</div>
+<div><span style="color: #8E8E95">~/code/overnote</span> <span style="color: #FFFFFF; font-weight: 600">❯</span> git status -s</div>
+<div style="color: #A1A1A8"><span style="color: #E6B673">M</span> editor/src/styles/theme.css</div>
+<div style="color: #A1A1A8"><span style="color: #7DD69A">A</span> editor/fonts/Geist.woff2</div>
+<div><span style="color: #8E8E95">~/code/overnote</span> <span style="color: #FFFFFF; font-weight: 600">❯</span> npm run build</div>
+<div style="color: #A1A1A8">Built in 0.4s</div>
+<div><span style="color: #8E8E95">~/code/overnote</span> <span style="color: #FFFFFF; font-weight: 600">❯</span> <span style="display: inline-block; width: 7px; height: 14px; background: #E4E4E7; vertical-align: -2px"></span></div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #5B5F66">Light</span>
+<div style="height: 720px; box-sizing: border-box; background: #FBFBFC; border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.12); overflow: hidden; color: #1A1A1D; display: flex; flex-direction: column">
+<div style="height: 46px; flex: none; display: flex; align-items: center; padding: 0 12px 0 16px; gap: 2px; color: #5F6168">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #EC6559"></span><span style="flex: 1; text-align: center; font-size: 12.5px; font-weight: 500; color: #6B6E75">Weekend project</span>
+<span style="width: 30px; height: 30px; border-radius: 8px; background: rgba(24,24,27,0.08); color: #18181B; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" aria-hidden="true"><use href="#i-term"></use></svg></span>
+<span style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" aria-hidden="true"><use href="#i-notes"></use></svg></span>
+<span style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" aria-hidden="true"><use href="#i-cmd"></use></svg></span>
+<span style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" aria-hidden="true"><use href="#i-new"></use></svg></span>
+</div>
+<div style="flex: 1; position: relative; padding: 4px 28px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.6">
+<div>Build a tiny CLI that turns a folder of <span style="font-family: 'Geist Mono', monospace; font-size: 13px; background: #EDEDF0; border-radius: 5px; padding: 1px 5px">.md</span> files into a static site.</div>
+<div><span style="font-weight: 600">1.</span> Sketch the commands<br><span style="font-weight: 600">2.</span> Parse front matter</div>
+<div style="position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; align-items: center"><span style="height: 24px; padding: 0 8px; border-radius: 6px; font-weight: 500; display: flex; align-items: center; font-size: 11.5px; color: #6B6E75">214<svg width="13" height="13" role="img" aria-label="words" style="margin-left: 5px"><use href="#i-words"></use></svg></span><span style="height: 24px; padding: 0 7px; border-radius: 6px; display: flex; align-items: center; font-size: 11.5px; font-weight: 600; color: #5F6168; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)">Aa</span></div>
+</div>
+<div style="height: 300px; flex: none; box-sizing: border-box; background: #F1F1F3; border-top: 1px solid rgba(0,0,0,0.08); display: flex; flex-direction: column">
+<div style="height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #6B6E75"><span style="width: 6px; height: 6px; border-radius: 50%; background: #27272A"></span><span style="color: #2C2F34">overnote</span><span>zsh</span><span style="flex: 1"></span><span title="Expand to full panel (⌘⇧↩)" style="width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px currentColor; opacity: 0.9"><svg width="13" height="13" role="img" aria-label="Expand to full panel"><use href="#i-expand"></use></svg></span><span title="Close drawer (⌃`)" style="width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" role="img" aria-label="Close drawer"><use href="#i-close"></use></svg></span></div>
+<div style="flex: 1; padding: 4px 14px 12px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.75; color: #1A1A1D">
+<div><span style="color: #6B6E75">~</span> <span style="color: #18181B; font-weight: 600">❯</span> cd code/overnote</div>
+<div><span style="color: #6B6E75">~/code/overnote</span> <span style="color: #18181B; font-weight: 600">❯</span> git status -s</div>
+<div style="color: #55585F"><span style="color: #9A5B00">M</span> editor/src/styles/theme.css</div>
+<div style="color: #55585F"><span style="color: #1F7A45">A</span> editor/fonts/Geist.woff2</div>
+<div><span style="color: #6B6E75">~/code/overnote</span> <span style="color: #18181B; font-weight: 600">❯</span> npm run build</div>
+<div style="color: #55585F">Built in 0.4s</div>
+<div><span style="color: #6B6E75">~/code/overnote</span> <span style="color: #18181B; font-weight: 600">❯</span> <span style="display: inline-block; width: 7px; height: 14px; background: #27272A; vertical-align: -2px"></span></div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #5B5F66">Expanded · full-panel terminal</span>
+<div style="height: 720px; box-sizing: border-box; background: #111113; border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,0.22), 0 0 0 0.5px rgba(255,255,255,0.14); overflow: hidden; display: flex; flex-direction: column">
+<div style="height: 46px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; background: #18181A; border-bottom: 1px solid rgba(255,255,255,0.08); color: #A1A1A8">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #EC6559; flex: none"></span>
+<span style="height: 28px; padding: 0 10px 0 4px; border-radius: 8px; background: rgba(255,255,255,0.08); color: #EDEDEF; display: flex; align-items: center; gap: 2px; font-size: 12.5px; font-weight: 500; margin-left: 6px"><svg width="16" height="16" aria-hidden="true"><use href="#i-back"></use></svg>Weekend project</span>
+<span style="flex: 1; display: flex; justify-content: center; align-items: center; gap: 6px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #8E8E95"><span style="width: 6px; height: 6px; border-radius: 50%; background: #E4E4E7"></span><span style="color: #D4D4D8">overnote</span>claude</span>
+<span title="Back to drawer (⌘⇧↩)" style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" role="img" aria-label="Back to drawer"><use href="#i-collapse"></use></svg></span>
+</div>
+<div style="flex: 1; padding: 14px 16px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px; line-height: 1.65; color: #E4E4E7; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px; color: #8E8E95; font-size: 11.5px"><span style="width: 5px; height: 5px; border-radius: 50%; background: #7DD69A"></span>done in 12s</div>
+<div style="display: flex; gap: 10px; background: #1C1C1F; border-radius: 8px; padding: 10px 12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06)"><span style="color: #FFFFFF; font-weight: 600">❯</span><span style="color: #FFFFFF">can we use it locally first, before notarization?</span></div>
+<div style="display: flex; gap: 10px"><span style="color: #8E8E95">●</span><span>Yes. Local first works.</span></div>
+<div style="padding-left: 20px; color: #D4D4D8">An app built on your own Mac never gets the quarantine flag, so an ad-hoc signed <span style="color: #FFFFFF; text-decoration: underline; text-decoration-color: rgba(255,255,255,0.35)">Overnote.app</span> opens without notarization.</div>
+<div style="padding-left: 20px; display: flex; flex-direction: column; gap: 2px; color: #D4D4D8"><span style="color: #E4E4E7; font-weight: 600">What works ad-hoc signed</span><span><span style="color: #8E8E95">–</span> Global hotkey, after one prompt</span><span><span style="color: #8E8E95">–</span> Panel, editor and terminal</span><span><span style="color: #8E8E95">–</span> Launch at login</span></div>
+<div style="padding-left: 20px; color: #D4D4D8"><span style="color: #E6B673">Note</span> Rebuilds change the signature, so macOS may ask for permissions again.</div>
+<div style="display: flex; gap: 10px; margin-top: auto"><span style="color: #FFFFFF; font-weight: 600">❯</span><span style="display: inline-block; width: 7px; height: 15px; background: #E4E4E7; margin-top: 3px"></span></div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; font-size: 13px; line-height: 1.5; color: #3A3D43">
+<div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 0 0 1px #E4E5E8; padding: 14px 16px"><div style="font-weight: 600; color: #141416; margin-bottom: 3px">Drawer</div>--bg-sunken under a --border hairline, flush with the panel. Opening it highlights the terminal button in the top bar.</div>
+<div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 0 0 1px #E4E5E8; padding: 14px 16px"><div style="font-weight: 600; color: #141416; margin-bottom: 3px">Prompt</div>Short path in --text-tertiary, then a bold ❯ in --accent-strong. No user@host.</div>
+<div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 0 0 1px #E4E5E8; padding: 14px 16px"><div style="font-weight: 600; color: #141416; margin-bottom: 3px">Colours and agents</div>ANSI blue and magenta → --accent-strong, bright black → --text-tertiary. Agent prompts sit in a #1C1C1F rounded block; links are white and underlined.</div>
+<div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 0 0 1px #E4E5E8; padding: 14px 16px"><div style="font-weight: 600; color: #141416; margin-bottom: 3px">Expand and back</div>Drawer header: expand (outlined, ⌘⇧↩) and close (⌃`). Full panel: “‹ note title” on the left and collapse on the right both return to the note; the session keeps running.</div>
+</div>
+</div>
+</body></html>

@@ -7,7 +7,8 @@ description: Change the Overnote editor or panel UI and prove it visually. Use f
 
 1. Run the browser harness: `npm run dev -w editor -- --port 5299 --strictPort --host 127.0.0.1`, save its PID, and stop only that process.
    Never drive the Raycast GUI or show the helper panel on screen; `scripts/e2e-window.sh` runs only when the maintainer asks.
-2. Colours and type come only from the Graphite tokens in `editor/src/styles/theme.css`.
+2. Colours and type come only from the tokens in `editor/src/styles/theme.css`, whose first part is the design's (`design/overnote/tokens/theme.css`, specified in `design/overnote/SPEC.md`); `scripts/check-theme-tokens.mjs` fails verify on a raw colour.
+   Match each screen against its board in `design/overnote/screens/`, and read exact values from `design/overnote/reference-html/`.
    No hex values in components, and no new token names without a reason in the PR.
    Text keeps 4.5:1 contrast on its surface in both modes.
 3. Icons: 17 pt on a 24 grid, stroke 1.6, round caps and joins, in `editor/src/ui/icons.tsx`.

@@ -18,3 +18,6 @@ scripts/perf/results/
 # Local agent state
 .claude/settings.local.json
 .claude/worktrees/
+
+# The design handoff is reference material, kept exactly as delivered
+design/

@@ -6,16 +6,16 @@
    * inflate it): one gap between any two top-level blocks, a larger one above headings, a tight one
    * between the items of a list.
    */
-  --note-em: var(--type-body);
+  --note-em: var(--font-size-body);
   /* 14 pt between blocks at 100%, as on the editor board. */
   --block-gap: calc(14 / 15 * var(--note-em));
   --heading-gap: calc(1.15 * var(--note-em));
   --inner-gap: calc(0.35 * var(--note-em));
   --item-gap: calc(0.2 * var(--note-em));
-  min-height: calc(1em * var(--line-height));
+  min-height: calc(1em * var(--line-height-body));
   outline: none;
   font-size: var(--note-em);
-  line-height: var(--line-height);
+  line-height: var(--line-height-body);
   white-space: pre-wrap;
   word-wrap: break-word;
   caret-color: var(--cursor);
@@ -57,24 +57,24 @@
   margin-top: var(--heading-gap);
 }
 
-/* Headings follow the type scale: title (23 px), heading (18 px), and a 16 px step between heading and body. */
+/* Headings follow the type scale: title (23 px), heading (18 px), and subheading (15 px). */
 .note-editor h1 {
-  font-size: var(--type-title);
+  font-size: var(--font-size-title);
   line-height: 1.6;
-  font-weight: var(--weight-heading);
+  font-weight: var(--font-weight-title);
   letter-spacing: var(--tracking-title);
 }
 
 .note-editor h2 {
-  font-size: var(--type-heading);
+  font-size: var(--font-size-heading);
   line-height: 1.4;
-  font-weight: var(--weight-heading);
+  font-weight: var(--font-weight-heading);
 }
 
 .note-editor h3 {
-  font-size: var(--type-subheading);
+  font-size: var(--font-size-subheading);
   line-height: 1.5;
-  font-weight: var(--weight-heading);
+  font-weight: var(--font-weight-heading);
 }
 
 .note-editor a {
@@ -156,7 +156,7 @@
   align-items: center;
   justify-content: center;
   width: var(--list-gutter);
-  height: calc(1em * var(--line-height));
+  height: calc(1em * var(--line-height-body));
   -webkit-user-select: none;
   user-select: none;
 }
@@ -166,7 +166,7 @@
   content: "";
   position: absolute;
   left: calc(var(--list-gutter) / 2 - 0.19em);
-  top: calc(0.5em * var(--line-height) - 0.19em);
+  top: calc(0.5em * var(--line-height-body) - 0.19em);
   width: 0.38em;
   height: 0.38em;
   border-radius: 50%;
@@ -186,7 +186,7 @@
   width: 0.32em;
   height: 0.32em;
   left: calc(var(--list-gutter) / 2 - 0.16em);
-  top: calc(0.5em * var(--line-height) - 0.16em);
+  top: calc(0.5em * var(--line-height-body) - 0.16em);
   background: var(--text-secondary);
   box-shadow: none;
 }
@@ -238,9 +238,9 @@
   box-shadow: inset 0 0 0 calc(1.5em / 15) var(--checkbox-ring);
   cursor: pointer;
   transition:
-    background-color var(--motion) var(--ease-out),
-    box-shadow var(--motion) var(--ease-out),
-    transform var(--motion-fast) var(--ease-out);
+    background-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    transform var(--duration-pop) var(--ease-out);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input:active {
@@ -260,8 +260,8 @@
   opacity: 0;
   transform: scale(0.4);
   transition:
-    opacity var(--motion-fast) var(--ease-out),
-    transform var(--motion-slow) var(--ease-out);
+    opacity var(--duration-pop) var(--ease-out),
+    transform var(--duration-slide) var(--ease-out);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker input:checked {
@@ -276,16 +276,16 @@
 
 /* The moment of checking (just-checked, see taskCheckPlugin): the box pops and the mark draws in. */
 .note-editor .just-checked[data-list-checked] > .list-marker input {
-  animation: check-pop var(--motion-slow) var(--ease-out);
+  animation: check-pop var(--duration-slide) var(--ease-out);
 }
 
 .note-editor .just-checked[data-list-checked] > .list-marker input::after {
-  animation: check-in var(--motion-slow) var(--ease-out);
+  animation: check-in var(--duration-slide) var(--ease-out);
 }
 
 .note-editor .just-checked[data-list-checked] > .list-marker,
 .note-editor .just-checked[data-list-checked] > .list-content > :is(p, h1, h2, h3) {
-  animation: check-dim var(--motion-slow) var(--ease-out);
+  animation: check-dim var(--duration-slide) var(--ease-out);
 }
 
 @keyframes check-pop {
@@ -311,8 +311,8 @@
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker,
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-content > :is(p, h1, h2, h3) {
   transition:
-    opacity var(--motion) var(--ease-out),
-    color var(--motion) var(--ease-out);
+    opacity var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 
 /* Done: tertiary text, struck through. */
@@ -335,7 +335,7 @@
 .note-editor .prosemirror-flat-list[data-list-kind="toggle"] > .list-marker::before {
   content: "▸";
   color: var(--text-secondary);
-  transition: transform var(--motion) var(--ease-out);
+  transition: transform var(--duration-fast) var(--ease-out);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="toggle"]:not([data-list-collapsed]) > .list-marker::before {
@@ -360,7 +360,7 @@
   padding: 0.8em 0.95em;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: var(--type-code);
+  font-size: var(--font-size-code);
   line-height: var(--line-height-code);
   tab-size: 4;
 }
@@ -379,7 +379,7 @@
   align-items: center;
   gap: 0.2em;
   opacity: 0;
-  transition: opacity var(--motion) var(--ease-out);
+  transition: opacity var(--duration-fast) var(--ease-out);
   -webkit-user-select: none;
   user-select: none;
 }
@@ -399,14 +399,14 @@
   box-shadow: var(--shadow-small);
   color: var(--text-secondary);
   font: inherit;
-  font-size: var(--type-small);
-  font-weight: var(--weight-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-secondary);
 }
 
 .note-editor .code-block-label {
   display: none;
-  font-size: var(--type-small);
-  font-weight: var(--weight-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-secondary);
   color: var(--text-secondary);
 }
 

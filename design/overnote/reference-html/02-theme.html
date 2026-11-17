@@ -1,0 +1,334 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Overnote · Theme</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#18181B}a:hover{color:#000000}
+</style>
+</head><body style="margin:0">
+
+<div style="width: 1440px; min-height: 1760px; box-sizing: border-box; padding: 64px 72px; background: #F7F7F8; color: #141416; font-family: 'Geist', -apple-system, 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: baseline; gap: 16px"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #5B5F66">Final · 2</span><h1 style="margin: 0; font-size: 44px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.05">Graphite theme</h1></div>
+<p style="margin: 0; font-size: 17px; line-height: 1.55; color: #3A3D43; max-width: 960px">Every colour the app uses, by token name, for both modes. Components refer to tokens only, never hex values. The CSS at the bottom is the source of truth for coding agents.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div style="background: #18181A; border-radius: 18px; padding: 22px 24px; display: flex; flex-direction: column; color: #EDEDEF">
+<div style="font-size: 19px; font-weight: 700; padding-bottom: 10px">Dark</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #18181A; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--bg-panel</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#18181A</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Note panel</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #232326; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--bg-raised</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#232326</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Menus, popovers, pinned island</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #111113; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--bg-sunken</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#111113</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Terminal drawer, code blocks</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #26262A; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--bg-code</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#26262A</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Inline code chip</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--border</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">rgba(255,255,255,0.08)</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Hairlines, dividers</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--border-strong</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">rgba(255,255,255,0.14)</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Panel edge, chips</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #EDEDEF; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--text</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#EDEDEF</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Body · 15.2 / 16.8:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #A1A1A8; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--text-secondary</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#A1A1A8</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Icons, labels · 6.9 / 6.0:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #8E8E95; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--text-tertiary</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#8E8E95</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Counts, hints · 5.4 / 4.9:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #E4E4E7; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--accent</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#E4E4E7</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Checked boxes, numbers</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--accent-strong</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#FFFFFF</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Active icons, links</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--accent-soft</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">rgba(255,255,255,0.12)</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Active and hover fills</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #18181A; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--on-accent</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#18181A</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Check on a filled box</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.18); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--selection</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">rgba(255,255,255,0.18)</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Text selection</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.55); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--focus-ring</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">rgba(255,255,255,0.55)</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Keyboard focus</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #E4E4E7; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--cursor</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#E4E4E7</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Text and terminal cursor</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #FF7B72; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--danger</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#FF7B72</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Errors · 7.0 / 5.2:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #7DD69A; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--success</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#7DD69A</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Saved, done · 10.1 / 5.2:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #E6B673; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--warning</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">#E6B673</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Warnings, find · 9.5 / 5.2:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(35,35,38,0.88); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--island</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #A1A1A8">rgba(35,35,38,0.88)</span>
+<span style="font-size: 12.5px; color: #A1A1A8">Format island, with 20px blur</span>
+</div>
+
+</div>
+<div style="background: #FBFBFC; border-radius: 18px; box-shadow: 0 0 0 1px #E4E5E8; padding: 22px 24px; display: flex; flex-direction: column; color: #1A1A1D">
+<div style="font-size: 19px; font-weight: 700; padding-bottom: 10px">Light</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #FBFBFC; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--bg-panel</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#FBFBFC</span>
+<span style="font-size: 12.5px; color: #5F6168">Note panel</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--bg-raised</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#FFFFFF</span>
+<span style="font-size: 12.5px; color: #5F6168">Menus, popovers, pinned island</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #F1F1F3; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--bg-sunken</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#F1F1F3</span>
+<span style="font-size: 12.5px; color: #5F6168">Terminal drawer, code blocks</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #EDEDF0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--bg-code</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#EDEDF0</span>
+<span style="font-size: 12.5px; color: #5F6168">Inline code chip</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(0,0,0,0.08); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--border</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">rgba(0,0,0,0.08)</span>
+<span style="font-size: 12.5px; color: #5F6168">Hairlines, dividers</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(0,0,0,0.14); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--border-strong</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">rgba(0,0,0,0.14)</span>
+<span style="font-size: 12.5px; color: #5F6168">Panel edge, chips</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #1A1A1D; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--text</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#1A1A1D</span>
+<span style="font-size: 12.5px; color: #5F6168">Body · 15.2 / 16.8:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #5F6168; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--text-secondary</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#5F6168</span>
+<span style="font-size: 12.5px; color: #5F6168">Icons, labels · 6.9 / 6.0:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #6B6E75; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--text-tertiary</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#6B6E75</span>
+<span style="font-size: 12.5px; color: #5F6168">Counts, hints · 5.4 / 4.9:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #27272A; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--accent</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#27272A</span>
+<span style="font-size: 12.5px; color: #5F6168">Checked boxes, numbers</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #18181B; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--accent-strong</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#18181B</span>
+<span style="font-size: 12.5px; color: #5F6168">Active icons, links</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(24,24,27,0.08); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--accent-soft</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">rgba(24,24,27,0.08)</span>
+<span style="font-size: 12.5px; color: #5F6168">Active and hover fills</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--on-accent</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#FFFFFF</span>
+<span style="font-size: 12.5px; color: #5F6168">Check on a filled box</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(24,24,27,0.14); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--selection</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">rgba(24,24,27,0.14)</span>
+<span style="font-size: 12.5px; color: #5F6168">Text selection</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(24,24,27,0.55); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--focus-ring</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">rgba(24,24,27,0.55)</span>
+<span style="font-size: 12.5px; color: #5F6168">Keyboard focus</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #27272A; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--cursor</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#27272A</span>
+<span style="font-size: 12.5px; color: #5F6168">Text and terminal cursor</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #C9302C; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--danger</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#C9302C</span>
+<span style="font-size: 12.5px; color: #5F6168">Errors · 7.0 / 5.2:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #1F7A45; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--success</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#1F7A45</span>
+<span style="font-size: 12.5px; color: #5F6168">Saved, done · 10.1 / 5.2:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: #9A5B00; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--warning</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">#9A5B00</span>
+<span style="font-size: 12.5px; color: #5F6168">Warnings, find · 9.5 / 5.2:1</span>
+</div>
+
+<div style="display: grid; grid-template-columns: 30px 160px 180px minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid rgba(0,0,0,0.08)">
+<span style="width: 30px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.88); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14)"></span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px">--island</span>
+<span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #5F6168">rgba(255,255,255,0.88)</span>
+<span style="font-size: 12.5px; color: #5F6168">Format island, with 20px blur</span>
+</div>
+
+</div>
+</div>
+<div style="background: #111113; border-radius: 14px; padding: 22px 24px; overflow-x: auto">
+<pre style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12.5px; line-height: 1.6; color: #E4E4E7; white-space: pre">/* Overnote · Graphite theme · editor/src/styles/theme.css */
+:root {
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* light */
+  --bg-panel: #FBFBFC;  --bg-raised: #FFFFFF;  --bg-sunken: #F1F1F3;  --bg-code: #EDEDF0;
+  --border: rgba(0,0,0,0.08);  --border-strong: rgba(0,0,0,0.14);
+  --text: #1A1A1D;  --text-secondary: #5F6168;  --text-tertiary: #6B6E75;
+  --accent: #27272A;  --accent-strong: #18181B;  --accent-soft: rgba(24,24,27,0.08);  --on-accent: #FFFFFF;
+  --selection: rgba(24,24,27,0.14);  --focus-ring: rgba(24,24,27,0.55);  --cursor: #27272A;  --link-underline: rgba(24,24,27,0.35);
+  --danger: #C9302C;  --success: #1F7A45;  --warning: #9A5B00;
+  --island: rgba(255,255,255,0.88);  --island-pinned: #FFFFFF;  --island-blur: 20px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-panel: #18181A;  --bg-raised: #232326;  --bg-sunken: #111113;  --bg-code: #26262A;
+    --border: rgba(255,255,255,0.08);  --border-strong: rgba(255,255,255,0.14);
+    --text: #EDEDEF;  --text-secondary: #A1A1A8;  --text-tertiary: #8E8E95;
+    --accent: #E4E4E7;  --accent-strong: #FFFFFF;  --accent-soft: rgba(255,255,255,0.12);  --on-accent: #18181A;
+    --selection: rgba(255,255,255,0.18);  --focus-ring: rgba(255,255,255,0.55);  --cursor: #E4E4E7;  --link-underline: rgba(255,255,255,0.35);
+    --danger: #FF7B72;  --success: #7DD69A;  --warning: #E6B673;
+    --island: rgba(35,35,38,0.88);  --island-pinned: #232326;  --island-blur: 20px;
+  }
+}
+/* Rules: no hard-coded colours in components. Links = --accent-strong + underline in --link-underline.
+   Active button = --accent-soft fill + --accent-strong icon; hover = --accent-soft at 2/3 strength.
+   Text under 14px never lighter than --text-tertiary. Terminal ANSI blue and magenta map to --accent-strong. */</pre>
+</div>
+</div>
+</body></html>

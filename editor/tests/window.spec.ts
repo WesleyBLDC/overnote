@@ -373,9 +373,9 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   await expect(ghost).toHaveCount(0);
   await expect(editor(page)).toBeFocused();
 
-  // The animation follows the --motion-fast token, and so does the fallback timer when no animation
+  // The animation follows the --duration-pop token, and so does the fallback timer when no animation
   // end event comes: the token plus 100 ms.
-  await page.evaluate(() => document.documentElement.style.setProperty("--motion-fast", "450ms"));
+  await page.evaluate(() => document.documentElement.style.setProperty("--duration-pop", "450ms"));
   await page.keyboard.press("Meta+k");
   await expect(page.getByTestId("command-panel")).toBeVisible();
   await watchGhost(page);
@@ -392,14 +392,14 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   await page.clock.runFor(20);
   await expect(ghost).toHaveCount(0);
   await page.evaluate(() => {
-    document.documentElement.style.removeProperty("--motion-fast");
+    document.documentElement.style.removeProperty("--duration-pop");
     document.querySelectorAll("style").forEach((style) => {
       if (style.textContent?.includes(".panel-ghost, .panel-ghost *")) style.remove();
     });
   });
 
   // A notice stays for NOTICE_MS (2 s), is marked as leaving, and is removed when its fade
-  // (--motion-slow) ends: the paused clock holds the fallback timer, so the transition end does it.
+  // (--duration-slide) ends: the paused clock holds the fallback timer, so the transition end does it.
   await page.keyboard.press("Meta+Shift+d");
   await page.clock.runFor(10);
   const notice = page.locator(".notice");

@@ -1,0 +1,137 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Overnote · Search</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</head><body style="margin:0">
+
+<svg width="0" height="0" style="position: absolute" aria-hidden="true"><defs>
+<symbol id="fs-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" style="fill:none;stroke:currentColor;stroke-width:2"></circle><path d="M16 16l4 4" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"></path></symbol>
+<symbol id="fs-note" viewBox="0 0 24 24"><rect x="5" y="3.5" width="14" height="17" rx="3" style="fill:none;stroke:currentColor;stroke-width:1.7"></rect><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round"></path></symbol>
+<symbol id="fs-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" style="fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round"></path></symbol>
+<symbol id="fs-pin" viewBox="0 0 24 24"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3zM12 14v6" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round"></path></symbol>
+<symbol id="fs-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round"></path></symbol>
+<symbol id="fs-win" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5" style="fill:none;stroke:currentColor;stroke-width:1.7"></rect><path d="M12 5v14" style="fill:none;stroke:currentColor;stroke-width:1.7"></path></symbol>
+<symbol id="fs-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" style="fill:none;stroke:currentColor;stroke-width:1.7"></circle><path d="M12 3.5v2.5M12 18v2.5M3.5 12H6M18 12h2.5M6 6l1.8 1.8M16.2 16.2L18 18M6 18l1.8-1.8M16.2 7.8L18 6" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round"></path></symbol>
+<symbol id="fs-term" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3" style="fill:none;stroke:currentColor;stroke-width:1.7"></rect><path d="M7.5 10l2.5 2-2.5 2M12 14.5h4" style="fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round"></path></symbol>
+<symbol id="fs-dup" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5" style="fill:none;stroke:currentColor;stroke-width:1.7"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" style="fill:none;stroke:currentColor;stroke-width:1.7"></path></symbol>
+<symbol id="fs-cmd" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6" style="fill:currentColor"></circle><circle cx="12" cy="12" r="1.6" style="fill:currentColor"></circle><circle cx="18" cy="12" r="1.6" style="fill:currentColor"></circle></symbol>
+<symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="3" style="fill:none;stroke:currentColor;stroke-width:1.6"></rect><path d="M7.5 9.5l2.8 2.5-2.8 2.5M12.5 15h4" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"></path></symbol>
+<symbol id="i-notes" viewBox="0 0 24 24"><rect x="3.5" y="7.5" width="17" height="13" rx="3" style="fill:none;stroke:currentColor;stroke-width:1.6"></rect><path d="M6.5 4h11" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"></path><path d="M7.5 12h9M7.5 16h5.5" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"></path></symbol>
+<symbol id="i-cmd" viewBox="0 0 24 24"><path d="M9 9V6.8A2.3 2.3 0 1 0 6.8 9H9Zm0 0h6m-6 0v6m6-6V6.8A2.3 2.3 0 1 1 17.2 9H15Zm0 0v6m0 0v2.2a2.3 2.3 0 1 0 2.2-2.2H15Zm0 0H9m0 0v2.2A2.3 2.3 0 1 1 6.8 15H9Z" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round"></path></symbol>
+<symbol id="i-new" viewBox="0 0 24 24"><path d="M12 4.5H7a2.5 2.5 0 0 0-2.5 2.5v10A2.5 2.5 0 0 0 7 19.5h10a2.5 2.5 0 0 0 2.5-2.5v-5" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round"></path><path d="M17.4 3.6l3 3-7.2 7.2-3.6.6.6-3.6z" style="fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round"></path></symbol>
+<symbol id="i-words" viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7" style="fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round"></path></symbol>
+</defs></svg>
+<div style="width: 1440px; height: 1900px; box-sizing: border-box; padding: 64px 72px; background: #F7F7F8; color: #141416; font-family: 'Geist', -apple-system, 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: baseline; gap: 16px"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #5B5F66">Final · 8</span><h1 style="margin: 0; font-size: 44px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.05">Search: notes, preview and key actions</h1></div>
+<p style="margin: 0; font-size: 17px; line-height: 1.55; color: #3A3D43; max-width: 1120px">One Spotlight-style box replaces both menus. A big search field, a row of key actions under it, notes on the left and a live preview on the right. ⌘P opens it on notes; ⌘K opens it on all actions. It floats over the screen, frosted, 18 pt corners.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 10px"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #5B5F66">1</span><span style="font-size: 17px; font-weight: 700">Open with ⌘P, nothing typed</span></div>
+<div style="position: relative; height: 620px; border-radius: 16px; overflow: hidden; background: #0E0E10">
+<div style="position: absolute; left: 60px; top: 50px; width: 320px; height: 520px; border-radius: 14px; background: #18181A; box-shadow: 0 0 0 0.5px rgba(255,255,255,0.12); padding: 56px 24px; box-sizing: border-box; color: #55555B; font-size: 13px; line-height: 1.7"><div style="font-size: 18px; font-weight: 600; margin-bottom: 8px">Standup</div>Shipped the terminal drawer behind a flag. Blocked on notarization until the Apple ID is set up.</div>
+<div style="position: absolute; left: 50%; top: 56px; transform: translateX(-50%); width: 700px; border-radius: 18px; background: rgba(38,38,42,0.80); -webkit-backdrop-filter: blur(30px) saturate(1.4); backdrop-filter: blur(30px) saturate(1.4); box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.18); color: #EDEDEF; overflow: hidden">
+<div style="height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 18px"><svg width="20" height="20" style="color: #A1A1A8"><use href="#fs-search"></use></svg><span style="width: 2px; height: 22px; background: #EDEDEF"></span><span style="font-size: 21px; color: #6B6B72; margin-left: -8px">Search notes or type &gt; for actions</span><span style="flex: 1"></span><span style="font-size: 12px; color: #A1A1A8; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,0.08)">Modified ▾</span></div>
+<div style="display: flex; gap: 6px; padding: 0 14px 12px">
+<span style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-radius: 9px; background: rgba(255,255,255,0.07); font-size: 12.5px"><svg width="14" height="14"><use href="#i-new"></use></svg>New<span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #8E8E95">⌘N</span></span>
+<span style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-radius: 9px; background: rgba(255,255,255,0.07); font-size: 12.5px"><svg width="14" height="14"><use href="#fs-pin"></use></svg>Pin<span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #8E8E95">⇧⌘P</span></span>
+<span style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-radius: 9px; background: rgba(255,255,255,0.07); font-size: 12.5px"><svg width="14" height="14"><use href="#fs-link"></use></svg>Copy link<span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #8E8E95">⇧⌘D</span></span>
+<span style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-radius: 9px; background: rgba(255,255,255,0.07); font-size: 12.5px"><svg width="14" height="14"><use href="#i-term"></use></svg>Terminal<span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #8E8E95">⌃`</span></span>
+<span style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-radius: 9px; background: rgba(255,255,255,0.07); font-size: 12.5px"><svg width="14" height="14"><use href="#fs-gear"></use></svg>Settings<span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #8E8E95">⌘,</span></span>
+<span style="flex: 1"></span>
+<span style="height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-radius: 9px; font-size: 12.5px; color: #A1A1A8; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12)"><svg width="14" height="14"><use href="#i-cmd"></use></svg>All actions<span style="font-family: 'Geist Mono', monospace; font-size: 10.5px; color: #8E8E95">⌘K</span></span>
+</div>
+<div style="height: 1px; background: rgba(255,255,255,0.08)"></div>
+<div style="display: grid; grid-template-columns: 270px 1fr; height: 380px">
+<div style="padding: 6px; border-right: 1px solid rgba(255,255,255,0.08); font-size: 13px; display: flex; flex-direction: column; gap: 2px">
+<div style="padding: 8px 10px 4px; font-size: 11px; font-weight: 600; color: #8E8E95">Pinned</div>
+<div style="padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.08); display: flex; gap: 10px; align-items: center"><svg width="15" height="15" style="color: #A1A1A8; flex: none"><use href="#fs-note"></use></svg><div style="flex: 1; min-width: 0"><div style="font-weight: 500">Standup</div><div style="font-size: 11.5px; color: #8E8E95">Current · edited now</div></div></div>
+<div style="padding: 8px 10px; display: flex; gap: 10px; align-items: center"><svg width="15" height="15" style="color: #8E8E95; flex: none"><use href="#fs-note"></use></svg><div><div>Interviews Fri Nov 13</div><div style="font-size: 11.5px; color: #8E8E95">2h ago · 1,731 words</div></div></div>
+<div style="padding: 10px 10px 4px; font-size: 11px; font-weight: 600; color: #8E8E95">Recent</div>
+<div style="padding: 8px 10px; display: flex; gap: 10px; align-items: center"><svg width="15" height="15" style="color: #8E8E95; flex: none"><use href="#fs-note"></use></svg><div><div>How formatting works across repos</div><div style="font-size: 11.5px; color: #8E8E95">1h ago · 402 words</div></div></div>
+<div style="padding: 8px 10px; display: flex; gap: 10px; align-items: center"><svg width="15" height="15" style="color: #8E8E95; flex: none"><use href="#fs-note"></use></svg><div><div>Scheduling reply templates</div><div style="font-size: 11.5px; color: #8E8E95">Yesterday · 215 words</div></div></div>
+<div style="padding: 8px 10px; display: flex; gap: 10px; align-items: center"><svg width="15" height="15" style="color: #8E8E95; flex: none"><use href="#fs-note"></use></svg><div><div>Weekend project</div><div style="font-size: 11.5px; color: #8E8E95">Tue · 3,120 words</div></div></div>
+</div>
+<div style="padding: 20px 24px; font-size: 13px; line-height: 1.65; color: #A1A1A8; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 18px; font-weight: 600; color: #EDEDEF">Standup</div>
+<div>Shipped the terminal drawer behind a flag.</div>
+<div>Blocked on notarization until the Apple ID is set up.</div>
+<div>Questions for Friday: keep the slash menu, the toolbar, or both?</div>
+<div style="margin-top: auto; display: flex; gap: 14px; font-size: 11.5px; color: #8E8E95"><span>Created Nov 3</span><span>Edited now</span><span>1,244 words</span></div>
+</div>
+</div>
+<div style="height: 34px; display: flex; align-items: center; gap: 16px; padding: 0 18px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 11.5px; color: #8E8E95"><span>↩ Open</span><span>⌘↩ New window</span><span>⌘⌫ Delete</span><span style="flex: 1"></span><span>24 notes</span></div>
+</div>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #3A3D43; max-width: 1100px">The key actions row is always there, each with its shortcut, so the five things you do most are one click or one keystroke away. Everything else sits behind “All actions”. Pinned notes first, then recent; the preview follows the highlighted row.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start">
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 10px"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #5B5F66">2</span><span style="font-size: 17px; font-weight: 700">Typing: notes and matching actions</span></div>
+<div style="position: relative; height: 470px; border-radius: 16px; overflow: hidden; background: #0E0E10">
+<div style="position: absolute; left: 16px; right: 16px; top: 20px; border-radius: 18px; background: rgba(38,38,42,0.82); box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.18); color: #EDEDEF; overflow: hidden">
+<div style="height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px"><svg width="19" height="19" style="color: #A1A1A8"><use href="#fs-search"></use></svg><span style="font-size: 20px">dup</span><span style="flex: 1"></span><span style="font-size: 12px; color: #A1A1A8; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,0.08)">Modified ▾</span></div>
+<div style="height: 1px; background: rgba(255,255,255,0.08)"></div>
+<div style="display: grid; grid-template-columns: 240px 1fr; height: 340px">
+<div style="padding: 6px; border-right: 1px solid rgba(255,255,255,0.08); font-size: 13px; display: flex; flex-direction: column; gap: 2px">
+<div style="padding: 8px 10px 4px; font-size: 11px; font-weight: 600; color: #8E8E95">Notes</div>
+<div style="padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.08)"><div style="font-weight: 500"><span style="background: rgba(230,182,115,0.28); border-radius: 3px">Dup</span>licate detection</div><div style="font-size: 11.5px; color: #8E8E95">Nov 4 · 512 words</div></div>
+<div style="padding: 8px 10px"><div>Ops checklist</div><div style="font-size: 11.5px; color: #8E8E95">…remove <span style="background: rgba(230,182,115,0.28); color: #EDEDEF; border-radius: 3px">dup</span>es before…</div></div>
+<div style="padding: 10px 10px 4px; font-size: 11px; font-weight: 600; color: #8E8E95">Actions</div>
+<div style="height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px"><svg width="15" height="15" style="color: #A1A1A8"><use href="#fs-dup"></use></svg><span style="flex: 1">Duplicate Note</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⌘D</span></div>
+<div style="height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px"><svg width="15" height="15" style="color: #A1A1A8"><use href="#i-new"></use></svg><span style="flex: 1">New note “dup”</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⌘↩</span></div>
+</div>
+<div style="padding: 18px 20px; font-size: 13px; line-height: 1.65; color: #A1A1A8; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 16px; font-weight: 600; color: #EDEDEF">Duplicate detection</div>
+<div>Hash each row on import and skip <span style="background: rgba(230,182,115,0.28); color: #EDEDEF; border-radius: 3px">dup</span>licates before they reach the table…</div>
+</div>
+</div>
+</div>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #3A3D43">The key actions row hides while typing to make room. Notes come first with matches highlighted; matching actions follow; a miss always offers “New note”.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; gap: 10px"><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #5B5F66">3</span><span style="font-size: 17px; font-weight: 700">⌘K or “&gt;”: all actions</span></div>
+<div style="position: relative; height: 470px; border-radius: 16px; overflow: hidden; background: #0E0E10">
+<div style="position: absolute; left: 16px; right: 16px; top: 20px; border-radius: 18px; background: rgba(38,38,42,0.82); box-shadow: 0 24px 60px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(255,255,255,0.18); color: #EDEDEF; overflow: hidden">
+<div style="height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 16px"><span style="height: 24px; padding: 0 8px; border-radius: 6px; background: rgba(255,255,255,0.12); display: flex; align-items: center; font-size: 12px; font-weight: 600">Actions</span><span style="font-size: 20px; color: #6B6B72">Search actions</span></div>
+<div style="height: 1px; background: rgba(255,255,255,0.08)"></div>
+<div style="display: grid; grid-template-columns: 240px 1fr; height: 340px">
+<div style="padding: 6px; border-right: 1px solid rgba(255,255,255,0.08); font-size: 13px; display: flex; flex-direction: column">
+<div style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px"><svg width="15" height="15" style="color: #A1A1A8"><use href="#fs-dup"></use></svg><span style="flex: 1">Duplicate</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⌘D</span></div>
+<div style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px"><svg width="15" height="15" style="color: #A1A1A8"><use href="#fs-search"></use></svg><span style="flex: 1">Find in Note</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⌘F</span></div>
+<div style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px"><svg width="15" height="15" style="color: #A1A1A8"><use href="#fs-link"></use></svg><span style="flex: 1">Share</span><span style="color: #8E8E95">›</span></div>
+<div style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 9px; background: rgba(255,255,255,0.08)"><svg width="15" height="15" style="color: #A1A1A8"><use href="#fs-win"></use></svg><span style="flex: 1">Window</span><span style="color: #8E8E95">›</span></div>
+<div style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px"><span style="width: 15px; text-align: center; color: #A1A1A8">±</span><span style="flex: 1">Zoom</span><span style="color: #8E8E95">›</span></div>
+<div style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px"><span style="width: 15px; text-align: center; color: #A1A1A8">↺</span><span style="flex: 1">Recently Deleted</span><span style="color: #8E8E95">›</span></div>
+<div style="height: 1px; background: rgba(255,255,255,0.08); margin: 4px 6px"></div>
+<div style="height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px; color: #FF7B72"><span style="width: 15px; text-align: center">⌫</span><span style="flex: 1">Delete Note</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⌘⌫</span></div>
+</div>
+<div style="padding: 8px; font-size: 13px; display: flex; flex-direction: column">
+<div style="padding: 8px 10px 4px; font-size: 11px; font-weight: 600; color: #8E8E95">Window</div>
+<div style="height: 32px; display: flex; align-items: center; padding: 0 10px; border-radius: 9px; background: rgba(255,255,255,0.06)"><span style="flex: 1">Fill Left</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⌃⌥←</span></div>
+<div style="height: 32px; display: flex; align-items: center; padding: 0 10px"><span style="flex: 1">Fill Right</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⌃⌥→</span></div>
+<div style="height: 32px; display: flex; align-items: center; padding: 0 10px"><span style="flex: 1">Fill Screen</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⌃⌥↑</span></div>
+<div style="height: 32px; display: flex; align-items: center; padding: 0 10px"><span style="flex: 1">Centre</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⌃⌥↓</span></div>
+<div style="height: 32px; display: flex; align-items: center; padding: 0 10px"><span style="flex: 1">Float on top</span><span style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #8E8E95">⇧⌘T</span></div>
+</div>
+</div>
+</div>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #3A3D43">An “Actions” token replaces the notes view. The short list from the earlier option B is on the left, and the right pane shows the highlighted submenu instead of a note. Backspace on the token goes back to notes.</p>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; background: #FFFFFF; border-radius: 18px; box-shadow: 0 0 0 1px #E4E5E8; padding: 26px 30px; font-size: 13.5px; line-height: 1.5; color: #3A3D43">
+<div><div style="font-weight: 600; color: #141416; margin-bottom: 4px">Size</div>700 × up to 520 pt, centred, 15% from the top of the screen. 18 pt corners, surface rgba(38,38,42,0.80) with 30 pt blur. Field 56 pt, 21 pt type.</div>
+<div><div style="font-weight: 600; color: #141416; margin-bottom: 4px">Key actions</div>Five fixed chips: New, Pin, Copy link, Terminal, Settings. 30 pt tall, 9 pt corners. They hide while typing and return when the field is cleared.</div>
+<div><div style="font-weight: 600; color: #141416; margin-bottom: 4px">Keys</div>⌘P opens on notes, ⌘K on actions, “&gt;” switches to actions. ↑↓ move, ↩ open, → opens a submenu, ⌘⌫ deletes the highlighted note.</div>
+<div><div style="font-weight: 600; color: #141416; margin-bottom: 4px">Sort</div>“Modified ▾” menu: Last opened, Modified, Created, Title, Length; Newest first; Pinned on top. The meta line under each note follows the sort.</div>
+</div>
+</div>
+</body></html>

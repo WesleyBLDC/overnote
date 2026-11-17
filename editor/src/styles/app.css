@@ -37,7 +37,7 @@ body {
   overflow: hidden;
   color: var(--text);
   font-family: var(--font-sans);
-  line-height: var(--line-height);
+  line-height: var(--line-height-body);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -83,8 +83,8 @@ button:focus-visible,
 
 kbd {
   font-family: var(--font-mono);
-  font-size: var(--type-small);
-  font-weight: var(--weight-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-secondary);
   color: var(--text-tertiary);
 }
 
@@ -108,10 +108,10 @@ kbd {
   box-shadow: inset 0 0 0 var(--hairline) var(--keycap-border);
   color: var(--keycap-text);
   font-family: var(--font-mono);
-  font-size: var(--type-label);
-  font-weight: var(--weight-secondary);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-secondary);
   line-height: 1;
-  transition: color var(--motion-fast) var(--ease-out);
+  transition: color var(--duration-pop) var(--ease-out);
 }
 
 .is-selected .keycap {
@@ -143,7 +143,7 @@ kbd {
 
 /* Chrome shows only while the pointer is over the panel. Opacity only, so nothing shifts. */
 .chrome {
-  transition: opacity var(--motion) var(--ease-out);
+  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .app:not(:hover) .chrome {
@@ -157,7 +157,7 @@ kbd {
 
 .toolbar-title,
 .format-bar {
-  transition: opacity var(--motion) var(--ease-out);
+  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 /*
@@ -168,10 +168,7 @@ kbd {
  */
 .close-button {
   --close-box: max(var(--close-dot), var(--hit-floor));
-  --close-pull: min(
-    calc((var(--close-box) - var(--close-dot)) / 2),
-    calc(var(--toolbar-inset-left) - var(--edge-zone))
-  );
+  --close-pull: min(calc((var(--close-box) - var(--close-dot)) / 2), calc(var(--topbar-inset-left) - var(--edge-zone)));
   position: relative;
   display: block;
   width: var(--close-box);
@@ -182,8 +179,8 @@ kbd {
   background: transparent;
   color: transparent;
   transition:
-    opacity var(--motion) var(--ease-out),
-    color var(--motion-fast) var(--ease-out);
+    opacity var(--duration-fast) var(--ease-out),
+    color var(--duration-pop) var(--ease-out);
 }
 
 .close-dot {
@@ -222,8 +219,8 @@ kbd {
   grid-template-columns: 1fr minmax(0, auto) 1fr;
   align-items: center;
   gap: var(--space-2);
-  min-height: var(--toolbar-height);
-  padding: var(--drag-strip) var(--toolbar-inset-right) 0 var(--toolbar-inset-left);
+  min-height: var(--topbar-height);
+  padding: var(--drag-strip) var(--topbar-inset-right) 0 var(--topbar-inset-left);
   -webkit-user-select: none;
   user-select: none;
 }
@@ -238,7 +235,7 @@ kbd {
   height: var(--hairline);
   background: var(--border);
   opacity: 0;
-  transition: opacity var(--motion-slow) var(--ease-out);
+  transition: opacity var(--duration-slide) var(--ease-out);
   pointer-events: none;
 }
 
@@ -249,9 +246,9 @@ kbd {
 /* No repeated title while the note shows its own first line; it fades in once that line scrolls away. */
 .toolbar-title {
   margin: 0;
-  font-size: var(--type-secondary);
-  font-weight: var(--weight-heading);
-  line-height: var(--toolbar-button);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--topbar-button);
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -271,7 +268,7 @@ kbd {
 .toolbar-leading {
   display: flex;
   align-items: center;
-  height: var(--toolbar-button);
+  height: var(--topbar-button);
 }
 
 .toolbar-actions {
@@ -283,17 +280,17 @@ kbd {
 
 .toolbar-actions .icon-button {
   position: relative;
-  width: max(var(--toolbar-button), var(--hit-floor));
-  min-width: max(var(--toolbar-button), var(--hit-floor));
-  height: max(var(--toolbar-button), var(--hit-floor));
+  width: max(var(--topbar-button), var(--hit-floor));
+  min-width: max(var(--topbar-button), var(--hit-floor));
+  height: max(var(--topbar-button), var(--hit-floor));
   padding: 0;
-  border-radius: var(--toolbar-button-radius);
+  border-radius: var(--topbar-button-radius);
 }
 
 .toolbar-actions .icon-button .icon {
-  width: var(--toolbar-icon);
-  height: var(--toolbar-icon);
-  stroke-width: var(--toolbar-stroke);
+  width: var(--topbar-icon);
+  height: var(--topbar-icon);
+  stroke-width: var(--topbar-stroke);
 }
 
 /* The tooltip pill: the button's name and its shortcut, shown after a short hover. */
@@ -303,19 +300,19 @@ kbd {
   right: 0;
   z-index: 30;
   padding: calc(4rem / 14) calc(8rem / 14);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-chip);
   background: var(--tooltip-bg);
   box-shadow:
     0 0 0 0.5px var(--tooltip-ring),
     var(--shadow-small);
   color: var(--text);
-  font-size: var(--type-small);
-  font-weight: var(--weight-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-secondary);
   line-height: 1.4;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--motion-fast) var(--ease-out);
+  transition: opacity var(--duration-pop) var(--ease-out);
 }
 
 .tooltip kbd {
@@ -346,9 +343,9 @@ kbd {
   color: var(--text-secondary);
   cursor: default;
   transition:
-    background-color var(--motion-fast) var(--ease-out),
-    color var(--motion-fast) var(--ease-out),
-    opacity var(--motion) var(--ease-out);
+    background-color var(--duration-pop) var(--ease-out),
+    color var(--duration-pop) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
 }
 
 .icon-button:hover:not(:disabled) {
@@ -378,9 +375,9 @@ kbd {
   border-radius: var(--radius-s);
   background: var(--accent-soft-hover);
   box-shadow: inset 0 0 0 var(--hairline) var(--border);
-  font-size: var(--type-secondary);
-  font-weight: var(--weight-secondary);
-  transition: background-color var(--motion-fast) var(--ease-out);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-secondary);
+  transition: background-color var(--duration-pop) var(--ease-out);
 }
 
 .text-button:hover:not(:disabled) {
@@ -400,7 +397,7 @@ kbd {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--content-top) var(--content-x) var(--content-bottom);
+  padding: var(--content-top) var(--note-padding-x) var(--content-bottom);
   cursor: text;
   -webkit-mask-image: linear-gradient(
     to bottom,
@@ -417,8 +414,8 @@ kbd {
     transparent 100%
   );
   transition:
-    --fade-top var(--motion-slow) var(--ease-out),
-    --fade-bottom var(--motion-slow) var(--ease-out);
+    --fade-top var(--duration-slide) var(--ease-out),
+    --fade-bottom var(--duration-slide) var(--ease-out);
 }
 
 .app[data-scroll~="top"] .content {
@@ -455,7 +452,7 @@ kbd {
   position: absolute;
   left: var(--count-room);
   right: var(--count-room);
-  bottom: max(var(--edge-zone), var(--footer-inset));
+  bottom: max(var(--edge-zone), var(--corner-inset));
   display: flex;
   justify-content: center;
 }
@@ -467,10 +464,10 @@ kbd {
 
 /* The word count pill: 24 points tall on screen, inside a button that meets the hit floor. */
 .counter {
-  --count-box: max(var(--count-height), var(--hit-floor));
+  --count-box: max(var(--corner-chip-height), var(--hit-floor));
   position: absolute;
-  right: max(var(--corner-clearance), var(--footer-inset));
-  bottom: max(var(--edge-zone), calc(var(--footer-inset) - (var(--count-box) - var(--count-height)) / 2));
+  right: max(var(--corner-clearance), var(--corner-inset));
+  bottom: max(var(--edge-zone), calc(var(--corner-inset) - (var(--count-box) - var(--corner-chip-height)) / 2));
   isolation: isolate;
   display: inline-flex;
   align-items: center;
@@ -480,12 +477,12 @@ kbd {
   border: 0;
   background: transparent;
   color: var(--count-text);
-  font-size: var(--type-small);
-  font-weight: var(--weight-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-secondary);
   font-variant-numeric: tabular-nums;
   pointer-events: auto;
-  transition: color var(--motion-fast) var(--ease-out);
-  animation: fade-in var(--motion) var(--ease-out);
+  transition: color var(--duration-pop) var(--ease-out);
+  animation: fade-in var(--duration-fast) var(--ease-out);
 }
 
 /* The pill itself: the panel colour, so note text scrolling under it never shows through. */
@@ -495,11 +492,11 @@ kbd {
   z-index: -1;
   left: 0;
   right: 0;
-  top: calc((var(--count-box) - var(--count-height)) / 2);
-  height: var(--count-height);
-  border-radius: var(--radius-pill);
+  top: calc((var(--count-box) - var(--corner-chip-height)) / 2);
+  height: var(--corner-chip-height);
+  border-radius: var(--radius-chip);
   background: var(--bg-panel);
-  transition: background-color var(--motion-fast) var(--ease-out);
+  transition: background-color var(--duration-pop) var(--ease-out);
 }
 
 .counter .icon {
@@ -531,7 +528,7 @@ kbd {
   -webkit-backdrop-filter: blur(var(--island-blur));
   backdrop-filter: blur(var(--island-blur));
   box-shadow: inset 0 0 0 var(--hairline) var(--border);
-  animation: rise-in var(--motion-slow) var(--ease-out);
+  animation: rise-in var(--duration-slide) var(--ease-out);
 }
 
 /* At high zoom the format bar scrolls sideways instead of wrapping or squeezing its buttons. */
@@ -563,8 +560,8 @@ html[data-high-zoom="true"] .format-bar {
   background: transparent;
   color: var(--text-secondary);
   transition:
-    background-color var(--motion-fast) var(--ease-out),
-    color var(--motion-fast) var(--ease-out);
+    background-color var(--duration-pop) var(--ease-out),
+    color var(--duration-pop) var(--ease-out);
 }
 
 .format-button .icon {
@@ -663,7 +660,7 @@ html[data-high-zoom="true"] .format-bar {
   position: absolute;
   z-index: 20;
   transform-origin: top center;
-  animation: pop-in var(--motion-slow) var(--ease-out);
+  animation: pop-in var(--duration-slide) var(--ease-out);
 }
 
 .menu {
@@ -674,7 +671,7 @@ html[data-high-zoom="true"] .format-bar {
   overflow-y: auto;
   transform-origin: top center;
   outline: none;
-  animation: pop-in var(--motion-slow) var(--ease-out);
+  animation: pop-in var(--duration-slide) var(--ease-out);
 }
 
 /*
@@ -705,9 +702,9 @@ html[data-high-zoom="true"] .format-bar {
   border-radius: var(--radius-s);
   background: transparent;
   text-align: left;
-  font-size: var(--type-secondary);
-  font-weight: var(--weight-secondary);
-  transition: background-color var(--motion-fast) var(--ease-out);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-secondary);
+  transition: background-color var(--duration-pop) var(--ease-out);
 }
 
 .menu-item.is-selected {
@@ -729,8 +726,8 @@ html[data-high-zoom="true"] .format-bar {
 
 .menu-section {
   padding: var(--space-2) var(--space-2) var(--space-1);
-  font-size: var(--type-label);
-  font-weight: var(--weight-label);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -778,8 +775,8 @@ html[data-high-zoom="true"] .format-bar {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: var(--type-secondary);
-  transition: background-color var(--motion-fast) var(--ease-out);
+  font-size: var(--font-size-secondary);
+  transition: background-color var(--duration-pop) var(--ease-out);
 }
 
 .link-url:hover {
@@ -799,9 +796,9 @@ html[data-high-zoom="true"] .format-bar {
   box-shadow: inset 0 0 0 var(--hairline) var(--border);
   color: var(--text);
   font: inherit;
-  font-size: var(--type-secondary);
+  font-size: var(--font-size-secondary);
   outline: none;
-  transition: box-shadow var(--motion-fast) var(--ease-out);
+  transition: box-shadow var(--duration-pop) var(--ease-out);
 }
 
 .link-edit input::placeholder,
@@ -837,7 +834,7 @@ html[data-high-zoom="true"] .find-bar {
   background: var(--bg-raised);
   box-shadow: var(--shadow);
   transform-origin: top center;
-  animation: pop-in var(--motion-slow) var(--ease-out);
+  animation: pop-in var(--duration-slide) var(--ease-out);
 }
 
 .find-row {
@@ -849,15 +846,15 @@ html[data-high-zoom="true"] .find-bar {
 .find-count {
   min-width: 4.2rem;
   white-space: nowrap;
-  font-size: var(--type-small);
-  font-weight: var(--weight-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-secondary);
   color: var(--text-tertiary);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 .chevron .icon {
-  transition: transform var(--motion) var(--ease-out);
+  transition: transform var(--duration-fast) var(--ease-out);
 }
 
 .chevron.is-open .icon {
@@ -881,7 +878,7 @@ html[data-high-zoom="true"] .find-bar {
   align-items: center;
   justify-content: center;
   background: var(--dialog-scrim);
-  animation: fade-in var(--motion) var(--ease-out);
+  animation: fade-in var(--duration-fast) var(--ease-out);
 }
 
 /* ---- the command panel (⌘K, browse, recently deleted, settings) ---- */
@@ -892,20 +889,20 @@ html[data-high-zoom="true"] .find-bar {
  */
 .panel {
   --panel-gap: 0.6rem;
-  top: calc(var(--drag-strip) + var(--toolbar-button) + var(--panel-gap));
-  right: var(--toolbar-inset-right);
+  top: calc(var(--drag-strip) + var(--topbar-button) + var(--panel-gap));
+  right: var(--topbar-inset-right);
   display: flex;
   flex-direction: column;
-  width: min(var(--panel-width), calc(100% - 2 * var(--toolbar-inset-right)));
+  width: min(var(--panel-width), calc(100% - 2 * var(--topbar-inset-right)));
   /* Inside the panel, whatever its size: the list scrolls when the panel is short. */
   max-height: min(
     30rem,
-    calc(100% - var(--drag-strip) - var(--toolbar-button) - var(--panel-gap) - var(--dropdown-inset))
+    calc(100% - var(--drag-strip) - var(--topbar-button) - var(--panel-gap) - var(--dropdown-inset))
   );
   padding: 0 var(--space-2) var(--space-2);
   overflow: hidden;
   transform-origin: var(--origin-x, calc(100% - 3rem)) 0;
-  animation: panel-in var(--motion-slow) var(--ease-out);
+  animation: panel-in var(--duration-slide) var(--ease-out);
 }
 
 /* The closing panel: a static, inert copy that fades out while focus is already back in the note. */
@@ -917,7 +914,7 @@ html[data-high-zoom="true"] .find-bar {
 }
 
 .panel-ghost .panel {
-  animation: panel-out var(--motion-fast) var(--ease-in) forwards;
+  animation: panel-out var(--duration-pop) var(--ease-in) forwards;
 }
 
 /* The copy is a still frame: nothing inside it replays its entrance while the whole fades out. */
@@ -934,7 +931,7 @@ html[data-high-zoom="true"] .find-bar {
   border-radius: 0;
   background: transparent;
   box-shadow: inset 0 calc(-1 * var(--hairline)) 0 var(--border);
-  font-size: var(--type-body);
+  font-size: var(--font-size-body);
 }
 
 /* Section titles and the banner start on the same line as the row titles. */
@@ -946,7 +943,7 @@ html[data-high-zoom="true"] .find-bar {
   overflow-y: auto;
   min-height: 0;
   scroll-padding: var(--space-1) 0;
-  animation: fade-in var(--motion-fast) var(--ease-out);
+  animation: fade-in var(--duration-pop) var(--ease-out);
 }
 
 .panel-row {
@@ -960,9 +957,9 @@ html[data-high-zoom="true"] .find-bar {
   border-radius: var(--radius-m);
   background: transparent;
   text-align: left;
-  font-size: var(--type-secondary);
-  font-weight: var(--weight-secondary);
-  transition: background-color var(--motion-fast) var(--ease-out);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-secondary);
+  transition: background-color var(--duration-pop) var(--ease-out);
 }
 
 .panel-row > .icon {
@@ -1004,7 +1001,7 @@ html[data-high-zoom="true"] .find-bar {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: var(--type-small);
+  font-size: var(--font-size-small);
   color: var(--text-tertiary);
 }
 
@@ -1033,7 +1030,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 .panel-row-buttons {
   display: flex;
   gap: 0.1rem;
-  animation: fade-in var(--motion-fast) var(--ease-out);
+  animation: fade-in var(--duration-pop) var(--ease-out);
 }
 
 .panel-empty {
@@ -1053,14 +1050,14 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 }
 
 .panel-empty-title {
-  font-size: var(--type-secondary);
-  font-weight: var(--weight-secondary);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-secondary);
   color: var(--text-secondary);
 }
 
 .panel-empty-hint {
   max-width: 16rem;
-  font-size: var(--type-small);
+  font-size: var(--font-size-small);
   color: var(--text-tertiary);
 }
 
@@ -1143,7 +1140,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   height: 1.25rem;
   border-radius: var(--radius-full);
   background: var(--border-strong);
-  transition: background-color var(--motion) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out);
 }
 
 .switch::after {
@@ -1157,8 +1154,8 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   background: var(--switch-knob);
   box-shadow: var(--switch-knob-shadow);
   transition:
-    transform var(--motion-slow) var(--ease-out),
-    background-color var(--motion) var(--ease-out);
+    transform var(--duration-slide) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
 
 .switch.is-on {
@@ -1185,10 +1182,10 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   border-radius: calc(var(--radius-s) - var(--space-0));
   background: transparent;
   color: var(--text-secondary);
-  font-size: var(--type-small);
+  font-size: var(--font-size-small);
   transition:
-    background-color var(--motion-fast) var(--ease-out),
-    color var(--motion-fast) var(--ease-out);
+    background-color var(--duration-pop) var(--ease-out),
+    color var(--duration-pop) var(--ease-out);
 }
 
 .segmented button.is-on {
@@ -1206,7 +1203,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 
 .stepper-value {
   min-width: 2.9rem;
-  font-size: var(--type-secondary);
+  font-size: var(--font-size-secondary);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -1214,7 +1211,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 .stepper-reset {
   margin-left: var(--space-1);
   height: max(1.6rem, var(--hit-floor));
-  font-size: var(--type-small);
+  font-size: var(--font-size-small);
 }
 
 /* The Reset All Settings row: the whole row is the button, the label only shows what it does. */
@@ -1222,7 +1219,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   display: inline-flex;
   align-items: center;
   height: max(1.6rem, var(--hit-floor));
-  font-size: var(--type-small);
+  font-size: var(--font-size-small);
   color: var(--text-secondary);
 }
 
@@ -1233,7 +1230,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 
 .panel-banner {
   margin: var(--space-1) var(--space-3) var(--space-2);
-  font-size: var(--type-small);
+  font-size: var(--font-size-small);
   color: var(--text-tertiary);
 }
 
@@ -1250,17 +1247,17 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 .dialog {
   width: min(20rem, calc(100% - 2rem));
   padding: var(--space-4);
-  animation: pop-in var(--motion-slow) var(--ease-out);
+  animation: pop-in var(--duration-slide) var(--ease-out);
 }
 
 .dialog h2 {
   margin: 0 0 var(--space-1);
-  font-size: var(--type-body);
+  font-size: var(--font-size-body);
 }
 
 .dialog p {
   margin: 0 0 var(--space-4);
-  font-size: var(--type-secondary);
+  font-size: var(--font-size-secondary);
   color: var(--text-secondary);
 }
 
@@ -1278,8 +1275,8 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   background: var(--accent-soft-hover);
   box-shadow: inset 0 0 0 var(--hairline) var(--border);
   transition:
-    background-color var(--motion-fast) var(--ease-out),
-    filter var(--motion-fast) var(--ease-out);
+    background-color var(--duration-pop) var(--ease-out),
+    filter var(--duration-pop) var(--ease-out);
 }
 
 .dialog-buttons button:hover {
@@ -1332,12 +1329,12 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   border-radius: var(--radius-full);
   background: var(--bg-raised);
   box-shadow: var(--shadow);
-  font-size: var(--type-secondary);
+  font-size: var(--font-size-secondary);
   white-space: nowrap;
-  animation: rise-in var(--motion-slow) var(--ease-out);
+  animation: rise-in var(--duration-slide) var(--ease-out);
   transition:
-    opacity var(--motion-slow) var(--ease-in),
-    transform var(--motion-slow) var(--ease-in);
+    opacity var(--duration-slide) var(--ease-in),
+    transform var(--duration-slide) var(--ease-in);
 }
 
 .notice[data-leaving] {
@@ -1392,8 +1389,8 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 .emoji-section {
   grid-column: 1 / -1;
   padding: var(--space-1) 0.2rem 0.15rem;
-  font-size: var(--type-label);
-  font-weight: var(--weight-label);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -1407,7 +1404,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   background: transparent;
   font-size: 1.25rem;
   line-height: 1;
-  transition: background-color var(--motion-fast) var(--ease-out);
+  transition: background-color var(--duration-pop) var(--ease-out);
 }
 
 .emoji-cell.is-selected,
@@ -1422,13 +1419,13 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   border: 0;
   border-radius: var(--radius-s);
   background: var(--accent-soft-hover);
-  font-size: var(--type-secondary);
+  font-size: var(--font-size-secondary);
   white-space: nowrap;
 }
 
 .emoji-name {
   padding: var(--space-1) 0.2rem 0;
-  font-size: var(--type-small);
+  font-size: var(--font-size-small);
   color: var(--text-secondary);
   border-top: var(--hairline) solid var(--border);
   margin-top: var(--space-1);
@@ -1450,8 +1447,8 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   border-radius: var(--radius-s);
   background: transparent;
   color: var(--text-secondary);
-  font-size: var(--type-small);
-  transition: background-color var(--motion-fast) var(--ease-out);
+  font-size: var(--font-size-small);
+  transition: background-color var(--duration-pop) var(--ease-out);
 }
 
 .emoji-category:hover {
@@ -1467,9 +1464,9 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
   border-radius: var(--radius-l);
   background: var(--accent-soft);
-  font-size: var(--type-secondary);
+  font-size: var(--font-size-secondary);
   color: var(--text-secondary);
-  animation: rise-in var(--motion-slow) var(--ease-out);
+  animation: rise-in var(--duration-slide) var(--ease-out);
 }
 
 .text-button.is-primary {
@@ -1571,7 +1568,7 @@ html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrol
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  font-size: var(--type-secondary);
+  font-size: var(--font-size-secondary);
   color: var(--text-tertiary);
   pointer-events: none;
   user-select: none;
@@ -1588,7 +1585,7 @@ html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrol
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--type-secondary);
+  font-size: var(--font-size-secondary);
   color: var(--text-tertiary);
   pointer-events: none;
 }
