@@ -8,8 +8,8 @@
 [![Release](https://img.shields.io/github/v/release/WesleyBLDC/overnote)](https://github.com/WesleyBLDC/overnote/releases)
 [![CI](https://github.com/WesleyBLDC/overnote/actions/workflows/ci.yml/badge.svg)](https://github.com/WesleyBLDC/overnote/actions/workflows/ci.yml) <!-- store:remove-line -->
 
-A floating Markdown notepad for Raycast.
-One hotkey opens a panel over whatever you are doing, without stealing focus from the app underneath.
+A floating Markdown notepad for macOS: a menu bar app, `Overnote.app`, that also works as a Raycast extension.
+One hotkey (⌃⌥N in the app) opens a panel over whatever you are doing, without stealing focus from the app underneath.
 Press it again and it is gone.
 
 <p align="center">
@@ -24,7 +24,8 @@ Press it again and it is gone.
 - **Open source.** MIT licensed; everything lives in this repository.
 - **Scriptable.** Deeplinks for quicklinks and scripts, plus a documented socket protocol ([docs/architecture.md](docs/architecture.md)).
 - **Local data.** One SQLite file on your Mac, with automatic daily backups.
-- **Updates you control.** Check for Updates, then one command that backs up and installs. <!-- store:remove-line -->
+- **Your choice of host.** Run it as a Mac app, as a Raycast extension, or both; they share the same notes.
+- **Updates you control.** One command that backs up and installs. <!-- store:remove-line -->
 
 ## Features
 
@@ -37,7 +38,7 @@ Press it again and it is gone.
 - Terminal drawer under the note (⌃` or the toolbar), backed by a kept Herdr terminal when `hc` is installed, else your login shell
 - Export and copy as Markdown, HTML, or plain text; Undo after deleting a note (⌘Z), and Recently Deleted for 60 days
 - Settings (⌘,): light, dark, or automatic appearance, Geist or SF Pro, float above other apps, every Space or one, spellcheck, smart quotes and dashes, and Back up now
-- Raycast commands: Search Notes, Create Note, Open Overnote, Recently Deleted, optional menu bar
+- With Raycast (optional): Search Notes, Create Note, Open Overnote, Recently Deleted, optional menu bar
 - Deeplinks and quicklinks to open a specific note
 
 <p align="center">
@@ -48,18 +49,33 @@ Press it again and it is gone.
 <!-- store:remove -->
 ## Install
 
-Overnote is a Raycast extension (not in the Store yet), and can also be built as a local menu bar app, `Overnote.app`; both are named Overnote and share the same notes.
-Needs an Apple silicon Mac, macOS 14+, [Raycast](https://www.raycast.com) signed in, and [Node.js](https://nodejs.org) 22+.
+Needs an Apple silicon Mac on macOS 14 or later and [Node.js](https://nodejs.org) 22 or later.
+
+### Overnote.app (macOS)
+
+The app lives in the menu bar, has no Dock icon, and shows or hides the panel with ⌃⌥N.
+There is no prebuilt download yet, so build it from a source checkout (it needs the Xcode Command Line Tools):
+
+```sh
+git clone https://github.com/WesleyBLDC/overnote.git && cd overnote
+npm install
+npm run app:install    # builds Overnote.app, signed for this Mac only, and copies it to /Applications
+open /Applications/Overnote.app
+```
+
+Update: quit it from its menu bar item, then `git pull --ff-only && npm install && npm run app:install`.
+
+### Raycast extension (optional)
+
+Prefer Raycast, or want its commands too?
+Overnote also installs as a Raycast extension (not in the Store yet), which needs [Raycast](https://www.raycast.com) signed in and no Xcode tools.
 
 1. Download `overnote-<version>.zip` from the latest [release](https://github.com/WesleyBLDC/overnote/releases), unzip, and move the folder to e.g. `~/Applications/Overnote`.
 2. `cd ~/Applications/Overnote && npm run install-extension`
 3. In Raycast Settings → Extensions, bind a hotkey to **Toggle Overnote**.
 
 Update with `npm run update-extension` in the same folder.
-
-**Local app (no Raycast needed to run it).**
-From a source checkout, `npm run app:install` builds `Overnote.app`, signed for your Mac only, and copies it to `/Applications`.
-It lives in the menu bar and toggles the panel with ⌃⌥N; while it runs, the extension's commands use its panel.
+With both installed, they share one panel and one set of notes: while the app runs, the extension's commands use its panel.
 
 Full guide: [`docs/install.md`](docs/install.md).
 From source: [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -111,7 +127,7 @@ Everything saves automatically.
 </details>
 
 <details>
-<summary>Raycast commands</summary>
+<summary>Raycast commands (extension only)</summary>
 
 | Command | What it does |
 |---|---|
