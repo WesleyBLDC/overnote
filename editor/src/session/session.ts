@@ -14,6 +14,7 @@ import {
   type NoteId,
   type WindowData,
 } from "@overnote/core";
+import type { rpc } from "@overnote/core";
 import type { Api } from "../bridge/api";
 import { NoteHistory } from "./history";
 
@@ -45,9 +46,16 @@ export interface EditorPort {
   isComposing(): boolean;
   /** Plain text of the current document, used for the blank check. */
   getText(): string;
+  /** Read-only while a deleted note is previewed. */
+  setEditable(editable: boolean): void;
 }
 
 export type NoticeKind = "info" | "error";
+
+/** What the editor shows: the current note (edits tracked and saved), or a deleted note read only. */
+export type SessionMode = { kind: "editing" } | { kind: "preview"; item: rpc.DeletedItem };
+
+const EDITING: SessionMode = { kind: "editing" };
 
 export interface SessionState {
   current: Note | null;
@@ -56,10 +64,8 @@ export interface SessionState {
   pinnedShortcutNoteIds: NoteId[];
   canGoBack: boolean;
   canGoForward: boolean;
-  saving: boolean;
   ready: boolean;
-  /** The editor shows something else (a deleted note preview) and edits are not tracked. */
-  paused: boolean;
+  mode: SessionMode;
 }
 
 export interface SessionOptions {
@@ -87,9 +93,8 @@ export class NoteSession {
     pinnedShortcutNoteIds: [],
     canGoBack: false,
     canGoForward: false,
-    saving: false,
     ready: false,
-    paused: false,
+    mode: EDITING,
   };
   private readonly listeners = new Set<() => void>();
   private readonly api: Api;
@@ -106,10 +111,12 @@ export class NoteSession {
   private savedCaret: number | null = null;
   private caretDirty = false;
   private lastEditAt = Number.NEGATIVE_INFINITY;
-  private loading = false;
+  /** True while the session itself changes the document, so the change is not taken as an edit. */
+  private muted = false;
   private chain: Promise<boolean> = Promise.resolve(true);
-  /** True after a background save failed, until one succeeds, so the failure is reported once. */
-  private backgroundSaveFailing = false;
+  /** "failing" after a background save failed, until one succeeds, so the failure is reported once. */
+  private backgroundSave: "ok" | "failing" = "ok";
+  /** Bumped by every note switch; see beginTransition. */
   private transition = 0;
 
   constructor(options: SessionOptions) {
@@ -153,6 +160,42 @@ export class NoteSession {
     return this.editor.getText().trim() === "";
   }
 
+  private get previewing(): boolean {
+    return this.state.mode.kind === "preview";
+  }
+
+  /**
+   * Starts a note switch (open, create, duplicate, delete, preview). The returned check turns false once a newer
+   * switch starts, and every step after an await checks it, so only the newest switch changes what the editor shows.
+   */
+  private beginTransition(): () => boolean {
+    const token = ++this.transition;
+    return () => token === this.transition;
+  }
+
+  /** A check for work that must give way to any switch that starts meanwhile (a refresh), without starting one. */
+  private observeTransition(): () => boolean {
+    const token = this.transition;
+    return () => token === this.transition;
+  }
+
+  /** Saves pending edits before a switch; a failure is told once, and only while the switch is still the newest. */
+  private async flushBefore(live: () => boolean): Promise<boolean> {
+    if (await this.flush()) return live();
+    if (live()) this.notify("Could not save note. Try again.", "error");
+    return false;
+  }
+
+  /** Runs `change` with edits ignored: the session itself is changing the document. */
+  private withEditorMuted(change: () => void): void {
+    this.muted = true;
+    try {
+      change();
+    } finally {
+      this.muted = false;
+    }
+  }
+
   // ---- boot ----
 
   async boot(): Promise<void> {
@@ -162,7 +205,7 @@ export class NoteSession {
 
   async applyBoot(windowData: WindowData): Promise<void> {
     if (!windowData.current) {
-      await this.createAndOpen(null);
+      await this.createAndOpen(null, this.beginTransition());
     } else {
       this.apply(windowData, true);
       void this.api.notes.setCurrentNote(windowData.current.id).catch(() => undefined);
@@ -174,7 +217,7 @@ export class NoteSession {
 
   /** The user changed the document. */
   contentChanged(): void {
-    if (this.loading || this.paused) return;
+    if (this.muted || this.previewing) return;
     this.editVersion++;
     this.lastEditAt = this.now();
     this.schedule();
@@ -182,7 +225,7 @@ export class NoteSession {
 
   /** The selection moved. */
   selectionChanged(): void {
-    if (this.loading || this.paused) return;
+    if (this.muted || this.previewing) return;
     const caret = this.editor.getCaret();
     if (caret === this.savedCaret) return;
     this.caretDirty = true;
@@ -207,8 +250,8 @@ export class NoteSession {
    */
   saveInBackground(): void {
     void this.flush().then((ok) => {
-      if (!ok && !this.backgroundSaveFailing) this.notify("Could not save note. Try again.", "error");
-      this.backgroundSaveFailing = !ok;
+      if (!ok && this.backgroundSave === "ok") this.notify("Could not save note. Try again.", "error");
+      this.backgroundSave = ok ? "ok" : "failing";
     });
   }
 
@@ -240,15 +283,12 @@ export class NoteSession {
     const note = this.state.current;
     if (!note) return true;
     if (!this.isDirty && !this.caretDirty) return true;
-    this.setState({ saving: true });
     try {
       if (this.isDirty) return await this.saveContent(note);
       return await this.saveCaret(note);
     } catch (error) {
       console.error("[session] save failed", error);
       return false;
-    } finally {
-      this.setState({ saving: false });
     }
   }
 
@@ -301,12 +341,7 @@ export class NoteSession {
    */
   private rebase(synced: Note, stored: Note): { unsaved: boolean; conflicted: boolean } {
     const merge = mergeDocs(docFromNote(synced), this.editor.getDoc(), docFromNote(stored));
-    this.loading = true;
-    try {
-      this.editor.replace(merge.doc);
-    } finally {
-      this.loading = false;
-    }
+    this.withEditorMuted(() => this.editor.replace(merge.doc));
     this.setState({ current: stored });
     if (!merge.matchesRemote) return { unsaved: true, conflicted: merge.conflicted };
     this.savedVersion = this.editVersion;
@@ -346,7 +381,7 @@ export class NoteSession {
     if (!(await this.whenComposed())) return true;
     const current = this.state.current;
     // A save that ran first may already have merged this version, or saved past it.
-    if (this.paused || current?.id !== stored.id || current.updatedAt >= stored.updatedAt) return true;
+    if (this.previewing || current?.id !== stored.id || current.updatedAt >= stored.updatedAt) return true;
     const merge = this.rebase(current, stored);
     if (merge.conflicted) this.noticeBothKept();
     if (merge.unsaved) this.schedule();
@@ -361,42 +396,57 @@ export class NoteSession {
     return true;
   }
 
-  // ---- read-only previews ----
+  // ---- read-only preview of a deleted note ----
 
   /**
-   * Saves pending edits, then stops tracking the editor so it can show something else
-   * (a deleted note preview). Resolves false when the save failed.
+   * Shows a deleted note read only: saves pending edits first, then stops tracking the editor. A switch that starts
+   * meanwhile wins. While previewing, actions on the current note (duplicate, pin, delete) are refused, since the
+   * note on screen is not the current note.
    */
-  async pause(): Promise<boolean> {
-    if (!(await this.flush())) {
-      this.notify("Could not save note. Try again.", "error");
-      return false;
-    }
-    this.setPaused(true);
-    return true;
+  startPreview(item: rpc.DeletedItem): Promise<boolean> {
+    return this.guard("show the deleted note", async () => {
+      const live = this.beginTransition();
+      if (!(await this.flushBefore(live))) return false;
+      this.setState({ mode: { kind: "preview", item } });
+      this.editor.setEditable(false);
+      this.withEditorMuted(() => this.editor.load(loadDoc(item.rawContent || null, item.preview), 0));
+      return true;
+    });
   }
 
-  /** Puts the current note back into the editor and resumes saving. */
-  resume(): void {
-    if (!this.paused) return;
-    this.setPaused(false);
+  /** Leaves the preview: the current note comes back, editable. */
+  exitPreview(): void {
+    if (!this.previewing) return;
+    this.beginTransition();
     const current = this.state.current;
+    this.setMode(EDITING);
     if (current) this.loadNote(current, current.caretPosition);
   }
 
-  private get paused(): boolean {
-    return this.state.paused;
+  /** Restores the previewed note and opens it; the preview stays when either step fails. */
+  restorePreview(): Promise<boolean> {
+    const { mode } = this.state;
+    if (mode.kind !== "preview") return Promise.resolve(false);
+    return this.guard("restore the note", async () => {
+      await this.api.notes.recover(mode.item.id);
+      if (!(await this.switchToNow(mode.item.id, this.visitCommit))) return false;
+      this.notify("Note restored", "info");
+      return true;
+    });
   }
 
-  private setPaused(paused: boolean): void {
-    if (this.state.paused !== paused) this.setState({ paused });
+  /** Leaving a preview makes the editor editable again; entering one is startPreview's job. */
+  private setMode(mode: SessionMode): void {
+    if (this.state.mode === mode) return;
+    if (mode.kind === "editing" && this.previewing) this.editor.setEditable(true);
+    this.setState({ mode });
   }
 
   // ---- loading notes into the editor ----
 
   private apply(windowData: WindowData, reload: boolean): void {
     const current = windowData.current;
-    if (reload) this.setPaused(false);
+    if (reload) this.setMode(EDITING);
     if (reload && current) this.loadNote(current, current.caretPosition);
     this.setState({
       current,
@@ -407,12 +457,7 @@ export class NoteSession {
   }
 
   private loadNote(note: Note, caret: number | null): void {
-    this.loading = true;
-    try {
-      this.editor.load(docFromNote(note), caret);
-    } finally {
-      this.loading = false;
-    }
+    this.withEditorMuted(() => this.editor.load(docFromNote(note), caret));
     this.savedVersion = this.editVersion;
     this.savedCaret = this.editor.getCaret();
     this.caretDirty = false;
@@ -428,19 +473,11 @@ export class NoteSession {
   }
 
   private async switchToNow(id: NoteId, commit: HistoryCommit | null): Promise<boolean> {
-    this.setPaused(false);
-    const token = ++this.transition;
-    if (!(await this.flush())) {
-      if (token === this.transition) this.notify("Could not save note. Try again.", "error");
-      return false;
-    }
-    if (token !== this.transition) return false;
+    const live = this.beginTransition();
+    if (!(await this.flushBefore(live))) return false;
     const windowData = await this.api.notes.windowData({ noteId: id });
-    if (token !== this.transition) return false;
-    if (!windowData.current) {
-      await this.createAndOpen(this.state.current?.id ?? null);
-      return true;
-    }
+    if (!live()) return false;
+    if (!windowData.current) return this.createAndOpen(this.state.current?.id ?? null, live);
     if (windowData.current.id !== id) this.history.remove(id);
     const previous = this.state.current?.id ?? null;
     if (commit && previous !== windowData.current.id) commit(previous);
@@ -493,15 +530,20 @@ export class NoteSession {
     return false;
   }
 
-  /** Creates a note (empty, or starting with `title`) and makes it current. `previous` is pushed on the back stack. */
-  private async createAndOpen(previous: NoteId | null, title?: string): Promise<Note> {
+  /**
+   * Creates a note (empty, or starting with `title`) and makes it current, unless a newer switch started meanwhile
+   * (`live`). `previous` is pushed on the back stack. Resolves whether the new note is now shown.
+   */
+  private async createAndOpen(previous: NoteId | null, live: () => boolean, title?: string): Promise<boolean> {
     const note = await this.api.notes.create(buildNoteContent(title ? docFromPlainText(title) : emptyDoc()));
+    if (!live()) return false;
     const windowData = await this.api.notes.windowData({ noteId: note.id });
+    if (!live()) return false;
     if (previous && previous !== note.id) this.history.visit(previous);
     this.apply({ ...windowData, current: windowData.current ?? note }, true);
     // notes.create without show leaves the persisted current note alone.
     void this.api.notes.setCurrentNote(note.id).catch(() => undefined);
-    return note;
+    return true;
   }
 
   /**
@@ -513,18 +555,14 @@ export class NoteSession {
   }
 
   private async newNoteNow(title?: string): Promise<boolean> {
-    if (!title && this.state.current && this.isBlank()) {
+    // A preview shows another note, so its text says nothing about whether the current note is blank.
+    if (!title && !this.previewing && this.state.current && this.isBlank()) {
       this.notify("You already have an empty note", "info");
       return false;
     }
-    const token = ++this.transition;
-    if (!(await this.flush())) {
-      this.notify("Could not save note. Try again.", "error");
-      return false;
-    }
-    if (token !== this.transition) return false;
-    await this.createAndOpen(this.state.current?.id ?? null, title);
-    return true;
+    const live = this.beginTransition();
+    if (!(await this.flushBefore(live))) return false;
+    return this.createAndOpen(this.state.current?.id ?? null, live, title);
   }
 
   /** ⌘D: the copy becomes current and is pushed onto history. */
@@ -534,13 +572,14 @@ export class NoteSession {
 
   private async duplicateNow(): Promise<boolean> {
     const note = this.state.current;
-    if (!note || this.isBlank()) return false;
-    if (!(await this.flush())) {
-      this.notify("Could not save note. Try again.", "error");
-      return false;
-    }
+    if (!note || this.previewing || this.isBlank()) return false;
+    const live = this.beginTransition();
+    if (!(await this.flushBefore(live))) return false;
     const copy = await this.api.notes.duplicate({ id: note.id });
+    // The copy exists either way; it is shown only if nothing else was opened meanwhile.
+    if (!live()) return false;
     const windowData = await this.api.notes.windowData({ noteId: copy.id });
+    if (!live()) return false;
     this.history.visit(note.id);
     this.apply({ ...windowData, current: windowData.current ?? copy }, true);
     // notes.duplicate leaves the persisted current note alone.
@@ -556,25 +595,21 @@ export class NoteSession {
 
   private async deleteCurrentNow(): Promise<boolean> {
     const note = this.state.current;
-    if (!note) return false;
-    const token = ++this.transition;
-    if (!(await this.flush())) {
-      this.notify("Could not save note. Try again.", "error");
-      return false;
-    }
-    if (token !== this.transition) return false;
+    if (!note || this.previewing) return false;
+    const live = this.beginTransition();
+    if (!(await this.flushBefore(live))) return false;
     const { nextNoteId, previousNoteId } = this.state;
     await this.api.notes.delete(note.id);
     this.history.remove(note.id);
+    this.notify("Note deleted", "info");
+    // Deleted either way; what shows next is decided only if nothing else was opened meanwhile.
+    if (!live()) return true;
     const target = nextNoteId ?? previousNoteId;
     const windowData = target ? await this.api.notes.windowData({ noteId: target }) : null;
-    if (windowData?.current) {
-      this.apply(windowData, true);
-      this.touch(windowData.current.id);
-    } else {
-      await this.createAndOpen(null);
-    }
-    this.notify("Note deleted", "info");
+    if (!live()) return true;
+    if (!windowData?.current) return this.createAndOpen(null, live).then(() => true);
+    this.apply(windowData, true);
+    this.touch(windowData.current.id);
     return true;
   }
 
@@ -584,16 +619,12 @@ export class NoteSession {
   }
 
   private async deleteAllNow(): Promise<boolean> {
-    const token = ++this.transition;
-    if (!(await this.flush())) {
-      this.notify("Could not save note. Try again.", "error");
-      return false;
-    }
-    if (token !== this.transition) return false;
+    const live = this.beginTransition();
+    if (!(await this.flushBefore(live))) return false;
     await this.api.notes.deleteAll();
     this.history.clear();
-    await this.createAndOpen(null);
     this.notify("All notes moved to Recently Deleted", "info");
+    await this.createAndOpen(null, live);
     return true;
   }
 
@@ -604,7 +635,7 @@ export class NoteSession {
 
   private async togglePinNow(): Promise<boolean> {
     const note = this.state.current;
-    if (!note) return false;
+    if (!note || this.previewing) return false;
     const pinned = note.pinned === null;
     if (pinned) await this.api.notes.pin(note.id);
     else await this.api.notes.unpin(note.id);
@@ -639,14 +670,14 @@ export class NoteSession {
    */
   async refresh(): Promise<void> {
     const current = this.state.current;
-    if (!current || this.paused) return;
-    const token = this.transition;
+    if (!current || this.previewing) return;
+    const live = this.observeTransition();
     const windowData = await this.api.notes.windowData({ noteId: current.id });
-    if (token !== this.transition || this.state.current?.id !== current.id) return;
+    if (!live() || this.state.current?.id !== current.id) return;
     const stored = windowData.current;
     if (!stored) {
       this.history.clear();
-      await this.createAndOpen(null);
+      await this.createAndOpen(null, live);
       return;
     }
     if (stored.id !== current.id) {

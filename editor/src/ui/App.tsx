@@ -8,7 +8,6 @@ import {
   docToHTML,
   docToMarkdown,
   docToPlainText,
-  loadDoc,
   type JSONContent,
   type NoteId,
   type PanelPlacement,
@@ -133,7 +132,6 @@ export function App({ api }: { api: Api }) {
   const [slashDismissed, setSlashDismissed] = useState<number | null>(null);
   // Bumped on every transaction: the editor state is read while rendering (shouldRerenderOnTransaction is off).
   const [, setTick] = useState(0);
-  const [preview, setPreview] = useState<rpc.DeletedItem | null>(null);
 
   const copyText = useCallback(
     (text: string, html?: string) =>
@@ -218,6 +216,7 @@ export function App({ api }: { api: Api }) {
       isComposing: () => editor.view.composing,
       load: (doc, caret) => loadIntoEditor(editor, doc, caret),
       replace: (doc) => replaceInEditor(editor, doc),
+      setEditable: (editable) => editor.setEditable(editable, false),
     };
     return new NoteSession({ api, editor: port, notice: (message, kind) => notify(message, kind) });
   }, [api, notify, editor]);
@@ -240,47 +239,22 @@ export function App({ api }: { api: Api }) {
     };
   }, [editor, session]);
 
-  // ---- read-only preview of a deleted note ----
+  // ---- read-only preview of a deleted note: the session owns the mode; the UI follows it ----
 
+  const preview = state.mode.kind === "preview" ? state.mode.item : null;
   const startPreview = useCallback(
-    async (note: rpc.DeletedItem) => {
-      if (!(await session.pause())) return;
+    (note: rpc.DeletedItem) => {
       setFind(null);
       setLinkTarget(null);
-      editor.setEditable(false, false);
-      loadIntoEditor(editor, loadDoc(note.rawContent || null, note.preview), 0);
-      setPreview(note);
+      void session.startPreview(note);
     },
-    [editor, session],
+    [session],
   );
-
   const exitPreview = useCallback(() => {
-    editor.setEditable(true, false);
-    session.resume();
-    setPreview(null);
+    session.exitPreview();
     editor.view.focus();
   }, [editor, session]);
-
-  const restorePreview = useCallback(
-    async (note: rpc.DeletedItem) => {
-      try {
-        await api.notes.recover(note.id);
-      } catch {
-        notify("Could not restore the note", "error");
-        return;
-      }
-      editor.setEditable(true, false);
-      await session.open(note.id);
-      notify("Note restored");
-    },
-    [api, editor, session, notify],
-  );
-
-  // Any switch, create, or delete reloads a note and unpauses the session, which ends the preview.
-  if (preview && !state.paused) setPreview(null);
-  useEffect(() => {
-    if (!preview && !editor.isEditable) editor.setEditable(true, false);
-  }, [editor, preview]);
+  const restorePreview = useCallback(() => void session.restorePreview(), [session]);
 
   // ---- boot and native events ----
 
@@ -709,6 +683,8 @@ export function App({ api }: { api: Api }) {
           section: "danger",
           icon: "trash",
           destructive: true,
+          // The note on screen during a preview is not the current note; restore it first.
+          enabled: !preview,
           run: () => void session.deleteCurrent(),
         },
         {
@@ -856,9 +832,8 @@ export function App({ api }: { api: Api }) {
       if (matches(event, { code: "KeyN", meta: true })) return run(() => void h.session.newNote());
       if (matches(event, { code: "KeyX", ctrl: true })) return run(() => void h.session.deleteCurrent());
       if (matches(event, { code: "KeyX", ctrl: true, shift: true })) return run(h.deleteAll);
-      if (matches(event, { code: "KeyP", meta: true, shift: true }))
-        return run(() => !h.preview && void h.session.togglePin());
-      if (matches(event, { code: "KeyD", meta: true })) return run(() => !h.preview && void h.session.duplicate());
+      if (matches(event, { code: "KeyP", meta: true, shift: true })) return run(() => void h.session.togglePin());
+      if (matches(event, { code: "KeyD", meta: true })) return run(() => void h.session.duplicate());
       if (matches(event, { code: "KeyD", meta: true, shift: true })) {
         return run(() => h.lists.root.find((a) => a.id === "deeplink")?.run?.());
       }
@@ -977,7 +952,7 @@ export function App({ api }: { api: Api }) {
       {preview ? (
         <div className="preview-banner" data-testid="preview-banner" role="status">
           <span>This note is in Recently Deleted.</span>
-          <button type="button" className="text-button is-primary" onClick={() => void restorePreview(preview)}>
+          <button type="button" className="text-button is-primary" onClick={restorePreview}>
             Restore
           </button>
         </div>
@@ -991,7 +966,7 @@ export function App({ api }: { api: Api }) {
               title: "Restore Note?",
               message: "This note is in Recently Deleted. Restore it to edit it.",
               confirm: "Restore",
-              onConfirm: () => void restorePreview(preview),
+              onConfirm: restorePreview,
             });
             return;
           }
@@ -1100,7 +1075,7 @@ export function App({ api }: { api: Api }) {
               await session.refresh();
             })
           }
-          onPreview={(note) => void startPreview(note)}
+          onPreview={startPreview}
           onPermanentlyDelete={(id) =>
             new Promise<void>((settle) =>
               setConfirm({
