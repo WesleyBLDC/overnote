@@ -97,9 +97,26 @@ zipinfo "$OUT/overnote-$VERSION.zip" | grep -E 'OvernoteHelper$' | grep -q '^-rw
 
 FILES="$(cd "$STAGE" && find overnote -type f | sort)"
 cat > "$OUT/release-notes.md" <<EOF
-## Install
+## Overnote for Mac
 
-This zip is the Raycast extension. The standalone menu bar app, \`Overnote.app\`, has no prebuilt download yet: build it from a source checkout with \`npm run app:install\` (see docs/install.md).
+Overnote is a floating Markdown notepad for your Mac.
+It runs on its own as \`Overnote.app\`, a menu bar app with its own hotkey (⌃⌥N), and it also works as a Raycast extension.
+Both share the same notes, so you can use either one, or both.
+
+### Overnote.app
+
+There is no prebuilt app download yet, so build it from a source checkout (it needs the Xcode Command Line Tools):
+
+\`\`\`sh
+git clone https://github.com/${GITHUB_REPOSITORY:-WesleyBLDC/overnote}.git && cd overnote
+npm install
+npm run app:install   # builds Overnote.app and copies it to /Applications
+open /Applications/Overnote.app
+\`\`\`
+
+Already installed? Quit it from its menu bar item, then run \`git pull --ff-only && npm install && npm run app:install\`.
+
+### Raycast extension
 
 1. Download \`overnote-$VERSION.zip\` below, unzip it, and move the \`overnote\` folder to a stable path, for example \`~/Applications/Overnote\`.
 2. In Terminal: \`cd ~/Applications/Overnote\` (or that folder) and run \`npm run install-extension\`.
@@ -107,7 +124,10 @@ This zip is the Raycast extension. The standalone menu bar app, \`Overnote.app\`
 
 Already installed? Run \`npm run update-extension\` in your Overnote folder; it backs up your notes first.
 
-You need an Apple silicon Mac on macOS 14 or later, Node.js 22 or later, and a signed-in Raycast; the Xcode tools are not needed.
+### Requirements
+
+You need an Apple silicon Mac on macOS 14 or later and Node.js 22 or later.
+The Raycast extension also needs a signed-in Raycast, and needs no Xcode tools.
 Full steps: [docs/install.md](https://github.com/${GITHUB_REPOSITORY:-WesleyBLDC/overnote}/blob/$COMMIT/docs/install.md).
 
 ## Source summary
