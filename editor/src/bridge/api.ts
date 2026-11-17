@@ -34,6 +34,7 @@ export function createApi(client: BridgeClient) {
     app: {
       openURL: (url: string) => call(M.AppOpenURL, { url }),
       revealDataFolder: () => call(M.AppRevealDataFolder, {}),
+      quit: () => call(M.AppQuit, {}),
     },
     file: {
       saveAs: (params: P<"file.saveAs">) => call(M.FileSaveAs, params),

@@ -65,5 +65,7 @@ export function allActionsMenu(lists: Lists): MenuEntry[] {
     })),
     ...action("deleted"),
     ...action("delete", true),
+    // Overnote.app only (the action exists only there): quitting closes the list, in red like Delete.
+    ...action("quit"),
   ];
 }

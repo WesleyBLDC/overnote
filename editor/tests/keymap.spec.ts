@@ -483,3 +483,23 @@ test("a deleted note comes back with Undo: ⌘Z while its toast shows, or the to
   await expect(editor(page)).toHaveText("Keep me");
   await expect.poll(live).toBe(2);
 });
+
+test("the red dot and ⌘M minimize (hide); Overnote.app alone lists Quit Overnote in All actions", async ({ page }) => {
+  await openHarness(page, ["Quit note"]);
+  await expect(page.getByTestId("close")).toHaveAccessibleName("Minimize");
+  await clearCalls(page);
+  await page.keyboard.press("Meta+m");
+  await expect.poll(async () => (await calls(page, "window.hide")).length).toBe(1);
+  await page.keyboard.press("Meta+k");
+  await page.keyboard.type("quit");
+  await expect(page.getByTestId("action-quit")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await openHarness(page, ["Quit note"], "host=app");
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("action-quit")).toBeVisible();
+  await page.keyboard.type("quit");
+  await expect(page.getByTestId("action-quit")).toHaveText("Quit Overnote⌘Q");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await calls(page, "app.quit")).length).toBe(1);
+});

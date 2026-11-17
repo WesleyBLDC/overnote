@@ -44,14 +44,13 @@ function ToolbarButton({ icon, label, shortcut, onClick, anchor, testId, active 
   );
 }
 
-/** The window's red close dot, shared by the top bar and the Settings page header. */
+/** The window's red dot, which minimizes (hides) the panel like ⌘M; shared by the top bar and the Settings header. */
 export function CloseButton({ onClose }: { onClose: () => void }) {
   return (
     <button
       type="button"
-      className="close-button"
-      title="Close"
-      aria-label="Close"
+      className="close-button has-tooltip"
+      aria-label="Minimize"
       data-testid="close"
       onMouseDown={keep}
       onClick={onClose}
@@ -60,6 +59,7 @@ export function CloseButton({ onClose }: { onClose: () => void }) {
       <span className="close-dot" data-testid="close-dot">
         <Icon name="close" />
       </span>
+      <Tooltip label="Minimize" shortcut="⌘M" />
     </button>
   );
 }
