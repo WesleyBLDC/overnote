@@ -21,7 +21,7 @@ import type { Api } from "../bridge/api";
 import { activeListKind, BLOCK_LABELS, focusEditorNow, runFormat, type FormatId } from "../editor/commands";
 import { findState, findTransaction } from "../editor/find";
 import { undoDepth } from "@tiptap/pm/history";
-import { createEditorExtensions } from "../editor/extensions";
+import { createEditorExtensions, setSmartTypography } from "../editor/extensions";
 import { createNoteLowlight, loadGrammars } from "../editor/lowlight";
 import { chooseLinkTarget, type LinkTarget } from "../editor/linkRange";
 import { filterSlashItems, slashQueryAt, type SlashItem } from "../editor/slash";
@@ -33,6 +33,7 @@ import { matches, pinSlot } from "../lib/keys";
 import { stepZoom, zoomLabel } from "../lib/zoom";
 import { NoteSession, type EditorPort } from "../session/session";
 import { CommandPanel, type PanelAction, type PanelViewName } from "./CommandPanel";
+import { SettingsPage } from "./SettingsPage";
 import { ConfirmDialog, type ConfirmRequest } from "./ConfirmDialog";
 import { FindBar, type FindBarHandle } from "./FindBar";
 import { Footer } from "./Footer";
@@ -136,7 +137,8 @@ export function App({ api }: { api: Api }) {
   // The app element as state, so popups and hooks get it as a value instead of reading a ref while rendering.
   const [app, setApp] = useState<HTMLDivElement | null>(null);
   const [linkTarget, setLinkTarget] = useState<LinkTarget | null>(null);
-  const [panel, setPanel] = useState<PanelViewName | null>(null);
+  // Search's views, or the Settings page (⌘,), which covers the note instead of floating over it.
+  const [panel, setPanel] = useState<PanelViewName | "settings" | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [find, setFind] = useState<{ term: string } | null>(null);
   const findRef = useRef<FindBarHandle>(null);
@@ -196,6 +198,7 @@ export function App({ api }: { api: Api }) {
     [copyText, openUrl, openLinkIn, lowlight],
   );
 
+  const spellcheckRef = useRef(true);
   const editor = useEditor({
     extensions,
     content: { type: "doc", content: [{ type: "paragraph" }] },
@@ -205,7 +208,12 @@ export function App({ api }: { api: Api }) {
       // The top margin keeps the caret below the scroll fade under the toolbar.
       scrollThreshold: { top: 24, bottom: 100, left: 0, right: 0 },
       scrollMargin: { top: 24, bottom: 100, left: 0, right: 0 },
-      attributes: { class: "note-editor", "data-testid": "editor", spellcheck: "true" },
+      // A function, so the Spellcheck setting applies on the next view update (see the effect below).
+      attributes: () => ({
+        class: "note-editor",
+        "data-testid": "editor",
+        spellcheck: String(spellcheckRef.current),
+      }),
       handleKeyDown: (_view, event) =>
         emojiRef.current?.onKeyDown(event) || slashRef.current?.onKeyDown(event) || false,
     },
@@ -329,6 +337,16 @@ export function App({ api }: { api: Api }) {
 
   // ---- zoom and resize ----
 
+  // Settings' Display and Editor groups that the page applies itself (v3.8); the helper applies appearance.
+  useEffect(() => {
+    document.documentElement.dataset.font = settings.font;
+  }, [settings.font]);
+  useEffect(() => {
+    spellcheckRef.current = settings.spellcheck;
+    editor.view.setProps({});
+  }, [editor, settings.spellcheck]);
+  useEffect(() => setSmartTypography(editor, settings.smartTypography), [editor, settings.smartTypography]);
+
   useEffect(() => {
     document.documentElement.style.setProperty("--zoom", String(settings.zoom));
     // High zoom switches the chrome to its scrolling and wrapping layout (app.css).
@@ -436,6 +454,12 @@ export function App({ api }: { api: Api }) {
           onConfirm: () => void session.deleteAll(),
         });
       });
+  }, [api, session]);
+
+  /** The red close dot: always hides, whatever Escape is set to do. */
+  const closeWindow = useCallback(() => {
+    session.saveInBackground();
+    void api.window.hide().catch(() => undefined);
   }, [api, session]);
 
   const hide = useCallback(() => {
@@ -688,7 +712,7 @@ export function App({ api }: { api: Api }) {
           section: "settings",
           icon: "sliders",
           keywords: ["preferences"],
-          push: "settings",
+          run: () => setPanel("settings"),
         },
         {
           id: "deleted",
@@ -868,7 +892,8 @@ export function App({ api }: { api: Api }) {
         const undo = h.notices.find((notice) => !notice.leaving && notice.action?.shortcut === "⌘Z");
         if (undo) return run(() => h.act(undo.id));
       }
-      if (matches(event, { code: "KeyK", meta: true })) return run(() => setPanel(h.panel ? null : "root"));
+      if (matches(event, { code: "KeyK", meta: true }))
+        return run(() => setPanel(h.panel && h.panel !== "settings" ? null : "root"));
       if (matches(event, { code: "KeyP", meta: true }))
         return run(() => setPanel(h.panel === "browse" ? null : "browse"));
       if (matches(event, { code: "Comma", meta: true, shift: true })) return run(() => setPanel("format"));
@@ -1012,10 +1037,7 @@ export function App({ api }: { api: Api }) {
     >
       <Toolbar
         title={title}
-        onClose={() => {
-          session.saveInBackground();
-          void api.window.hide().catch(() => undefined);
-        }}
+        onClose={closeWindow}
         onActions={() => setPanel(panel ? null : "root")}
         onBrowse={() => setPanel("browse")}
         onNew={() => void session.newNote()}
@@ -1110,7 +1132,23 @@ export function App({ api }: { api: Api }) {
           copy={(value) => copyText(value)}
         />
       ) : null}
-      {panel ? (
+      {panel === "settings" ? (
+        <SettingsPage
+          api={api}
+          settings={settings}
+          notify={notify}
+          onChange={updateSettings}
+          onReset={() =>
+            attempt("reset the settings", async () => {
+              await resetSettings();
+              notify("Settings reset to defaults", "success");
+            })
+          }
+          onDeleteAll={deleteAll}
+          onBack={closePanel}
+          onHide={closeWindow}
+        />
+      ) : panel ? (
         <CommandPanel
           key={panel}
           initial={panel}
@@ -1119,12 +1157,6 @@ export function App({ api }: { api: Api }) {
           currentId={currentId}
           settings={settings}
           onSettings={updateSettings}
-          onResetSettings={() =>
-            attempt("reset the settings", async () => {
-              await resetSettings();
-              notify("Settings reset to defaults");
-            })
-          }
           onClose={closePanel}
           onOpenNote={(id: NoteId) => void session.open(id)}
           onCreateNote={(title) => void session.newNote(title)}

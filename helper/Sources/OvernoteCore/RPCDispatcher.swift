@@ -21,15 +21,14 @@ public final class RPCDispatcher: Sendable {
     /// Extra socket methods (the `--test-hooks` set). Returns nil for methods it does not own.
     public typealias ExtensionHandler = @Sendable (_ method: String, _ params: JSONValue?) async throws -> JSONValue?
 
-    /// Methods only the socket may call: backups and restores are for the extension and scripts.
+    /// Methods only the socket may call: restores are for the extension and scripts (Settings may list and write backups).
     public static let socketOnlyMethods: Set<String> = [
-        "system.status", "system.backup", "system.listBackups", "system.restoreBackup", "system.dismissRestoreOffer",
-        "system.importLegacy",
+        "system.status", "system.restoreBackup", "system.dismissRestoreOffer", "system.importLegacy",
     ]
 
     /// Methods only the editor may call.
     public static let bridgeOnlyMethods: Set<String> = [
-        "system.ready", "window.resize", "window.setMinimumSize", "window.setDragRegions", "window.resignFocus", "app.openURL", "clipboard.copy", "file.saveAs",
+        "system.ready", "window.resize", "window.setMinimumSize", "window.setDragRegions", "window.resignFocus", "app.openURL", "app.revealDataFolder", "clipboard.copy", "file.saveAs",
         // The terminal: socket clients must never type into or resize the drawer's shell.
         "window.setDrawer", "term.open", "term.resize", "term.close",
     ]
@@ -100,7 +99,11 @@ public final class RPCDispatcher: Sendable {
             return try store.create(reason: reason) { try repository.backup(to: $0) }.json
         case "system.listBackups":
             let store = try requireBackups()
-            return ["directory": .string(store.directory), "items": .array(try store.list().map(\.json))]
+            return [
+                "directory": .string(store.directory),
+                "dataDirectory": .string((repository.databasePath as NSString).deletingLastPathComponent),
+                "items": .array(try store.list().map(\.json)),
+            ]
         case "system.restoreBackup":
             let store = try requireBackups()
             let outcome = try store.restore(
@@ -202,6 +205,9 @@ public final class RPCDispatcher: Sendable {
                 throw RPCError.badParams("url must be an http, https, mailto, or raycast link")
             }
             await host.openURL(url)
+            return [:]
+        case "app.revealDataFolder":
+            await host.revealInFinder(path: repository.databasePath)
             return [:]
         case "clipboard.copy":
             await host.copyToClipboard(text: try p.string("text"), html: try p.optionalString("html"))

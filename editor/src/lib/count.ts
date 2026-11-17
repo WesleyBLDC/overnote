@@ -22,6 +22,6 @@ export function wordLabel(n: number): string {
   return `${grouped(n)} ${n === 1 ? "word" : "words"}`;
 }
 
-export function countLabel(n: number, mode: CountMode): string {
+export function countLabel(n: number, mode: Exclude<CountMode, "off">): string {
   return mode === "words" ? wordLabel(n) : characterLabel(n);
 }

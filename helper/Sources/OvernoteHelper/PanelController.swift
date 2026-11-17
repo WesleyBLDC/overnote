@@ -228,6 +228,17 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
         // Our own optional setting, default off.
         panel.sharingType = settings.hideWhileScreenSharing ? .none : .readOnly
         panel.minSize = windowMinimumSize
+        // Settings' Window group (v3.8): floating above other apps and joining every Space are both on by default.
+        panel.isFloatingPanel = settings.floatOnTop
+        panel.level = settings.floatOnTop ? NotesPanel.floatingLevel : .normal
+        panel.collectionBehavior =
+            settings.allSpaces ? [.canJoinAllSpaces, .fullScreenAuxiliary] : [.moveToActiveSpace, .fullScreenAuxiliary]
+        // The web view follows the window's appearance, so the page's prefers-color-scheme switches with it.
+        switch settings.appearance {
+        case .auto: panel.appearance = nil
+        case .light: panel.appearance = NSAppearance(named: .aqua)
+        case .dark: panel.appearance = NSAppearance(named: .darkAqua)
+        }
     }
 
     // MARK: - Showing and hiding
@@ -724,6 +735,10 @@ final class PanelController: NSObject, HelperHost, NSWindowDelegate {
 
     func openURL(_ url: URL) async {
         NSWorkspace.shared.open(url)
+    }
+
+    func revealInFinder(path: String) async {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
     func resignFocus() async {

@@ -25,6 +25,9 @@ final class NotesPanel: NSPanel {
         return ProcessInfo.processInfo.isOperatingSystemAtLeast(tahoe) ? 26 : 10
     }()
 
+    /// The level while "Float above other apps" is on (the default).
+    static let floatingLevel = NSWindow.Level.modalPanel
+
     init(contentRect: NSRect) {
         super.init(
             contentRect: contentRect,
@@ -36,7 +39,7 @@ final class NotesPanel: NSPanel {
             defer: false
         )
         isFloatingPanel = true
-        level = .modalPanel
+        level = Self.floatingLevel
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         hidesOnDeactivate = false
         becomesKeyOnlyIfNeeded = false

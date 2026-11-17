@@ -686,6 +686,37 @@ struct PanelPlacementTests {
         #expect(await code(["placement": 1], source: .bridge) == RPCError.badParamsCode)
         #expect(host.calls == [.place(.center)])
     }
+
+    @Test func settingsChoicesRoundTripAndValidate() throws {
+        let defaults = Settings.defaults.json
+        #expect(defaults["appearance"] == "auto" && defaults["font"] == "geist")
+        #expect(defaults["floatOnTop"] == true && defaults["allSpaces"] == true)
+        #expect(defaults["spellcheck"] == true && defaults["smartTypography"] == true)
+        let set = try Settings.defaults.applying([
+            "appearance": "dark", "font": "system", "countMode": "off", "floatOnTop": false, "allSpaces": false,
+        ])
+        #expect(set.appearance == .dark && set.font == .system && set.countMode == .off)
+        #expect(!set.floatOnTop && !set.allSpaces)
+        #expect(throws: RPCError.self) { try Settings.defaults.applying(["appearance": "sepia"]) }
+        #expect(throws: RPCError.self) { try Settings.defaults.applying(["spellcheck": "on"]) }
+    }
+
+    @Test func settingsListsAndWritesBackupsAndRevealsTheDataFolderOnTheBridge() async throws {
+        let f = try Fixture()
+        let host = RecordingHost()
+        let store = BackupStore(directory: f.directory.file("backups"), clock: f.clock.function)
+        let dispatcher = RPCDispatcher(repository: f.repository, host: host, backups: store)
+        _ = try await dispatcher.handle(method: "system.backup", params: nil, source: .bridge)
+        let list = try await dispatcher.handle(method: "system.listBackups", params: nil, source: .bridge)
+        #expect(list["items"]?.arrayValue?.count == 1)
+        #expect(list["dataDirectory"]?.stringValue == f.directory.path)
+        _ = try await dispatcher.handle(method: "app.revealDataFolder", params: nil, source: .bridge)
+        #expect(host.calls == [.reveal(f.repository.databasePath)])
+        // Restores stay with the extension and scripts.
+        await #expect(throws: RPCError.self) {
+            try await dispatcher.handle(method: "system.restoreBackup", params: ["path": "x"], source: .bridge)
+        }
+    }
 }
 
 @Suite("Update conflict")

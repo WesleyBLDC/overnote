@@ -29,13 +29,14 @@ Press it again and it is gone.
 ## Features
 
 - Floating panel over full-screen apps and every Space; typing without stealing focus
-- Markdown as you type, a `/` block menu (text, lists, quote, code, divider) with each block's Markdown shortcut, emoji picker, a format island you can pin with Aa (⌥⌘,), and a corner count that switches between words and characters
+- Markdown as you type, a `/` block menu (text, lists, quote, code, divider) with each block's Markdown shortcut, emoji picker, a format island you can pin with Aa (⌥⌘,), and a corner count that switches between words and characters (or hides)
 - Tasks (⌘↩), nested lists, syntax-highlighted code, find and replace (⌘F)
 - Search (⌘P): notes with a live preview and match snippets, a sort menu (last opened, modified, created, title, length), key actions, and every action behind ⌘K or `>`
 - Pins (⇧⌘P, ⌘1–⌘9), history (⌘[ / ⌘])
 - Window placement: Fill Left / Right / Screen / Centre (⌃⌥ arrows, ⌘K, or the menu bar)
 - Terminal drawer under the note (⌃` or the toolbar), backed by a kept Herdr terminal when `hc` is installed, else your login shell
 - Export and copy as Markdown, HTML, or plain text; Undo after deleting a note (⌘Z), and Recently Deleted for 60 days
+- Settings (⌘,): light, dark, or automatic appearance, Geist or SF Pro, float above other apps, every Space or one, spellcheck, smart quotes and dashes, and Back up now
 - Raycast commands: Search Notes, Create Note, Open Overnote, Recently Deleted, optional menu bar
 - Deeplinks and quicklinks to open a specific note
 

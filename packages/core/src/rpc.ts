@@ -59,6 +59,7 @@ export const Method = {
   ClipboardCopy: "clipboard.copy",
   FileSaveAs: "file.saveAs",
   AppOpenURL: "app.openURL",
+  AppRevealDataFolder: "app.revealDataFolder",
   NotesCreate: "notes.create",
   NotesGet: "notes.get",
   NotesUpdate: "notes.update",
@@ -99,14 +100,13 @@ export const BRIDGE_ONLY_METHODS = [
   Method.ClipboardCopy,
   Method.FileSaveAs,
   Method.AppOpenURL,
+  Method.AppRevealDataFolder,
 ] as const satisfies readonly MethodName[];
 export type BridgeOnlyMethod = (typeof BRIDGE_ONLY_METHODS)[number];
 
-/** Methods that only exist on the socket (backups and restores are for the extension and scripts). */
+/** Methods that only exist on the socket (restores are for the extension and scripts; Settings may list and write backups). */
 export const SOCKET_ONLY_METHODS = [
   Method.SystemStatus,
-  Method.SystemBackup,
-  Method.SystemListBackups,
   Method.SystemRestoreBackup,
   Method.SystemDismissRestoreOffer,
   Method.SystemImportLegacy,
@@ -230,7 +230,8 @@ export interface Methods {
   "system.ready": { params: Empty; result: { settings: Settings; windowData: WindowData } };
   "system.status": { params: Empty; result: SystemStatus };
   "system.backup": { params: { reason?: BackupReason }; result: BackupInfo };
-  "system.listBackups": { params: Empty; result: { directory: string; items: BackupInfo[] } };
+  /** `dataDirectory` (v3.8) is the folder that holds the database, which Settings shows as the notes folder. */
+  "system.listBackups": { params: Empty; result: { directory: string; dataDirectory: string; items: BackupInfo[] } };
   "system.restoreBackup": { params: { path: string }; result: RestoreResult };
   "system.dismissRestoreOffer": { params: Empty; result: Empty };
   "system.importLegacy": { params: { dir: string }; result: ImportLegacyResult };
@@ -253,6 +254,8 @@ export interface Methods {
   "term.close": { params: Empty; result: Empty };
   "clipboard.copy": { params: { text: string; html?: string }; result: Empty };
   "app.openURL": { params: { url: string }; result: Empty };
+  /** Shows the data folder in Finder with the database selected (v3.8). */
+  "app.revealDataFolder": { params: Empty; result: Empty };
   "file.saveAs": { params: { suggestedName: string; content: string }; result: { saved: boolean; path?: string } };
   "notes.create": { params: NoteContent & { show?: boolean }; result: Note };
   "notes.get": { params: { id: NoteId }; result: Note };

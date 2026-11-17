@@ -370,7 +370,8 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   const defaults = await call("settings.get");
   assert.deepEqual(defaults, {
     escapeLosesFocus: false, hideWhileScreenSharing: false, zoom: 1, showFormatBar: false,
-    countMode: "words", windowAutoSize: false, panelFrame: null, terminal: { open: false },
+    countMode: "words", appearance: "auto", floatOnTop: true, allSpaces: true, font: "geist", spellcheck: true,
+    smartTypography: true, windowAutoSize: false, panelFrame: null, terminal: { open: false },
     searchSort: { field: "modified", direction: "desc", pinnedFirst: true },
   });
   let settings = await call("settings.set", { zoom: 1.13, countMode: "characters" });
@@ -385,7 +386,8 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   assert.deepEqual((await call("settings.set", { panelFrame: { x: 1, y: 2, width: 300 } })).panelFrame, { x: 1, y: 2, width: 300 });
   for (const bad of [{ zoom: "big" }, { countMode: "lines" }, { unknown: true }, { currentNoteId: "x" },
     { panelFrame: { x: 1 } }, { showFormatBar: true, escapeLosesFocus: 1 }, { terminal: true }, { terminal: { open: 1 } },
-    { searchSort: { field: "title", direction: "asc" } }, { searchSort: { field: "size", direction: "asc", pinnedFirst: true } }]) {
+    { searchSort: { field: "title", direction: "asc" } }, { searchSort: { field: "size", direction: "asc", pinnedFirst: true } },
+    { appearance: "sepia" }, { font: "comic" }, { floatOnTop: "yes" }]) {
     await expectError(-32602, "settings.set", bad);
   }
   assert.equal((await call("settings.get")).showFormatBar, false);

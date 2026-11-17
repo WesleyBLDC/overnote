@@ -170,6 +170,11 @@
 
 /* ==== 2. Overnote's tokens ==== */
 
+/* Settings' Font (v3.8): "system" swaps Geist for the system font (SF Pro); the mono face stays Geist Mono. */
+:root[data-font="system"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+}
+
 :root {
   --zoom: 1;
 
@@ -251,9 +256,15 @@
   --tooltip-key: var(--text-tertiary);
   --panel-shadow: 0 14px 40px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
   --shadow-island: 0 6px 18px rgba(0, 0, 0, 0.12), 0 0 0 0.5px var(--border-strong);
-  /* The switch knob stays white in both modes, like a native switch. */
-  --switch-knob: #ffffff;
-  --switch-knob-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  /* Settings (board 08): the toggle's off track and knob, and the segmented control's selected segment. */
+  --toggle-off-track: #d4d4d8;
+  --toggle-off-knob: #ffffff;
+  --toggle-knob-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --segment-selected: #ffffff;
+  --segment-selected-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  --settings-header-height: calc(46rem / 14);
+  --settings-row-height: calc(38rem / 14);
+  --settings-gutter: calc(28rem / 14);
 
   /* Keycaps are neutral: a sunken chip with a strong hairline, in tertiary text that turns secondary on a selected row. */
   --keycap-bg: var(--bg-sunken);
@@ -352,6 +363,10 @@
     --search-chip-fill: rgba(255, 255, 255, 0.07);
     --tile-fill: rgba(255, 255, 255, 0.08);
     --toast-action-fill: rgba(255, 255, 255, 0.1);
+    --toggle-off-track: #3a3a3e;
+    --toggle-off-knob: #8e8e93;
+    --segment-selected: #2e2e32;
+    --segment-selected-shadow: none;
     --text-ghost: #5a5a60;
 
     --harness-backdrop: linear-gradient(135deg, #34343a, #111113);

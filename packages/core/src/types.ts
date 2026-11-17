@@ -51,7 +51,14 @@ export interface BrowseItem extends NoteSummary {
   snippet?: string;
 }
 
-export type CountMode = "characters" | "words";
+/** What the corner counts; "off" hides the count (v3.8). */
+export type CountMode = "characters" | "words" | "off";
+
+/** The panel's appearance: follow the system ("auto"), or force light or dark (v3.8). */
+export type Appearance = "auto" | "light" | "dark";
+
+/** The interface font: the bundled Geist, or the system font (SF Pro) (v3.8). */
+export type InterfaceFont = "geist" | "system";
 
 /** What Search orders notes by: Last opened, Modified, Created, Title, Length. */
 export type BrowseSortField = "opened" | "modified" | "created" | "title" | "length";
@@ -107,8 +114,20 @@ export interface Settings {
   windowAutoSize: boolean;
   /** Default false. */
   showFormatBar: boolean;
-  /** Default "words" (v3.6; "characters" before). */
+  /** Default "words" (v3.6; "characters" before); "off" since v3.8. */
   countMode: CountMode;
+  /** Default "auto": the helper sets the panel's appearance, which the page sees as `prefers-color-scheme` (v3.8). */
+  appearance: Appearance;
+  /** Default true: the panel floats above other apps' windows; false: a normal window level (v3.8). */
+  floatOnTop: boolean;
+  /** Default true: the panel shows on every Space; false: it stays on the Space where it was last shown (v3.8). */
+  allSpaces: boolean;
+  /** Default "geist" (v3.8). */
+  font: InterfaceFont;
+  /** Default true: the system spell checker underlines misspellings in the note (v3.8). */
+  spellcheck: boolean;
+  /** Default true: typing turns straight quotes, "--", and "..." into curly quotes, dashes, and ellipses (v3.8). */
+  smartTypography: boolean;
   panelFrame: PanelFrame | null;
   /** The terminal drawer. Default `{ open: false }`; the drawer height is a fixed 260 pt. */
   terminal: TerminalSettings;
@@ -147,6 +166,12 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   windowAutoSize: false,
   showFormatBar: false,
   countMode: "words",
+  appearance: "auto",
+  floatOnTop: true,
+  allSpaces: true,
+  font: "geist",
+  spellcheck: true,
+  smartTypography: true,
   panelFrame: null,
   terminal: Object.freeze({ open: false }),
   searchSort: Object.freeze({ field: "modified", direction: "desc", pinnedFirst: true }),

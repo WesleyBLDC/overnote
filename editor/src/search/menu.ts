@@ -43,10 +43,7 @@ function shareActions(lists: Lists): PanelAction[] {
 
 /** Every runnable action, for typed queries: the root list plus Share's copy and export rows. */
 export function leafActions(lists: Lists): PanelAction[] {
-  return [
-    ...lists.root.filter((a) => !a.push || a.push === "settings" || a.push === "deleted"),
-    ...shareActions(lists),
-  ];
+  return [...lists.root.filter((a) => !a.push || a.push === "deleted"), ...shareActions(lists)];
 }
 
 export function allActionsMenu(lists: Lists): MenuEntry[] {

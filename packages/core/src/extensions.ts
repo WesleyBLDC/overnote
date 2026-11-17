@@ -23,6 +23,8 @@ export interface ExtensionOptions {
    * It is passed through the same customizations, so the schema stays identical.
    */
   codeBlock?: AnyExtension;
+  /** Replaces the stock Typography input rules, for example with ones the editor can turn off. They add no schema. */
+  typography?: AnyExtension;
 }
 
 export function createHeadlessExtensions(options: ExtensionOptions = {}): AnyExtension[] {
@@ -48,7 +50,7 @@ export function createHeadlessExtensions(options: ExtensionOptions = {}): AnyExt
     FlatListSchemaFields,
     NoteListKeymap,
     NoteInputRules,
-    Typography,
+    options.typography ?? Typography,
     UnknownBlock,
     UnknownInline,
     UnknownMarks,
