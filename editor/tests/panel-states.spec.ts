@@ -1,6 +1,6 @@
 /** The command panel as one surface: loading and error states, roving focus, sections, and action icons. */
 import { expect, test, type Page } from "@playwright/test";
-import { openHarness } from "./harness";
+import { openHarness, settle } from "./harness";
 
 const NOTES = ["# Alpha\n\nFirst", "# Beta\n\nSecond"];
 
@@ -149,6 +149,8 @@ test("Search reads Pinned then Recent with aligned titles, the Current label, an
   await page.keyboard.press("Meta+Shift+p");
   await page.keyboard.press("Meta+p");
   await expect(page.getByTestId("browse-row")).toHaveCount(2);
+  // Measure after the entrance animation: mid animation the bounding boxes are scaled.
+  await settle(page);
   const surface = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>("[data-testid=command-panel]")!;
     const app = document.querySelector<HTMLElement>("[data-testid=app]")!;
