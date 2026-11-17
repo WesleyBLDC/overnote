@@ -611,8 +611,6 @@ The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.
 Helper 0.4.0 is the first release that speaks v2.14 and v2.15, so a socket client can tell from `system.ping` (or `system.status`) `version` whether the editor merges outside changes and whether a create or duplicate leaves the current note alone.
 Helper 0.5.0 is the first release that speaks v3.0 through v3.3 (and writes schema 2): `notes.duplicate` takes the copy's content and refuses `titleSuffix`, so a socket client that sent `titleSuffix` to 0.4.0 or earlier sends the content built with `duplicateContent` instead.
-Helper releases after 0.5.0 speak v3.4: they report `host` in `system.ping` and keep the database in the shared folder.
-The first release with the terminal drawer speaks v3.5; a socket client can tell it from `settings.get`, which then has a `terminal` key.
-The first release with Search's sort speaks v3.7; a socket client can tell it from `settings.get`, which then has a `searchSort` key.
-The first release with the Settings page speaks v3.8; a socket client can tell it from `settings.get`, which then has an `appearance` key.
+Helper 0.6.0 is the first release that speaks v3.4 through v3.8 (and writes schema 3): it reports `host` in `system.ping` and keeps the database in the shared folder (v3.4).
+A socket client can tell the newer parts from `settings.get`: a `terminal` key means the terminal drawer (v3.5), `searchSort` means Search's sort (v3.7), and `appearance` means the Settings page (v3.8).
 Bump the version at the top of this document in the same pull request as the code change, and name the new version in the pull request description.
