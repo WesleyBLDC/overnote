@@ -29,7 +29,7 @@ Press it again and it is gone.
 ## Features
 
 - Floating panel over full-screen apps and every Space; typing without stealing focus
-- Markdown as you type, `/` slash menu, emoji picker, format bar
+- Markdown as you type, `/` slash menu, emoji picker, a format island you can pin with Aa (⌥⌘,), and a corner count that switches between words and characters
 - Tasks (⌘↩), nested lists, syntax-highlighted code, find and replace (⌘F)
 - Pins (⇧⌘P, ⌘1–⌘9), browse (⌘P), history (⌘[ / ⌘])
 - Window placement: Fill Left / Right / Screen / Centre (⌃⌥ arrows, ⌘K, or the menu bar)

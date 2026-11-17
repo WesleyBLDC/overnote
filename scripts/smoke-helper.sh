@@ -362,9 +362,9 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   const defaults = await call("settings.get");
   assert.deepEqual(defaults, {
     escapeLosesFocus: false, hideWhileScreenSharing: false, zoom: 1, showFormatBar: false,
-    countMode: "characters", windowAutoSize: false, panelFrame: null, terminal: { open: false },
+    countMode: "words", windowAutoSize: false, panelFrame: null, terminal: { open: false },
   });
-  let settings = await call("settings.set", { zoom: 1.13, countMode: "words" });
+  let settings = await call("settings.set", { zoom: 1.13, countMode: "characters" });
   assert.equal(settings.zoom, 1.15);
   assert.equal((await call("settings.set", { zoom: 9 })).zoom, 2);
   assert.equal((await call("settings.set", { zoom: 0.1 })).zoom, 0.75);
@@ -385,7 +385,7 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   await call("window.show", { noteId: kept.id });
   const currentBefore = (await call("notes.windowData", {})).current?.id ?? null;
   assert.equal(currentBefore, kept.id);
-  await call("settings.set", { zoom: 1.5, showFormatBar: true, countMode: "words" });
+  await call("settings.set", { zoom: 1.5, showFormatBar: true, countMode: "characters" });
   const reset = await call("settings.reset");
   assert.deepEqual(reset, defaults);
   assert.deepEqual(await call("settings.get"), defaults);

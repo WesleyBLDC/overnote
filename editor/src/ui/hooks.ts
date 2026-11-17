@@ -201,7 +201,7 @@ export function measureMinimumSize(app: HTMLElement): { width: number; height: n
     2 * (parseFloat(bar.columnGap) || 0) +
     TITLE_MIN_REM * rem;
   const island = footer.querySelector<HTMLElement>(".footer-center");
-  const counter = footer.querySelector<HTMLElement>(".counter");
+  const counter = footer.querySelector<HTMLElement>(".corner");
   const footerBox = footer.getBoundingClientRect();
   const footerWidth = island
     ? contentWidth(island.querySelector(".format-bar") ?? island) + 2 * (parseFloat(getComputedStyle(island).left) || 0)
@@ -246,7 +246,7 @@ export function useMinimumSizeReporter(app: HTMLElement | null, api: Api) {
     const observeBars = () => {
       resizes.disconnect();
       for (const bar of Array.from(
-        app.querySelectorAll(".toolbar, .toolbar-actions, .footer, .counter, .footer-center > *"),
+        app.querySelectorAll(".toolbar, .toolbar-actions, .footer, .corner, .footer-center > *"),
       )) {
         resizes.observe(bar);
       }

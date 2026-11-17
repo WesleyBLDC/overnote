@@ -85,7 +85,7 @@ export interface Settings {
   windowAutoSize: boolean;
   /** Default false. */
   showFormatBar: boolean;
-  /** Default "characters". */
+  /** Default "words" (v3.6; "characters" before). */
   countMode: CountMode;
   panelFrame: PanelFrame | null;
   /** The terminal drawer. Default `{ open: false }`; the drawer height is a fixed 260 pt. */
@@ -122,7 +122,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   zoom: 1,
   windowAutoSize: false,
   showFormatBar: false,
-  countMode: "characters",
+  countMode: "words",
   panelFrame: null,
   terminal: Object.freeze({ open: false }),
 });

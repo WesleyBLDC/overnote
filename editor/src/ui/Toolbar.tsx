@@ -1,4 +1,5 @@
 import { Icon, type IconName } from "./icons";
+import { Tooltip } from "./Tooltip";
 
 interface ToolbarProps {
   title: string;
@@ -28,7 +29,7 @@ function ToolbarButton({ icon, label, shortcut, onClick, anchor, testId, active 
   return (
     <button
       type="button"
-      className={`icon-button toolbar-button${active ? " is-active" : ""}`}
+      className={`icon-button toolbar-button has-tooltip${active ? " is-active" : ""}`}
       aria-pressed={active}
       aria-label={label}
       data-anchor={anchor}
@@ -38,9 +39,7 @@ function ToolbarButton({ icon, label, shortcut, onClick, anchor, testId, active 
       tabIndex={-1}
     >
       <Icon name={icon} />
-      <span className="tooltip" role="tooltip">
-        {label} <kbd>{shortcut}</kbd>
-      </span>
+      <Tooltip label={label} shortcut={shortcut} />
     </button>
   );
 }

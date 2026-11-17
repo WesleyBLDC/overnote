@@ -153,7 +153,7 @@ kbd {
 /*
  * Close: a 12 pt dot on the toolbar's 16 pt left inset, on the toolbar's centre line. The button around it
  * meets the hit floor but never reaches into the helper's 10 pt edge zone: --close-pull is how far it
- * reaches left of the dot. The dot sits on the lower edge of the 24 pt corner square; the top left of the hit
+ * reaches left of the dot. The dot sits clear of the 12 pt corner square; the top left of the hit
  * area overlaps that square, where the helper takes the pointer for resizing.
  */
 .close-button {
@@ -282,7 +282,7 @@ kbd {
 /* The tooltip pill: the button's name and its shortcut, 6 points under the button, shown after a short hover. */
 .tooltip {
   position: absolute;
-  top: calc(100% + var(--space-1) + var(--space-0));
+  top: calc(100% + 6rem / 14);
   right: 0;
   z-index: 30;
   padding: var(--space-1) var(--space-2);
@@ -305,7 +305,12 @@ kbd {
   color: var(--tooltip-key);
 }
 
-.toolbar-button:hover .tooltip {
+.tooltip[data-placement="above"] {
+  top: auto;
+  bottom: calc(100% + 6rem / 14);
+}
+
+.has-tooltip:hover > .tooltip {
   opacity: 1;
   transition-delay: 400ms;
 }
@@ -382,7 +387,7 @@ kbd {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--content-top) var(--note-padding-x) var(--content-bottom);
+  padding: var(--content-top) var(--note-padding-x) var(--note-padding-bottom);
   cursor: text;
   -webkit-mask-image: linear-gradient(
     to bottom,
@@ -417,9 +422,9 @@ kbd {
 }
 
 /*
- * The bottom of the panel is an overlay that takes no height: the content's bottom padding keeps the
- * room. The count pill sits in the bottom right corner (clear of the 24 pt corner square), and the format
- * island, when it is on, floats centred between --count-room on either side.
+ * The bottom row (board 05) is an overlay that takes no height: the content's bottom padding keeps the room.
+ * The corner (count and Aa) sits 12 points from the right and bottom edges; the format island, when pinned,
+ * floats in the middle on the same line.
  */
 .footer {
   position: absolute;
@@ -427,7 +432,7 @@ kbd {
   right: 0;
   bottom: 0;
   z-index: 5;
-  height: var(--content-bottom);
+  height: var(--note-padding-bottom);
   pointer-events: none;
   -webkit-user-select: none;
   user-select: none;
@@ -447,58 +452,111 @@ kbd {
   pointer-events: auto;
 }
 
-/* The word count pill: 24 points tall on screen, inside a button that meets the hit floor. */
-.counter {
-  --count-box: max(var(--corner-chip-height), var(--hit-floor));
+.corner {
+  --chip-box: max(var(--corner-chip-height), var(--hit-floor));
   position: absolute;
-  right: max(var(--corner-clearance), var(--corner-inset));
-  bottom: max(var(--edge-zone), calc(var(--corner-inset) - (var(--count-box) - var(--corner-chip-height)) / 2));
-  isolation: isolate;
-  display: inline-flex;
+  right: var(--corner-inset);
+  bottom: calc(var(--corner-inset) - (var(--chip-box) - var(--corner-chip-height)) / 2);
+  display: flex;
   align-items: center;
-  gap: var(--space-1);
-  height: var(--count-box);
-  padding: 0 calc(8rem / 14);
-  border: 0;
-  background: transparent;
-  color: var(--count-text);
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-secondary);
-  font-variant-numeric: tabular-nums;
+  gap: calc(4rem / 14);
+  max-width: var(--corner-max-width);
+  border-radius: var(--radius-chip);
+  /* The panel colour behind both chips and the gap between them, so text scrolling under the row never shows. */
+  background: var(--bg-panel);
   pointer-events: auto;
-  transition: color var(--duration-pop) var(--ease-out);
   animation: fade-in var(--duration-fast) var(--ease-out);
 }
 
-/* The pill itself: the panel colour, so note text scrolling under it never shows through. */
-.counter::before {
+/*
+ * A corner chip: the button meets the 28 point hit floor, and the 24 point pill with 6 point corners is drawn
+ * by ::before in the panel colour, so note text scrolling under it never shows through.
+ */
+.corner-chip {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4rem / 14);
+  min-width: var(--hit-floor);
+  height: var(--chip-box);
+  padding: 0 calc(8rem / 14);
+  border: 0;
+  background: transparent;
+  font-size: var(--font-size-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: default;
+  transition: color var(--duration-pop) var(--ease-out);
+}
+
+.corner-chip::before {
   content: "";
   position: absolute;
   z-index: -1;
   left: 0;
   right: 0;
-  top: calc((var(--count-box) - var(--corner-chip-height)) / 2);
+  top: calc((var(--chip-box) - var(--corner-chip-height)) / 2);
   height: var(--corner-chip-height);
   border-radius: var(--radius-chip);
   background: var(--bg-panel);
-  transition: background-color var(--duration-pop) var(--ease-out);
+  transition:
+    background-color var(--duration-pop) var(--ease-out),
+    box-shadow var(--duration-pop) var(--ease-out);
 }
 
-.counter .icon {
-  stroke-width: calc(1.5rem / 14);
-}
-
-.counter:hover {
-  color: var(--text-secondary);
-}
-
-.counter:hover::before {
+.corner-chip:hover::before {
   background: linear-gradient(var(--accent-soft-hover), var(--accent-soft-hover)), var(--bg-panel);
 }
 
-/* The counter never shows a focus ring: focus stays in the editor. */
-.counter:focus-visible {
+/* The chips never show a focus ring: focus stays in the editor. */
+.corner-chip:focus-visible {
   box-shadow: none;
+}
+
+/* The count: the number, then a 13 point icon that says words or characters; brighter while text is selected. */
+.corner-count {
+  color: var(--count-text);
+  font-weight: var(--font-weight-secondary);
+}
+
+.corner-count.is-selection,
+.corner-count:hover {
+  color: var(--text-secondary);
+}
+
+.corner-count .icon {
+  width: calc(13rem / 14);
+  height: calc(13rem / 14);
+  stroke-width: calc(1.5rem / 14);
+}
+
+/* Aa: an outlined chip; pinned, the soft fill with the strong label and no outline. */
+.corner-aa {
+  justify-content: center;
+  padding: 0 calc(7rem / 14);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-label);
+}
+
+.corner-aa::before {
+  box-shadow: inset 0 0 0 var(--hairline) var(--border-strong);
+}
+
+.corner-aa.is-active {
+  color: var(--accent-strong);
+}
+
+.corner-aa.is-active::before {
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--bg-panel);
+  box-shadow: none;
+}
+
+/* Below 440 points the count gives way first; Aa and the island stay. */
+@container panel (max-width: 439px) {
+  .corner-count {
+    display: none;
+  }
 }
 
 /* The format island: a translucent, blurred pill that floats over the note. */
@@ -1287,7 +1345,7 @@ html[data-high-zoom="true"] .panel-row-subtitle {
   position: absolute;
   left: 50%;
   /* Above the count pill and the format island, so a notice never covers them. */
-  bottom: var(--content-bottom);
+  bottom: var(--note-padding-bottom);
   z-index: 50;
   display: flex;
   flex-direction: column;
