@@ -35,6 +35,14 @@ describe("text rules", () => {
     expect(countCharacters("👨‍👩‍👧‍👦")).toBe(1);
     expect(countWords("Hi, there! 🙂 ok")).toBe(3);
   });
+
+  it("counts words like the Swift helper over the shared word corpus", () => {
+    // Scripts whose word breaks need a dictionary (Chinese, Japanese, Thai) stay out: ICU versions split them differently.
+    const corpus = JSON.parse(
+      readFileSync(join(dirname(fileURLToPath(import.meta.url)), "word-corpus.json"), "utf8"),
+    ) as { input: string; words: number }[];
+    for (const entry of corpus) expect(countWords(entry.input), JSON.stringify(entry.input)).toBe(entry.words);
+  });
 });
 
 describe("stored content", () => {

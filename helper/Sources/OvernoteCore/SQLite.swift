@@ -248,6 +248,16 @@ final class Statement {
         isNull(column) ? nil : double(column)
     }
 
+    /// The column as whichever value SQLite holds (blobs read as text).
+    func value(_ column: Int32) -> SQLValue {
+        switch sqlite3_column_type(pointer, column) {
+        case SQLITE_NULL: return .null
+        case SQLITE_INTEGER: return .int(int(column))
+        case SQLITE_FLOAT: return .double(double(column))
+        default: return .text(text(column))
+        }
+    }
+
     func text(_ column: Int32) -> String {
         guard let base = sqlite3_column_text(pointer, column) else { return "" }
         let count = Int(sqlite3_column_bytes(pointer, column))

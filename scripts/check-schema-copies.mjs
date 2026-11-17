@@ -2,7 +2,8 @@
 // Schema copy drift check.
 //
 // Schema version 2 SQL lives canonically in helper/Sources/OvernoteCore/Migrations.swift,
-// and two test and fixture builders copy it by hand: scripts/perf/generate-fixture.mjs and
+// and two test and fixture builders copy it by hand (they build version 2 databases on purpose,
+// which the helper then migrates to the latest version): scripts/perf/generate-fixture.mjs and
 // src/__tests__/readonly-db.test.ts. Building a real database from each copy and comparing
 // the resulting schema catches any drift between them, including a changed generated
 // column expression, index definition, FTS tokenizer, or trigger body, while ignoring the
@@ -23,8 +24,8 @@ function read(relative) {
 function swiftBlocks() {
   const source = read("helper/Sources/OvernoteCore/Migrations.swift");
   const blocks = [...source.matchAll(/"""\n([\s\S]*?)\n\s*"""/g)].map((match) => match[1]);
-  if (blocks.length !== 3) throw new Error(`expected 3 SQL blocks in Migrations.swift, found ${blocks.length}`);
-  return blocks; // version 1 sql, version 2 sql, version 2 ftsSQL
+  if (blocks.length !== 4) throw new Error(`expected 4 SQL blocks in Migrations.swift, found ${blocks.length}`);
+  return blocks; // version 1 sql, version 2 sql, version 2 ftsSQL, version 3 sql
 }
 
 function perfSchema() {

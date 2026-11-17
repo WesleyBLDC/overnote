@@ -180,6 +180,8 @@
   --font-size: 14px;
   /* 12.5 px: the faded title in the top bar, Search's chips, and toasts. */
   --font-size-caption: calc(12.5rem / 14);
+  /* 12 px: Search's sort pill. */
+  --font-size-pill: calc(12rem / 14);
   /* 10.5 px: code block labels and shortcut hints in menus. */
   --font-size-micro: calc(10.5rem / 14);
   --font-weight-secondary: 500;

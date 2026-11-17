@@ -324,7 +324,15 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   const page2 = await call("notes.browse", { limit: 2, cursor: page1.nextCursor });
   assert.equal(page1.items.length + page2.items.length, 4);
   await expectError(-32602, "notes.list", { cursor: page1.nextCursor });
-  ok("browse pages with cursors, and a browse cursor is refused by list");
+  const byLength = await call("notes.browse", { sort: { field: "length", direction: "desc" }, pinnedFirst: false, limit: 3 });
+  const counts = byLength.items.map((n) => n.wordCount);
+  assert.deepEqual(counts, [...counts].sort((x, y) => y - x));
+  assert.equal(byLength.items.find((n) => n.id === german.id)?.wordCount, 3);
+  await expectError(-32602, "notes.browse", { sort: { field: "length", direction: "asc" }, cursor: byLength.nextCursor });
+  await expectError(-32602, "notes.browse", { sort: { field: "size", direction: "desc" } });
+  const matched = (await call("notes.browse", { filter: "alles" })).items[0];
+  assert.equal(matched.snippet, "Straße ÜBER alles");
+  ok("browse pages with cursors per sort, rows carry wordCount and filtered rows a snippet; cursors stay with their order");
 
   // ---- window data and pins
   for (const note of [german, long]) await call("notes.delete", { id: note.id });
@@ -363,8 +371,11 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   assert.deepEqual(defaults, {
     escapeLosesFocus: false, hideWhileScreenSharing: false, zoom: 1, showFormatBar: false,
     countMode: "words", windowAutoSize: false, panelFrame: null, terminal: { open: false },
+    searchSort: { field: "modified", direction: "desc", pinnedFirst: true },
   });
   let settings = await call("settings.set", { zoom: 1.13, countMode: "characters" });
+  const sort = { field: "title", direction: "asc", pinnedFirst: false };
+  assert.deepEqual((await call("settings.set", { searchSort: sort })).searchSort, sort);
   assert.equal(settings.zoom, 1.15);
   assert.equal((await call("settings.set", { zoom: 9 })).zoom, 2);
   assert.equal((await call("settings.set", { zoom: 0.1 })).zoom, 0.75);
@@ -373,7 +384,8 @@ const lastEvent = async (name) => (await events()).filter((e) => e.event === nam
   assert.deepEqual(settings.panelFrame, frame);
   assert.deepEqual((await call("settings.set", { panelFrame: { x: 1, y: 2, width: 300 } })).panelFrame, { x: 1, y: 2, width: 300 });
   for (const bad of [{ zoom: "big" }, { countMode: "lines" }, { unknown: true }, { currentNoteId: "x" },
-    { panelFrame: { x: 1 } }, { showFormatBar: true, escapeLosesFocus: 1 }, { terminal: true }, { terminal: { open: 1 } }]) {
+    { panelFrame: { x: 1 } }, { showFormatBar: true, escapeLosesFocus: 1 }, { terminal: true }, { terminal: { open: 1 } },
+    { searchSort: { field: "title", direction: "asc" } }, { searchSort: { field: "size", direction: "asc", pinnedFirst: true } }]) {
     await expectError(-32602, "settings.set", bad);
   }
   assert.equal((await call("settings.get")).showFormatBar, false);

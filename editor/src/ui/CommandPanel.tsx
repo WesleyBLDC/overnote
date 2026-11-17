@@ -5,13 +5,14 @@
 import {
   countWords,
   displayTitle,
+  type BrowseItem,
   type Note,
   type NoteId,
-  type NoteSummary,
   type rpc,
+  type SearchSort,
   type Settings,
 } from "@overnote/core";
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
 import { fuzzyScore } from "../editor/slash";
 import { revealSelected } from "../lib/motion";
@@ -19,12 +20,24 @@ import { characterLabel, wordLabel } from "../lib/count";
 import { relativeTime } from "../lib/relativeTime";
 import { allActionsMenu, leafActions, type MenuEntry } from "../search/menu";
 import { Highlight, snippetAround } from "../search/Highlight";
+import {
+  directionLabel,
+  isNaturalOrder,
+  restHeader,
+  rowMeta,
+  shortDate,
+  SORT_FIELDS,
+  sortLabel,
+  withDirectionFlipped,
+  withField,
+} from "../search/sort";
 import { currentView, initialSearch, searchReducer } from "../search/state";
 import { useNoteBrowse } from "../search/useNoteBrowse";
 import { useOrderedQuery } from "../search/useOrderedQuery";
 import { Icon, type IconName } from "./icons";
 import { adjustSetting, filterSettings, SettingsList } from "./SettingsView";
 import { Keys } from "./Keys";
+import { Menu, type MenuItem } from "./Menu";
 
 export interface PanelAction {
   id: string;
@@ -76,12 +89,10 @@ const MATCHING_ACTIONS = 4;
 
 /** One row of the left-hand list. */
 type Row =
-  | { kind: "note"; note: NoteSummary }
+  | { kind: "note"; note: BrowseItem }
   | { kind: "action"; action: PanelAction; divider?: boolean }
   | { kind: "submenu"; entry: Extract<MenuEntry, { kind: "submenu" }> }
   | { kind: "create" };
-
-const shortDate = (time: number) => new Date(time).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 const PLACEHOLDERS: Record<PanelViewName, string> = {
   root: "Search actions",
@@ -136,10 +147,12 @@ export function CommandPanel(props: CommandPanelProps) {
   useLayoutEffect(() => {
     pendingOpen.current = state.openFirstWhenLoaded;
   });
+  const sort = props.settings.searchSort;
   const notes = useNoteBrowse(
     api,
-    view === "browse" ? JSON.stringify([filter, version, currentId]) : null,
+    view === "browse" ? JSON.stringify([filter, sort, version, currentId]) : null,
     filter,
+    sort,
     (result, latest) => {
       // Only the newest search may act: open its first note for an Enter pressed early, or land on the current note.
       if (!latest) return;
@@ -155,6 +168,30 @@ export function CommandPanel(props: CommandPanelProps) {
   const browse = { items: notes.items, cursor: notes.cursor };
   const browseStatus = notes.status;
   const retryBrowse = notes.retry;
+
+  // The sort pill's menu: the fields, then the direction and pins toggles. Picking a field closes it.
+  const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
+  const closeSortMenu = useCallback(() => {
+    setSortAnchor(null);
+    inputRef.current?.focus();
+  }, []);
+  const sortItems: MenuItem[] = [
+    ...SORT_FIELDS.map(({ field, label }) => ({ id: field, title: label, checked: sort.field === field })),
+    { id: "direction", title: directionLabel(sort.field), checked: isNaturalOrder(sort), divider: true },
+    { id: "pinnedFirst", title: "Pinned on top", checked: sort.pinnedFirst },
+  ];
+  const chooseSort = (id: string) => {
+    let next: SearchSort;
+    if (id === "direction") next = withDirectionFlipped(sort);
+    else if (id === "pinnedFirst") next = { ...sort, pinnedFirst: !sort.pinnedFirst };
+    else {
+      const field = SORT_FIELDS.find((f) => f.field === id)?.field;
+      if (!field) return;
+      next = withField(sort, field);
+      closeSortMenu();
+    }
+    props.onSettings({ searchSort: next });
+  };
 
   // Searching deleted notes filters the loaded list locally; only the view and refreshes refetch.
   const deletedQuery = useOrderedQuery(view === "deleted" ? `deleted#${version}` : null, () => api.notes.listDeleted());
@@ -322,11 +359,12 @@ export function CommandPanel(props: CommandPanelProps) {
   };
 
   const q = query.trim();
-  const pinnedCount = browse.items.filter((n) => n.pinned !== null).length;
+  // Pinned notes lead the list only while the sort keeps them on top.
+  const pinnedCount = sort.pinnedFirst ? browse.items.filter((n) => n.pinned !== null).length : 0;
   const noteHeader = (i: number) => {
     if (q) return i === 0 ? "Notes" : null;
     if (i === 0 && pinnedCount) return "Pinned";
-    return i === pinnedCount ? "Recent" : null;
+    return i === pinnedCount ? restHeader(sort.field) : null;
   };
 
   const renderRow = (row: Row, i: number) => {
@@ -341,7 +379,7 @@ export function CommandPanel(props: CommandPanelProps) {
     if (row.kind === "note") {
       const { note } = row;
       const title = displayTitle({ title: note.title, text: note.preview });
-      // A match in the body shows the passage around it; otherwise the row says when it was edited.
+      // A match in the body shows the passage around it; otherwise the meta line follows the sort.
       const bodyMatch = q && !title.toLocaleLowerCase().includes(q.toLocaleLowerCase());
       const header = noteHeader(i);
       return (
@@ -360,11 +398,9 @@ export function CommandPanel(props: CommandPanelProps) {
               </span>
               <span className="panel-row-subtitle">
                 {bodyMatch ? (
-                  <Highlight text={snippetAround(note.preview, q, 12)} query={q} />
-                ) : note.id === props.currentId ? (
-                  `Current · edited ${relativeTime(note.updatedAt)}`
+                  <Highlight text={snippetAround(note.snippet ?? note.preview, q, 12)} query={q} />
                 ) : (
-                  `${relativeTime(note.lastAccessedAt ?? note.updatedAt)} · ${characterLabel(note.charCount)}`
+                  rowMeta(note, sort.field, note.id === props.currentId)
                 )}
               </span>
             </div>
@@ -447,7 +483,8 @@ export function CommandPanel(props: CommandPanelProps) {
     if (!previewNote) return null;
     const full = fullNotes.get(previewNote.id);
     const title = displayTitle({ title: previewNote.title, text: previewNote.preview });
-    const text = full?.text ?? previewNote.preview;
+    // Until the note loads, a match deep in it still shows through the row's snippet.
+    const text = full?.text ?? (q && previewNote.snippet ? `\n${previewNote.snippet}` : previewNote.preview);
     // The body without its first line, which is the title above it.
     const body = text.slice(text.indexOf("\n") >= 0 ? text.indexOf("\n") + 1 : text.length).trim();
     return (
@@ -461,7 +498,7 @@ export function CommandPanel(props: CommandPanelProps) {
         <div className="search-preview-meta">
           <span>Created {shortDate(previewNote.createdAt)}</span>
           <span>Edited {relativeTime(previewNote.updatedAt)}</span>
-          <span>{full ? wordLabel(countWords(full.text)) : characterLabel(previewNote.charCount)}</span>
+          <span>{wordLabel(full ? countWords(full.text) : previewNote.wordCount)}</span>
         </div>
       </div>
     );
@@ -497,6 +534,31 @@ export function CommandPanel(props: CommandPanelProps) {
             spellCheck={false}
             onChange={(event) => dispatch({ type: "type", query: event.target.value })}
           />
+          {view === "browse" ? (
+            <button
+              type="button"
+              className="search-token search-sort"
+              data-testid="search-sort"
+              aria-haspopup="menu"
+              aria-expanded={sortAnchor !== null}
+              aria-label={`Sort: ${sortLabel(sort.field)}`}
+              tabIndex={-1}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={(event) => (sortAnchor ? closeSortMenu() : setSortAnchor(event.currentTarget))}
+            >
+              {sortLabel(sort.field)} ▾
+            </button>
+          ) : null}
+          {view === "browse" && sortAnchor ? (
+            <Menu
+              items={sortItems}
+              anchor={sortAnchor}
+              prefer="below"
+              align="end"
+              onSelect={chooseSort}
+              onClose={closeSortMenu}
+            />
+          ) : null}
         </div>
         {view === "browse" && !q ? (
           <div className="search-chips" data-testid="key-actions">

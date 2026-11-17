@@ -1,7 +1,7 @@
 # Architecture and protocol
 
 This is the contributor reference for how Overnote's four components fit together and talk to each other: file paths, the socket and bridge protocols, shared data types, RPC methods, the database schema, the `@overnote/core` API, and the extension commands.
-The current protocol version is v3.6 (see [Protocol versioning](#protocol-versioning)).
+The current protocol version is v3.7 (see [Protocol versioning](#protocol-versioning)).
 Code and this document change together: if a pull request changes a method, a type, a path, or the schema, it updates this file too.
 
 ```
@@ -163,6 +163,14 @@ interface NoteSummary {        // list rows: no rawContent or markdown
 }
 // Display title everywhere: title, else first non-empty line of text trimmed, else "Untitled" (core.displayTitle).
 
+interface BrowseItem extends NoteSummary {  // notes.browse rows (v3.7)
+  wordCount: number;           // words of text (see wordCount below)
+  snippet?: string;            // with a filter, when text matches: the passage around the first match
+}
+
+type BrowseSortField = "opened" | "modified" | "created" | "title" | "length";
+interface BrowseSort { field: BrowseSortField; direction: "asc" | "desc" }  // "desc": newest, longest, or Z to A first
+
 interface Settings {
   escapeLosesFocus: boolean;       // default false: Esc hides the panel
   hideWhileScreenSharing: boolean; // default false
@@ -173,6 +181,7 @@ interface Settings {
   panelFrame: { x: number; y: number; width: number; height?: number;
                 displays?: { [key: string]: PanelPoint } } | null; // y is the TOP edge; displays keyed "<display uuid>@<w>x<h>"
   terminal: { open: boolean };     // default { open: false }: whether the terminal drawer is open (v3.5)
+  searchSort: BrowseSort & { pinnedFirst: boolean }; // default { field: "modified", direction: "desc", pinnedFirst: true }: Search's sort menu (v3.7)
 }
 
 type PanelPlacement = "left" | "right" | "fill" | "center";
@@ -230,7 +239,7 @@ The helper stores `NoteContent` verbatim.
 | `notes.unpin` | `{ id }` | `Note` | Does not change `updatedAt` |
 | `notes.movePinnedUp` / `notes.movePinnedDown` | `{ id }` | `{}` | Swap keys with the neighbor pin; no-op at the ends |
 | `notes.list` | `{ filter?: string, limit?: number (100), cursor?: string }` | `{ items: NoteSummary[], nextCursor: string \| null }` | Live notes. Order: pinned key asc (pinned first), then `updatedAt` desc, then `id` asc. Used by Search Notes |
-| `notes.browse` | `{ filter?: string, limit?: number (100), cursor?: string }` | same shape | Live notes. Order: pinned key asc, then `lastAccessedAt` desc, then `id` asc. With a filter, title matches come before text-only matches (each group in that order). Used by Search (⌘P) |
+| `notes.browse` | `{ filter?: string, sort?: BrowseSort, pinnedFirst?: boolean (true), limit?: number (100), cursor?: string }` | `{ items: BrowseItem[], nextCursor: string \| null }` | Live notes. Order: with `pinnedFirst`, pinned notes first by pin key; then the sort field in its direction, then `id` (ascending when the field runs its natural way: `opened` is `lastAccessedAt` and `modified` is `updatedAt`, both newest first, `created` is `createdAt` newest first, `length` is `wordCount` longest first, and `title` is the folded display title A to Z; the other direction is the exact reverse, `id` included). Without `sort`: `opened`, `desc`, the order browse always had. With a filter, title matches come before text-only matches (each group in that order), and each row whose text matches carries `snippet`. Unknown fields or directions are refused with `-32602`. Used by Search (⌘P) |
 | `notes.listDeleted` | `{}` | `{ items: (NoteSummary & { markdown: string, rawContent: string })[] }` | All trashed notes, `deletedAt` desc, no paging |
 | `notes.count` | `{}` | `{ count: number }` | Live notes |
 | `notes.setCurrentNote` | `{ noteId: NoteId }` | `{}` | Persists the current note id (settings key `currentNoteId`) |
@@ -252,6 +261,11 @@ The editor's ⌘D sends only `id` and makes an exact copy, with no suffix.
 Apply the same fold to the query.
 Both implementations are checked against one shared golden corpus in `packages/core/tests/fold-corpus.json`, covering accents, case, compatibility characters, combining marks, and emoji.
 **charCount** is the number of Unicode code points in `text` (SQLite `length(text)`, Swift `unicodeScalars.count`).
+**wordCount** is the number of word-like segments of `text` under the Unicode word break rules (UAX #29): core's `countWords` (`Intl.Segmenter`) and the helper's `NoteText.wordCount` (Foundation's word enumeration), checked against one golden corpus, `packages/core/tests/word-corpus.json`.
+Scripts whose word breaks need a dictionary (Chinese, Japanese, Thai) can differ by a few words between ICU versions, so the corpus leaves them out.
+The helper stores it as `word_count` on every write that sets `text`, and schema version 3 counts the existing notes when it migrates.
+**snippet** comes from the passage of `text` around the first folded match: up to 40 characters ahead of the match, starting on a word, at most 160 characters, with `…` in front when it starts mid note.
+The helper finds the match with `instr` over `text_fold`, reads a window of `text` around it, and matches the fold rule character by character inside that window; when folding moved the match out of the window, it reads the whole text instead.
 The editor's count pill counts grapheme clusters separately.
 The helper stores folded copies (`title_fold`, `text_fold`) and matches with an escaped `LIKE`.
 Schema version 2 adds an FTS5 trigram index over the folded copies, kept in sync by triggers, plus virtual generated sort columns and paging indexes over them that match the list and browse paging order, so a keyset cursor seeks straight to its page.
@@ -263,7 +277,8 @@ The read-only fallback mirrors that query shape: on a database with `notes_fts` 
 A SQLite built without FTS5, such as the system `sqlite3` on some macOS versions, still reads and backs up a schema version 2 database, because only a statement that touches `notes_fts` needs the module; the fallback treats that failed `MATCH` like any other and keeps the `LIKE` scan.
 Writing `notes` fires the index triggers, so only a SQLite with FTS5 can write it: the helper, which created the index, and in tests `node:sqlite`, never the system `sqlite3`.
 Cursors are opaque strings, and a cursor is only valid for the source that issued it (helper or read-only fallback).
-Helper cursors encode the keyset (match group, pin key, order timestamp, id), and read-only fallback cursors encode an offset into the same order, in the format that fallback has always issued.
+Helper cursors encode the order they belong to, the run of the page query they came from, and the keyset of the last row (list: pin group, pin key, negated `updatedAt`, id; browse: the pin key and id for pinned notes, then the sort column and id, and in a filtered browse the match group, pins, sort column, and id), so a cursor is refused by any other method, sort, direction, or `pinnedFirst`; read-only fallback cursors encode an offset into the same order, in the format that fallback has always issued.
+Every unfiltered page seeks an index: list reads `notes_list_page`, and browse reads the few pinned notes and then the sort field's paging index, forwards for the natural direction and backwards for the other.
 Deep offset paging is the fallback's structural gap: a page deep in the list still walks every row before it, where a helper keyset cursor seeks straight to its page.
 
 ```ts
@@ -394,7 +409,8 @@ PRAGMA foreign_keys = ON;
 -- PRAGMA user_version tracks migrations; version 1 is the notes and settings tables with the
 -- two order indexes below, and version 2 adds the virtual generated sort columns, the paging
 -- indexes over them, the FTS5 trigram table over the folded copies, and the triggers that keep
--- that table in sync with notes.
+-- that table in sync with notes. Version 3 adds the stored word count, sort columns for created,
+-- length, and title, and one browse paging index per sort field in place of the two browse indexes.
 -- Where FTS5 or the trigram tokenizer is unavailable (probed outside the migration transaction),
 -- version 2 still applies without the FTS5 table and its triggers.
 
@@ -416,14 +432,24 @@ CREATE TABLE notes (
   sort_pin_group    INTEGER GENERATED ALWAYS AS (pinned IS NULL) VIRTUAL,
   sort_pin_key      REAL GENERATED ALWAYS AS (COALESCE(pinned, 0.0)) VIRTUAL,
   sort_updated_neg  INTEGER GENERATED ALWAYS AS (-updated_at) VIRTUAL,
-  sort_accessed_neg INTEGER GENERATED ALWAYS AS (-COALESCE(last_accessed_at, -1)) VIRTUAL
+  sort_accessed_neg INTEGER GENERATED ALWAYS AS (-COALESCE(last_accessed_at, -1)) VIRTUAL,
+  -- version 3, added with ALTER TABLE ADD COLUMN (word_count is filled by the helper):
+  word_count        INTEGER NOT NULL DEFAULT 0,
+  sort_created_neg  INTEGER GENERATED ALWAYS AS (-created_at) VIRTUAL,
+  sort_words_neg    INTEGER GENERATED ALWAYS AS (-word_count) VIRTUAL,
+  sort_title        TEXT GENERATED ALWAYS AS (
+                      CASE WHEN title_fold = '' THEN 'untitled' ELSE substr(title_fold, 1, 100) END) VIRTUAL
 ) STRICT, WITHOUT ROWID;
 
-CREATE INDEX notes_list_order   ON notes (deleted_at, pinned, updated_at DESC, id);
-CREATE INDEX notes_browse_order ON notes (deleted_at, pinned, last_accessed_at DESC, id);
--- version 2:
-CREATE INDEX notes_list_page    ON notes (deleted_at, sort_pin_group, sort_pin_key, sort_updated_neg, id);
-CREATE INDEX notes_browse_page  ON notes (deleted_at, sort_pin_group, sort_pin_key, sort_accessed_neg, id);
+CREATE INDEX notes_list_order    ON notes (deleted_at, pinned, updated_at DESC, id);
+-- version 2 (version 3 drops notes_browse_order and notes_browse_page, which version 1 and 2 added):
+CREATE INDEX notes_list_page     ON notes (deleted_at, sort_pin_group, sort_pin_key, sort_updated_neg, id);
+-- version 3:
+CREATE INDEX notes_opened_page   ON notes (deleted_at, sort_accessed_neg, id);
+CREATE INDEX notes_modified_page ON notes (deleted_at, sort_updated_neg, id);
+CREATE INDEX notes_created_page  ON notes (deleted_at, sort_created_neg, id);
+CREATE INDEX notes_title_page    ON notes (deleted_at, sort_title, id);
+CREATE INDEX notes_length_page   ON notes (deleted_at, sort_words_neg, id);
 
 CREATE VIRTUAL TABLE notes_fts USING fts5(id UNINDEXED, title_fold, text_fold, tokenize = 'trigram');
 CREATE TRIGGER notes_fts_after_insert AFTER INSERT ON notes BEGIN
@@ -569,7 +595,7 @@ The extension honors `OVERNOTE_SUPPORT_DIR` and `OVERNOTE_RUNTIME_DIR` too (`src
 
 ## Protocol versioning
 
-The protocol described here is v3.6 (v3.6 made `countMode` default to `"words"`, as the finalized design shows, so a helper that never stored a choice now counts words; v3.5 added the terminal drawer: the bridge-only `window.setDrawer`, `term.open`, `term.resize`, and `term.close`, the `term.data` and `term.exit` events, the `overnoteTerm` fast lane, and the `terminal` setting, which older helpers refuse as an unknown setting; v3.4 added `Overnote.app`, the app packaging of the helper with app mode, `--app`, its argument defaults, hotkey, and menu bar item, moved the data folder to `~/Library/Application Support/Overnote` with the one time copy from the extension's folder through the new `--legacy-support-dir`, added `host` to the `system.ping` result, defined the handover between the app and the extension, added the socket-only `system.importLegacy` with the `pre-import` backup reason so an empty shared database still receives the legacy notes, and added `window.overnoteBridge.flush()`, which the helper awaits before every shutdown; v3.3 added `window.place` on the socket and the bridge with the `PanelPlacement` type, and optional `width`, `height`, and `placement` on each `panelFrame.displays` point, which older points simply lack; v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
+The protocol described here is v3.7 (v3.7 added Search's sort: optional `sort` (`BrowseSort`) and `pinnedFirst` on `notes.browse`, `wordCount` and the filtered `snippet` on its rows (`BrowseItem`), the `searchSort` setting, which older helpers refuse as an unknown setting, and schema version 3 with the stored word count and one paging index per sort field; a browse without `sort` keeps the order it always had, and browse cursors issued before v3.7 are refused; v3.6 made `countMode` default to `"words"`, as the finalized design shows, so a helper that never stored a choice now counts words; v3.5 added the terminal drawer: the bridge-only `window.setDrawer`, `term.open`, `term.resize`, and `term.close`, the `term.data` and `term.exit` events, the `overnoteTerm` fast lane, and the `terminal` setting, which older helpers refuse as an unknown setting; v3.4 added `Overnote.app`, the app packaging of the helper with app mode, `--app`, its argument defaults, hotkey, and menu bar item, moved the data folder to `~/Library/Application Support/Overnote` with the one time copy from the extension's folder through the new `--legacy-support-dir`, added `host` to the `system.ping` result, defined the handover between the app and the extension, added the socket-only `system.importLegacy` with the `pre-import` backup reason so an empty shared database still receives the legacy notes, and added `window.overnoteBridge.flush()`, which the helper awaits before every shutdown; v3.3 added `window.place` on the socket and the bridge with the `PanelPlacement` type, and optional `width`, `height`, and `placement` on each `panelFrame.displays` point, which older points simply lack; v3.2 raised the database to schema version 2 with an FTS5 trigram index over the folded title and text, virtual generated sort columns with paging indexes over them, and a shared TypeScript and Swift golden fold corpus, keeps the folded `LIKE` path for terms under three scalars and wherever the index is unavailable, and serves list, browse, deleted list, and count queries from a read-only second connection while every write stays on the single writer connection, with no change to any method shape, to list and browse ordering, or to cursor validity; v3.1 added the bridge-only `window.setMinimumSize` and removed the bridge-only `window.setOverhang`, since panels and dropdowns now stay inside the panel; bridge-only methods are refused on the socket, so no socket client is affected; v3.0 replaced `notes.duplicate`'s `titleSuffix`, which renamed only the stored title, with optional content built by the new core `duplicateContent`, and refuses `titleSuffix`; v2.15 made `notes.create` persist the current note only with `show: true` and `notes.duplicate` never, so socket writes no longer move the note the panel opens on, and made `mergeDocs` report an edit against a delete as not conflicted; v2.14 added `mergeDocs` to the core API, and the editor merges outside changes into unsaved edits instead of overwriting them; v2.13 added `window.setOverhang` and removed the unused `window.didBecomeKey` event; v2.12 added `settings.reset` and removed `derivePreview` from the core API; v2.11 added `--watch-editor`, the `editor.willReload` event, `assets/dev.json`, and the launch record; v2.10 added the `file.saveAs` timeout and `rpc.SAVE_AS_TIMEOUT_MS`; v2.9 added the backup methods, `--schema-version`, and the release metadata in section 9).
 Any change to the wire shape (a method, its params or result, an event, a data type, the database schema, or the core API) bumps the version: a minor bump for additive or compatible changes, a major bump when existing callers would break.
 The protocol version is not sent on the wire.
 Instead the helper reports its release version (`helper/VERSION`) through `system.ping`, and the extension's launcher restarts a running helper whose version differs from the bundled binary, so the extension, helper, and editor of one release always speak the same protocol.
@@ -577,4 +603,5 @@ Helper 0.4.0 is the first release that speaks v2.14 and v2.15, so a socket clien
 Helper 0.5.0 is the first release that speaks v3.0 through v3.3 (and writes schema 2): `notes.duplicate` takes the copy's content and refuses `titleSuffix`, so a socket client that sent `titleSuffix` to 0.4.0 or earlier sends the content built with `duplicateContent` instead.
 Helper releases after 0.5.0 speak v3.4: they report `host` in `system.ping` and keep the database in the shared folder.
 The first release with the terminal drawer speaks v3.5; a socket client can tell it from `settings.get`, which then has a `terminal` key.
+The first release with Search's sort speaks v3.7; a socket client can tell it from `settings.get`, which then has a `searchSort` key.
 Bump the version at the top of this document in the same pull request as the code change, and name the new version in the pull request description.

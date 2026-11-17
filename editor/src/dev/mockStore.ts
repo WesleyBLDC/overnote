@@ -3,10 +3,13 @@
  * Used by the browser dev harness and the Playwright tests; never shipped in the build.
  */
 import {
+  countWords,
   DEFAULT_SETTINGS,
   displayTitle,
   fold,
   rpc,
+  type BrowseItem,
+  type BrowseSort,
   type Note,
   type NoteId,
   type NoteSummary,
@@ -15,6 +18,37 @@ import {
   type Settings,
   type WindowData,
 } from "@overnote/core";
+
+/**
+ * The helper's match snippet (NoteText.snippet): the passage around the first folded match, up to 40 characters
+ * ahead of it on a word, at most 160 characters, with an ellipsis when it starts mid note.
+ */
+function snippetOf(text: string, term: string): string | undefined {
+  const chars = Array.from(text);
+  let folded = "";
+  const owner: number[] = [];
+  chars.forEach((char, index) => {
+    // One owner per UTF-16 unit, so indexOf maps straight back to the character.
+    const unit = fold(char);
+    folded += unit;
+    for (let k = 0; k < unit.length; k++) owner.push(index);
+  });
+  const at = folded.indexOf(term);
+  if (at < 0) return undefined;
+  const match = owner[at] ?? 0;
+  let start = 0;
+  if (match > 40) {
+    start = match;
+    for (let i = match - 40; i < match; i++) {
+      if (/\s/.test(chars[i - 1] ?? "") && !/\s/.test(chars[i] ?? "")) {
+        start = i;
+        break;
+      }
+    }
+  }
+  const passage = chars.slice(start, start + 160).join("");
+  return start > 0 ? `…${passage}` : passage;
+}
 
 export class MockRpcError extends Error {
   constructor(
@@ -190,11 +224,17 @@ export class MockStore {
     };
   }
 
-  private filtered(filter: string | undefined, order: (a: Note, b: Note) => number, titleFirst: boolean): Note[] {
+  private filtered(
+    filter: string | undefined,
+    order: (a: Note, b: Note) => number,
+    titleFirst: boolean,
+    pinnedFirst = true,
+  ): Note[] {
     // The helper's fold rule (docs/architecture.md section 5), so the harness finds what the helper finds.
     const term = fold(filter?.trim() ?? "");
     const pinOrder = (a: Note, b: Note) =>
-      (a.pinned ?? Number.POSITIVE_INFINITY) - (b.pinned ?? Number.POSITIVE_INFINITY) || order(a, b);
+      (pinnedFirst ? (a.pinned ?? Number.POSITIVE_INFINITY) - (b.pinned ?? Number.POSITIVE_INFINITY) : 0) ||
+      order(a, b);
     let notes = this.live().sort(pinOrder);
     if (term) {
       notes = notes.filter((n) => fold(n.title).includes(term) || fold(n.text).includes(term));
@@ -206,12 +246,39 @@ export class MockStore {
     return notes;
   }
 
-  private page(notes: Note[], params: rpc.ListParams): rpc.ListResult {
+  private page<T>(
+    notes: Note[],
+    params: rpc.ListParams,
+    row: (note: Note) => T,
+  ): { items: T[]; nextCursor: string | null } {
     const limit = params.limit ?? 100;
     const start = params.cursor ? Number(params.cursor) : 0;
-    const items = notes.slice(start, start + limit).map((n) => this.summary(n));
+    const items = notes.slice(start, start + limit).map(row);
     const next = start + limit < notes.length ? String(start + limit) : null;
     return { items, nextCursor: next };
+  }
+
+  /** notes.browse: the helper's orders (docs/architecture.md section 5), word counts, and match snippets. */
+  private browse(params: rpc.BrowseParams): rpc.BrowseResult {
+    const sort: BrowseSort = params.sort ?? { field: "opened", direction: "desc" };
+    const key: Record<BrowseSort["field"], (n: Note) => number | string> = {
+      opened: (n) => -(n.lastAccessedAt ?? -1),
+      modified: (n) => -n.updatedAt,
+      created: (n) => -n.createdAt,
+      length: (n) => -countWords(n.text),
+      title: (n) => fold(n.title) || "untitled",
+    };
+    const sign = sort.direction === (sort.field === "title" ? "asc" : "desc") ? 1 : -1;
+    const byKey = (a: Note, b: Note) => {
+      const [x, y] = [key[sort.field](a), key[sort.field](b)];
+      return sign * (x < y ? -1 : x > y ? 1 : a.id.localeCompare(b.id));
+    };
+    const term = fold(params.filter?.trim() ?? "");
+    const notes = this.filtered(params.filter, byKey, true, params.pinnedFirst ?? true);
+    return this.page(notes, params, (n): BrowseItem => {
+      const snippet = term ? snippetOf(n.text, term) : undefined;
+      return { ...this.summary(n), wordCount: countWords(n.text), ...(snippet === undefined ? {} : { snippet }) };
+    });
   }
 
   readonly handlers: { [M in rpc.MethodName]: (params: rpc.Params<M>) => rpc.Result<M> } = {
@@ -394,16 +461,9 @@ export class MockStore {
       this.page(
         this.filtered(params.filter, (a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id), false),
         params,
+        (n) => this.summary(n),
       ),
-    "notes.browse": (params) =>
-      this.page(
-        this.filtered(
-          params.filter,
-          (a, b) => (b.lastAccessedAt ?? 0) - (a.lastAccessedAt ?? 0) || a.id.localeCompare(b.id),
-          true,
-        ),
-        params,
-      ),
+    "notes.browse": (params) => this.browse(params),
     "notes.listDeleted": () => ({
       items: [...this.notes.values()]
         .filter((n) => n.deletedAt !== null)

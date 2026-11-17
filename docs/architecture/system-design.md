@@ -126,6 +126,7 @@ Details are in "App mode and handover" in [`../architecture.md`](../architecture
 - **Migrations.**
   `Migrations` tracks `PRAGMA user_version`, applies each step in one transaction, and refuses a database newer than the helper.
   Schema 2 added generated sort columns, paging indexes, and an FTS5 trigram index, and applies without the index where FTS5 is missing.
+  Schema 3 added the stored word count and one paging index per Search sort field, so every sort pages by index.
 - **Backups.**
   `BackupStore` writes consistent copies with SQLite's online backup API into `~/Library/Application Support/Overnote/backups` (outside the extension, so they survive an uninstall), and `BackupScheduler` writes a daily one.
   The other reasons are manual, pre-migration, pre-update, and pre-restore, and retention keeps the newest 10 plus one per week for 4 weeks.
