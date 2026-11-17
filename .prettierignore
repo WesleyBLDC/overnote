@@ -21,3 +21,7 @@ scripts/perf/results/
 
 # The design handoff is reference material, kept exactly as delivered
 design/
+
+# Vendored upstream copies, kept byte for byte
+.claude/skills/editor-change/references/tiptap/SKILL.md
+.claude/skills/editor-change/references/tiptap/references/setup.md
