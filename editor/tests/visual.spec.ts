@@ -38,7 +38,6 @@ const SCHEMES = {
     underline: "rgba(24, 24, 27, 0.35)",
     secondary: "rgb(95, 97, 104)",
     tertiary: "rgb(107, 110, 117)",
-    sunken: "rgb(241, 241, 243)",
     code: "rgb(237, 237, 240)",
     quote: "rgb(58, 61, 67)",
     quoteBar: "rgba(0, 0, 0, 0.18)",
@@ -53,7 +52,6 @@ const SCHEMES = {
     underline: "rgba(255, 255, 255, 0.35)",
     secondary: "rgb(161, 161, 168)",
     tertiary: "rgb(142, 142, 149)",
-    sunken: "rgb(17, 17, 19)",
     code: "rgb(38, 38, 42)",
     quote: "rgb(212, 212, 216)",
     quoteBar: "rgba(255, 255, 255, 0.22)",
@@ -98,14 +96,14 @@ for (const scheme of ["light", "dark"] as const) {
       expect(await style(page, ".note-editor blockquote", "width", "::before")).toBe("3px");
     });
 
-    test("code and tasks: sunken blocks, code chips, secondary comments, and struck through done tasks", async ({
+    test("code and tasks: code blocks and chips on --bg-code, tertiary comments, and struck through done tasks", async ({
       page,
     }) => {
       const want = SCHEMES[scheme];
-      expect(await style(page, ".note-editor .code-block", "background-color")).toBe(want.sunken);
-      expect(await style(page, ".note-editor .code-block", "box-shadow")).toContain("inset");
+      expect(await style(page, ".note-editor .code-block", "background-color")).toBe(want.code);
+      expect(await style(page, ".note-editor .code-block", "box-shadow")).toBe("none");
       expect(await style(page, ".note-editor p code", "background-color")).toBe(want.code);
-      expect(await style(page, ".note-editor .hljs-comment", "color")).toBe(want.secondary);
+      expect(await style(page, ".note-editor .hljs-comment", "color")).toBe(want.tertiary);
 
       const checked = ".note-editor [data-list-kind=task][data-list-checked] > .list-content > p";
       expect(await style(page, checked, "color")).toBe(want.tertiary);

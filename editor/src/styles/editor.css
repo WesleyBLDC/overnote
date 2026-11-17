@@ -1,17 +1,8 @@
 /* Note content: typography, lists (prosemirror-flat-list markup), tasks, code, find highlights. */
 /* Note text is the body size of the type scale (15 px at 100%); sizes below are in em, so they all grow together. */
+/* The vertical rhythm (--block-gap, --heading-gap, --item-gap, --inner-gap, --list-indent) lives in theme.css. */
 .note-editor {
-  /*
-   * Vertical rhythm in units of the note text size (rem based, so zoom scales it and headings do not
-   * inflate it): one gap between any two top-level blocks, a larger one above headings, a tight one
-   * between the items of a list.
-   */
   --note-em: var(--font-size-body);
-  /* 14 pt between blocks at 100%, as on the editor board. */
-  --block-gap: calc(14 / 15 * var(--note-em));
-  --heading-gap: calc(1.15 * var(--note-em));
-  --inner-gap: calc(0.35 * var(--note-em));
-  --item-gap: calc(0.2 * var(--note-em));
   min-height: calc(1em * var(--line-height-body));
   outline: none;
   font-size: var(--note-em);
@@ -57,32 +48,41 @@
   margin-top: var(--heading-gap);
 }
 
-/* Headings follow the type scale: title (23 px), heading (18 px), and subheading (15 px). */
+/* Headings follow the type scale: title 23/600/1.3, heading 18/600/1.35, subheading 15/600/1.4. */
 .note-editor h1 {
   font-size: var(--font-size-title);
-  line-height: 1.6;
+  line-height: var(--line-height-title);
   font-weight: var(--font-weight-title);
   letter-spacing: var(--tracking-title);
 }
 
 .note-editor h2 {
   font-size: var(--font-size-heading);
-  line-height: 1.4;
+  line-height: var(--line-height-heading);
   font-weight: var(--font-weight-heading);
 }
 
 .note-editor h3 {
   font-size: var(--font-size-subheading);
-  line-height: 1.5;
+  line-height: var(--line-height-subheading);
   font-weight: var(--font-weight-heading);
 }
 
+.note-editor :is(strong, b) {
+  font-weight: var(--font-weight-strong);
+}
+
+.note-editor s {
+  color: var(--text-tertiary);
+}
+
+/* Links: the strong accent with a soft underline 3 pt below the text. */
 .note-editor a {
   color: var(--accent-strong);
   text-decoration: underline;
   text-decoration-color: var(--link-underline);
   text-decoration-thickness: 0.06em;
-  text-underline-offset: 0.18em;
+  text-underline-offset: calc(3em / 15);
   cursor: pointer;
 }
 
@@ -114,11 +114,12 @@
   background: var(--quote-bar);
 }
 
+/* A divider: one --border hairline, with a little more room than the block gap on each side. */
 .note-editor hr {
   height: 0;
-  margin: 0.9em 0;
+  margin: calc(var(--block-gap) + var(--space-1)) 0;
   border: 0;
-  border-top: var(--hairline) solid var(--border-strong);
+  border-top: var(--hairline) solid var(--border);
 }
 
 .note-editor hr.ProseMirror-selectednode {
@@ -136,10 +137,28 @@
 
 /* ---- flat lists ---- */
 
+/*
+ * Board 10: the marker starts at the text edge and the item's text follows it (bullets 9 pt, numbers 14 pt,
+ * tasks 25 pt), and each nested list starts --list-indent to the right of its parent's marker.
+ */
 .note-editor .prosemirror-flat-list {
+  --list-gutter: calc(9em / 15);
   position: relative;
   padding: 0 0 0 var(--list-gutter);
   list-style: none;
+}
+
+.note-editor .prosemirror-flat-list[data-list-kind="ordered"] {
+  --list-gutter: calc(14em / 15);
+}
+
+/* The parent's gutter, read by a nested list to place itself --list-indent from the parent's marker. */
+.note-editor .list-content {
+  --parent-gutter: var(--list-gutter);
+}
+
+.note-editor .list-content > .prosemirror-flat-list {
+  margin-left: calc(var(--list-indent) - var(--parent-gutter));
 }
 
 /* A list keeps the block gap from its neighbors, items of one list sit close, and a nested list hugs its parent. */
@@ -161,58 +180,48 @@
   user-select: none;
 }
 
-/* Bullets: a dot, then a ring, then a small square for deeper levels. */
+/* Bullets: • at the top level, ◦ in --text-secondary one level down, alternating deeper. */
 .note-editor .prosemirror-flat-list[data-list-kind="bullet"]::before {
-  content: "";
+  content: "•";
   position: absolute;
-  left: calc(var(--list-gutter) / 2 - 0.19em);
-  top: calc(0.5em * var(--line-height-body) - 0.19em);
-  width: 0.38em;
-  height: 0.38em;
-  border-radius: 50%;
-  background: var(--text-secondary);
+  left: 0;
+  top: 0;
+  color: var(--text);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="bullet"] .prosemirror-flat-list[data-list-kind="bullet"]::before {
-  background: transparent;
-  box-shadow: inset 0 0 0 0.09em var(--text-secondary);
+  content: "◦";
+  color: var(--text-secondary);
 }
 
 .note-editor
   .prosemirror-flat-list[data-list-kind="bullet"]
   .prosemirror-flat-list[data-list-kind="bullet"]
   .prosemirror-flat-list[data-list-kind="bullet"]::before {
-  border-radius: 0.05em;
-  width: 0.32em;
-  height: 0.32em;
-  left: calc(var(--list-gutter) / 2 - 0.16em);
-  top: calc(0.5em * var(--line-height-body) - 0.16em);
-  background: var(--text-secondary);
-  box-shadow: none;
+  content: "•";
 }
 
 /*
  * Ordered markers come from data-list-marker, set by the editor's orderedMarkerPlugin: 3. at the top
- * level, 3.1 and 3.1.1 when nested in ordered items. The marker ends at the gutter, so a long path
- * grows to the left, into the indent.
+ * level, 3.1 and 3.1.1 when nested in ordered items. Numbers are in the accent at 600. The marker ends a
+ * quarter em before the text, so a long number grows to the left, into the note's padding.
  */
 .note-editor .prosemirror-flat-list[data-list-kind="ordered"]::before {
   content: attr(data-list-marker);
   position: absolute;
-  right: calc(100% - var(--list-gutter) + 0.35em);
+  right: calc(100% - var(--list-gutter) + 0.25em);
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: var(--accent);
 }
 
 /*
- * Tasks, as on the editor board: a 16 pt box with 4 pt corners and a 10 pt gap before the text. Unchecked,
+ * Tasks, as on the content board: a 16 pt box with 4 pt corners and a 9 pt gap before the text. Unchecked,
  * the box is a 1.5 pt ring; checked, it fills with the accent and shows the check. The check animates once,
  * only when the user checks it (just-checked), so a freshly loaded note never replays it.
  */
 .note-editor .prosemirror-flat-list[data-list-kind="task"] {
-  --list-gutter: calc(26em / 15);
+  --list-gutter: calc(25em / 15);
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="task"] > .list-marker {
@@ -348,16 +357,16 @@
 
 /* ---- code blocks ---- */
 
+/* Board 10: --bg-code, 10 pt corners, 12 by 14 pt padding, and a quiet "language · Copy" label at the top right. */
 .note-editor .code-block {
   position: relative;
-  border-radius: var(--radius-m);
-  background: var(--bg-sunken);
-  box-shadow: inset 0 0 0 var(--hairline) var(--border);
+  border-radius: calc(10em / 15);
+  background: var(--bg-code);
 }
 
 .note-editor .code-block pre {
   margin: 0;
-  padding: 0.8em 0.95em;
+  padding: calc(12em / 15) calc(14em / 15);
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: var(--font-size-code);
@@ -373,89 +382,76 @@
 
 .note-editor .code-block-toolbar {
   position: absolute;
-  top: 0.3em;
-  right: 0.35em;
+  top: calc(8em / 15);
+  right: calc(10em / 15);
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 0.2em;
-  opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-out);
+  font-size: var(--font-size-micro);
+  line-height: 1;
+  color: var(--text-tertiary);
   -webkit-user-select: none;
   user-select: none;
 }
 
-.note-editor .code-block:hover .code-block-toolbar,
-.note-editor .code-block:focus-within .code-block-toolbar {
-  opacity: 1;
+/* The language label with its invisible select on top, then a middle dot, then Copy. */
+.note-editor .code-block-lang {
+  position: relative;
+  display: inline-flex;
 }
 
-.note-editor .code-block-language,
-.note-editor .code-block-copy {
-  height: 1.6em;
-  padding: 0 0.45em;
-  border: 0;
-  border-radius: var(--radius-s);
-  background: var(--bg-raised);
-  box-shadow: var(--shadow-small);
-  color: var(--text-secondary);
+.note-editor .code-block-language {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
   font: inherit;
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-secondary);
-}
-
-.note-editor .code-block-label {
-  display: none;
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-secondary);
-  color: var(--text-secondary);
+  cursor: pointer;
 }
 
 .note-editor .code-block.is-readonly .code-block-language {
   display: none;
 }
 
-.note-editor .code-block.is-readonly .code-block-label {
-  display: inline;
+.note-editor .code-block-copy {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.note-editor .code-block-copy::before {
+  content: "·";
+  padding: 0 0.4em;
+}
+
+.note-editor :is(.code-block-label, .code-block-copy) {
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.note-editor .code-block-lang:hover .code-block-label,
+.note-editor .code-block-copy:hover {
+  color: var(--text-secondary);
 }
 
 .note-editor .code-block-copy.is-done {
   color: var(--success);
 }
 
-.note-editor .hljs-keyword,
-.note-editor .hljs-selector-tag,
-.note-editor .hljs-built_in {
+.note-editor :is(.hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-number, .hljs-literal) {
   color: var(--code-keyword);
 }
 
-.note-editor .hljs-string,
-.note-editor .hljs-regexp,
-.note-editor .hljs-addition {
+.note-editor :is(.hljs-string, .hljs-regexp, .hljs-addition) {
   color: var(--code-string);
 }
 
-.note-editor .hljs-number,
-.note-editor .hljs-literal {
-  color: var(--code-number);
-}
-
-.note-editor .hljs-comment,
-.note-editor .hljs-quote {
+.note-editor :is(.hljs-comment, .hljs-quote) {
   color: var(--code-comment);
-  font-style: italic;
-}
-
-.note-editor .hljs-title,
-.note-editor .hljs-section,
-.note-editor .hljs-function {
-  color: var(--code-title);
-}
-
-.note-editor .hljs-attr,
-.note-editor .hljs-attribute,
-.note-editor .hljs-variable,
-.note-editor .hljs-deletion {
-  color: var(--code-attr);
 }
 
 /* ---- find, drop cursor, gap cursor ---- */

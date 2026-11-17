@@ -202,9 +202,9 @@ test("blocks keep one balanced gap while list items stay tight", async ({ page }
   });
   const gap = (from: string, to: string) =>
     layout.gaps.find((g) => g.from.startsWith(from) && g.to.startsWith(to))?.gap;
-  // 15 px note text: blocks are 14 px apart, list items 0.2em (3 px), headings get 1.15em above.
-  const block = 14;
-  const item = 15 * 0.2;
+  // Board 10: blocks are 12 px apart, list items 3 px, and a heading gets 20 px above it.
+  const block = 12;
+  const item = 3;
   for (const [from, to] of [
     ["Intro", "one"],
     ["two", "Between"],
@@ -220,7 +220,7 @@ test("blocks keep one balanced gap while list items stay tight", async ({ page }
   expect(gap("one", "two")).toBeCloseTo(item, 0);
   expect(gap("task", "done")).toBeCloseTo(item, 0);
   expect(layout.nested).toBeCloseTo(item, 0);
-  expect(gap("Next", "Heading")).toBeCloseTo(15 * 1.15, 0);
+  expect(gap("Next", "Heading")).toBeCloseTo(20, 0);
 
   // The rhythm scales with zoom.
   await page.keyboard.press("Meta+Equal");

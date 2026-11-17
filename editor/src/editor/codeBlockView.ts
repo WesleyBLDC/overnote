@@ -28,8 +28,13 @@ export function createCodeBlockView(options: CodeBlockViewOptions) {
       option.textContent = language.label;
       select.append(option);
     }
+    // The language reads as plain text (the fence's info string, such as "ts"); the select lies invisibly over it,
+    // so a click still opens the picker without the select's own chrome or width.
     const label = document.createElement("span");
     label.className = "code-block-label";
+    const languageBox = document.createElement("span");
+    languageBox.className = "code-block-lang";
+    languageBox.append(label, select);
 
     const copy = document.createElement("button");
     copy.type = "button";
@@ -41,14 +46,14 @@ export function createCodeBlockView(options: CodeBlockViewOptions) {
     const pre = document.createElement("pre");
     const code = document.createElement("code");
     pre.append(code);
-    toolbar.append(select, label, copy);
+    toolbar.append(languageBox, copy);
     dom.append(toolbar, pre);
 
     const sync = () => {
       const language = (node.attrs.language as string | null) ?? null;
       const known = CODE_LANGUAGES.some((entry) => entry.id === language);
       select.value = known && language ? language : "";
-      label.textContent = CODE_LANGUAGES.find((entry) => entry.id === language)?.label ?? "Auto";
+      label.textContent = language ?? "Auto";
       dom.classList.toggle("is-readonly", !editor.isEditable);
       code.className = language ? `language-${language}` : "";
     };
