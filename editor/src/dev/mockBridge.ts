@@ -68,6 +68,8 @@ const FLOOR = { width: 405, height: 197 };
 
 function seedFromUrl(control: MockControl, search: string): void {
   const params = new URLSearchParams(search);
+  // `?host=app` stands in for Overnote.app (system.ready's host); the default is the extension's helper.
+  if (params.get("host") === "app") control.store.host = "app";
   const settings = params.get("settings");
   if (settings) {
     try {

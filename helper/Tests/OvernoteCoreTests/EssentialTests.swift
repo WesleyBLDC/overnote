@@ -701,6 +701,22 @@ struct PanelPlacementTests {
         #expect(throws: RPCError.self) { try Settings.defaults.applying(["spellcheck": "on"]) }
     }
 
+    @Test func onlyTheAppQuitsAndTheEditorLearnsItsHost() async throws {
+        let f = try Fixture()
+        for kind in [HelperHostKind.app, .extension] {
+            let host = RecordingHost()
+            let dispatcher = RPCDispatcher(repository: f.repository, host: host, hostKind: kind)
+            let ready = try await dispatcher.handle(method: "system.ready", params: nil, source: .bridge)
+            #expect(ready["host"]?.stringValue == kind.rawValue)
+            do {
+                _ = try await dispatcher.handle(method: "app.quit", params: nil, source: .bridge)
+                #expect(kind == .app && host.calls == [.quit])
+            } catch {
+                #expect(kind == .extension && (error as? RPCError)?.code == RPCError.conflictCode && host.calls.isEmpty)
+            }
+        }
+    }
+
     @Test func settingsListsAndWritesBackupsAndRevealsTheDataFolderOnTheBridge() async throws {
         let f = try Fixture()
         let host = RecordingHost()

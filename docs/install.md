@@ -71,6 +71,7 @@ open /Applications/Overnote.app
 
 `app:install` refuses to replace a running app: quit it first from its menu bar item.
 The menu bar item offers Show or Hide Overnote, New Note, Launch at Login, About Overnote, and Quit Overnote.
+With the panel open, ⌘Q quits too, as does Quit Overnote in All actions (⌘K); the red dot and ⌘M only hide the panel.
 The app is signed ad hoc, not notarized, so it is meant for the Mac that built it.
 
 The app and the extension share one database and one running panel:

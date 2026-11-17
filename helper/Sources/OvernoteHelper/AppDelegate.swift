@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let repository = runtime.repository else {
-            NSApp.mainMenu = MainMenu.make(closeTarget: nil)
+            NSApp.mainMenu = MainMenu.make(closeTarget: nil, canQuit: runtime.arguments.app)
             return
         }
         let controller = PanelController(
@@ -25,7 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onShutdown: { [runtime] in runtime.scheduleShutdown() }
         )
         panelController = controller
-        NSApp.mainMenu = MainMenu.make(closeTarget: controller)
+        NSApp.mainMenu = MainMenu.make(closeTarget: controller, canQuit: runtime.arguments.app)
         let hooks = runtime.arguments.testHooks ? TestHooks(controller: controller) : nil
         testHooks = hooks
         runtime.start(host: controller, extensionHandler: hooks?.handler())
@@ -67,21 +67,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// standard key equivalents (copy, paste, undo, select all) through it to the web view.
 @MainActor
 enum MainMenu {
-    static func make(closeTarget: PanelController?) -> NSMenu {
+    /// `canQuit` is Overnote.app: ⌘Q quits it. The extension's helper has no Quit, because the
+    /// extension owns its lifetime and a stray ⌘Q should not kill it.
+    static func make(closeTarget: PanelController?, canQuit: Bool) -> NSMenu {
         let main = NSMenu()
 
         let appItem = NSMenuItem()
-        // No Quit item: the extension owns the helper's lifetime, and a stray ⌘Q should not kill it.
-        // Overnote.app quits from its menu bar item instead.
-        appItem.submenu = NSMenu()
+        let app = NSMenu()
+        if canQuit {
+            app.addItem(withTitle: "Quit Overnote", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        }
+        appItem.submenu = app
         main.addItem(appItem)
 
-        // ⌘W hides the panel, like closing a window in any app.
+        // ⌘W and ⌘M hide the panel: with no Dock icon there is nowhere to minimize to, so both mean hide.
         let fileItem = NSMenuItem()
         let file = NSMenu(title: "File")
         let close = file.addItem(
             withTitle: "Close Window", action: #selector(PanelController.closeWindow(_:)), keyEquivalent: "w")
         close.target = closeTarget
+        let minimize = file.addItem(
+            withTitle: "Minimize", action: #selector(PanelController.closeWindow(_:)), keyEquivalent: "m")
+        minimize.target = closeTarget
         fileItem.submenu = file
         main.addItem(fileItem)
 

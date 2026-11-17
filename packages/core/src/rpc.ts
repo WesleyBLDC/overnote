@@ -60,6 +60,7 @@ export const Method = {
   FileSaveAs: "file.saveAs",
   AppOpenURL: "app.openURL",
   AppRevealDataFolder: "app.revealDataFolder",
+  AppQuit: "app.quit",
   NotesCreate: "notes.create",
   NotesGet: "notes.get",
   NotesUpdate: "notes.update",
@@ -101,6 +102,7 @@ export const BRIDGE_ONLY_METHODS = [
   Method.FileSaveAs,
   Method.AppOpenURL,
   Method.AppRevealDataFolder,
+  Method.AppQuit,
 ] as const satisfies readonly MethodName[];
 export type BridgeOnlyMethod = (typeof BRIDGE_ONLY_METHODS)[number];
 
@@ -227,7 +229,8 @@ export type TermFastMessage = { type: "write"; data: string } | { type: "ack"; b
 export interface Methods {
   "system.ping": { params: Empty; result: { version: string; pid: number; host?: "app" | "extension" } };
   "system.shutdown": { params: Empty; result: Empty };
-  "system.ready": { params: Empty; result: { settings: Settings; windowData: WindowData } };
+  /** `host` (v3.8) says whether the panel runs in Overnote.app or for the Raycast extension; only the app can quit. */
+  "system.ready": { params: Empty; result: { settings: Settings; windowData: WindowData; host: "app" | "extension" } };
   "system.status": { params: Empty; result: SystemStatus };
   "system.backup": { params: { reason?: BackupReason }; result: BackupInfo };
   /** `dataDirectory` (v3.8) is the folder that holds the database, which Settings shows as the notes folder. */
@@ -256,6 +259,8 @@ export interface Methods {
   "app.openURL": { params: { url: string }; result: Empty };
   /** Shows the data folder in Finder with the database selected (v3.8). */
   "app.revealDataFolder": { params: Empty; result: Empty };
+  /** Quits Overnote.app after saving pending edits (v3.8); refused with 409 for the extension's helper. */
+  "app.quit": { params: Empty; result: Empty };
   "file.saveAs": { params: { suggestedName: string; content: string }; result: { saved: boolean; path?: string } };
   "notes.create": { params: NoteContent & { show?: boolean }; result: Note };
   "notes.get": { params: { id: NoteId }; result: Note };

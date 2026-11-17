@@ -132,6 +132,8 @@ export class MockStore {
   settings: Settings = { ...DEFAULT_SETTINGS };
   currentNoteId: NoteId | null = null;
   visible = true;
+  /** Which host the panel runs in; only "app" may quit. */
+  host: "app" | "extension" = "extension";
   /** Backups the page wrote with `system.backup`, newest first. */
   backups: rpc.BackupInfo[] = [];
   /** Every `window.place` placement, in order. */
@@ -289,7 +291,7 @@ export class MockStore {
   readonly handlers: { [M in rpc.MethodName]: (params: rpc.Params<M>) => rpc.Result<M> } = {
     "system.ping": () => ({ version: "mock", pid: 0, host: "extension" }),
     "system.shutdown": () => ({}),
-    "system.ready": () => ({ settings: { ...this.settings }, windowData: this.windowData() }),
+    "system.ready": () => ({ settings: { ...this.settings }, windowData: this.windowData(), host: this.host }),
     // Socket-only on the real helper, so the bridge refuses them the same way.
     "system.status": () => socketOnly("system.status"),
     "system.backup": () => {
@@ -344,6 +346,10 @@ export class MockStore {
     "clipboard.copy": () => ({}),
     "app.openURL": () => ({}),
     "app.revealDataFolder": () => ({}),
+    "app.quit": () => {
+      if (this.host !== "app") throw new MockRpcError(rpc.ErrorCode.Conflict, "Only Overnote.app can quit");
+      return {};
+    },
     "file.saveAs": (params) => ({ saved: true, path: `/tmp/${params.suggestedName}` }),
     "notes.create": (params) => {
       const at = this.now();

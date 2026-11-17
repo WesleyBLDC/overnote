@@ -90,7 +90,8 @@ Everything saves automatically.
 | ⌘= / ⌘- / ⌘0 | Zoom |
 | ⌃` | Open or close the terminal drawer |
 | ⇧⌘↩ | Expand the terminal to the whole panel, and back |
-| ⎋ or ⌘W | Hide |
+| ⎋, ⌘W, ⌘M, or the red dot | Hide |
+| ⌘Q | Quit Overnote.app (also in All actions; the Raycast extension has no Quit) |
 
 </details>
 

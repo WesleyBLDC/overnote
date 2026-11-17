@@ -287,6 +287,12 @@ kbd {
   stroke-width: var(--topbar-stroke);
 }
 
+/* The red dot sits at the left edge, so its tooltip opens rightward. */
+.close-button .tooltip {
+  right: auto;
+  left: 0;
+}
+
 /* The tooltip pill: the button's name and its shortcut, 6 points under the button, shown after a short hover. */
 .tooltip {
   position: absolute;

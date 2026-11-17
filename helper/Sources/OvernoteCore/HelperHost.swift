@@ -36,6 +36,8 @@ public protocol HelperHost: Sendable {
     func openURL(_ url: URL) async
     /// Shows the file at `path` selected in a Finder window (`app.revealDataFolder` passes the database).
     func revealInFinder(path: String) async
+    /// Quits Overnote.app; the app delegate saves pending edits before the process exits (`app.quit`).
+    func quit() async
     /// Returns keyboard focus to the previously frontmost app without hiding.
     func resignFocus() async
     func copyToClipboard(text: String, html: String?) async
@@ -74,7 +76,7 @@ public struct DragRect: Equatable, Sendable {
 /// implementation behind `--headless`.
 public final class RecordingHost: HelperHost, @unchecked Sendable {
     public enum Call: Equatable, Sendable {
-        case toggle, show, hide, place(PanelPlacement), resize(Double, temporary: Bool), minimumSize(Double, Double), dragRegions([DragRect]), openURL(String), reveal(String), resignFocus, copy(String, String?), save(String, String)
+        case toggle, show, hide, place(PanelPlacement), resize(Double, temporary: Bool), minimumSize(Double, Double), dragRegions([DragRect]), openURL(String), reveal(String), quit, resignFocus, copy(String, String?), save(String, String)
         case drawer(Double), terminalOpen(Int, Int), terminalResize(Int, Int), terminalClose
         case settingsChanged(Settings), emit(String, JSONValue), shutdown
     }
@@ -155,6 +157,7 @@ public final class RecordingHost: HelperHost, @unchecked Sendable {
     public func terminalClose() async { record(.terminalClose) }
     public func openURL(_ url: URL) async { record(.openURL(url.absoluteString)) }
     public func revealInFinder(path: String) async { record(.reveal(path)) }
+    public func quit() async { record(.quit) }
     public func resignFocus() async { record(.resignFocus) }
     public func copyToClipboard(text: String, html: String?) async { record(.copy(text, html)) }
 

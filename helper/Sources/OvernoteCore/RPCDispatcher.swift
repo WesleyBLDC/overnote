@@ -28,7 +28,7 @@ public final class RPCDispatcher: Sendable {
 
     /// Methods only the editor may call.
     public static let bridgeOnlyMethods: Set<String> = [
-        "system.ready", "window.resize", "window.setMinimumSize", "window.setDragRegions", "window.resignFocus", "app.openURL", "app.revealDataFolder", "clipboard.copy", "file.saveAs",
+        "system.ready", "window.resize", "window.setMinimumSize", "window.setDragRegions", "window.resignFocus", "app.openURL", "app.revealDataFolder", "app.quit", "clipboard.copy", "file.saveAs",
         // The terminal: socket clients must never type into or resize the drawer's shell.
         "window.setDrawer", "term.open", "term.resize", "term.close",
     ]
@@ -131,7 +131,10 @@ public final class RPCDispatcher: Sendable {
             try repository.setRestoreOffered(false)
             return [:]
         case "system.ready":
-            return ["settings": try repository.settings().json, "windowData": try repository.windowData().json]
+            return [
+                "settings": try repository.settings().json, "windowData": try repository.windowData().json,
+                "host": .string(hostKind.rawValue),
+            ]
 
         // MARK: window
         case "window.toggle":
@@ -208,6 +211,11 @@ public final class RPCDispatcher: Sendable {
             return [:]
         case "app.revealDataFolder":
             await host.revealInFinder(path: repository.databasePath)
+            return [:]
+        case "app.quit":
+            // The Raycast extension owns its helper's lifetime and restarts it on demand.
+            guard hostKind == .app else { throw RPCError.conflict("Only Overnote.app can quit") }
+            await host.quit()
             return [:]
         case "clipboard.copy":
             await host.copyToClipboard(text: try p.string("text"), html: try p.optionalString("html"))
