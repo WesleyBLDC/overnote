@@ -218,6 +218,44 @@ async function controls(page: Page) {
   }, FLOOR);
 }
 
+// The light mode pass (board 12) as a guard: every text colour keeps 4.5:1 on every surface it sits on, in both
+// modes, translucent text composited over its surface first.
+test("every text token keeps 4.5:1 contrast on every surface, light and dark", async ({ page }) => {
+  await openHarness(page, ["Contrast"]);
+  for (const scheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const low = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      document.body.append(probe);
+      const rgba = (token: string) => {
+        probe.style.color = `var(${token})`;
+        const [r, g, b, a = 1] = getComputedStyle(probe)
+          .color.match(/[\d.]+/g)!
+          .map(Number);
+        return [r!, g!, b!, a] as const;
+      };
+      const luminance = (rgb: number[]) => {
+        const f = (c: number) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+        return 0.2126 * f(rgb[0]!) + 0.7152 * f(rgb[1]!) + 0.0722 * f(rgb[2]!);
+      };
+      const failures: string[] = [];
+      for (const surface of ["--bg-panel", "--bg-raised", "--bg-sunken"]) {
+        const back = rgba(surface).slice(0, 3);
+        for (const text of ["--text", "--text-secondary", "--text-tertiary", "--danger", "--success", "--accent"]) {
+          const [r, g, b, a] = rgba(text);
+          const fore = [r, g, b].map((c, i) => c * a + back[i]! * (1 - a));
+          const [hi, lo] = [luminance(fore), luminance(back)].sort((x, y) => y - x);
+          const ratio = (hi! + 0.05) / (lo! + 0.05);
+          if (ratio < 4.5) failures.push(`${text} on ${surface}: ${ratio.toFixed(2)}`);
+        }
+      }
+      probe.remove();
+      return failures;
+    });
+    expect(low, scheme).toEqual([]);
+  }
+});
+
 test.describe("chrome sizing", () => {
   for (const zoom of [0.75, 1, 2]) {
     test(`hit floor and layout at ${zoom * 100}% zoom`, async ({ page }) => {
