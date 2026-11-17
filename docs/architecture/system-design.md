@@ -10,9 +10,9 @@ The agent CLI described here lives in the sibling repository [WesleyBLDC/overnot
 
 ## 1. The shape of the system
 
-Overnote is a floating Markdown notepad that a person opens from Raycast with one hotkey.
-It ships as a Raycast extension, but the panel, the editor, and the data all live in a separate native process, `OvernoteHelper`.
-The same helper binary also ships as `Overnote.app`, a menu bar app with its own hotkey, so Overnote works without Raycast too.
+Overnote is a floating Markdown notepad for macOS that a person opens with one hotkey.
+It runs as `Overnote.app`, a menu bar app with its own hotkey, and optionally as a Raycast extension.
+In both, the panel, the editor, and the data live in one native process, `OvernoteHelper`: the app is that binary in app mode, and the extension starts it on demand.
 
 | Part | Where | Runtime | Lifetime |
 |---|---|---|---|

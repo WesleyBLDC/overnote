@@ -13,6 +13,7 @@ description: Take an Overnote change from a branch to a merged pull request with
    - `CONTRIBUTING.md` layout table for new or removed files and scripts.
    - `docs/architecture.md` for any protocol, path, flag, schema, or bundle change, with a protocol version bump for protocol changes.
    - `docs/architecture/system-design.md` for new parts, flows, or hosts.
+   - The clean-room guard blocks any shell command whose text names the Raycast support folder, even when it only quotes a doc line; edit around such lines with the Edit tool instead of retyping them in a script.
 3. `npm run verify` must print `all steps passed`. Treat flaky or failing tests as defects.
    In a fresh worktree run `npm ci` first: most steps quietly use the main checkout's `node_modules` further up, but `ray build` then fails with "please install the TypeScript compiler".
 4. Commit as `WesleyBLDC <WesleyBLDC@users.noreply.github.com>`, with no co-author trailer.

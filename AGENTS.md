@@ -3,7 +3,7 @@
 ## Read first
 
 - `README.md` and `CONTRIBUTING.md`: setup, project layout, testing, style, and commits.
-- `docs/architecture/system-design.md`: the big picture (why a Raycast extension plus a native helper, the C4 views, the main data flows).
+- `docs/architecture/system-design.md`: the big picture (why one native helper serves both `Overnote.app` and the Raycast extension, the C4 views, the main data flows).
 - `docs/architecture.md`: the protocol of record; read the section you touch for any method, type, path, schema, or core API detail.
 - `docs/clean-room.md` before your first change.
 
