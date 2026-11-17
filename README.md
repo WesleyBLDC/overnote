@@ -88,6 +88,7 @@ Everything saves automatically.
 | ⌃⌥← → ↑ ↓ | Fill left / right / screen / centre |
 | ⌘= / ⌘- / ⌘0 | Zoom |
 | ⌃` | Open or close the terminal drawer |
+| ⇧⌘↩ | Expand the terminal to the whole panel, and back |
 | ⎋ or ⌘W | Hide |
 
 </details>

@@ -271,6 +271,8 @@
   --terminal-cursor: var(--cursor);
   --terminal-selection: var(--selection);
   --terminal-divider: var(--border-strong);
+  --terminal-header-height: calc(32rem / 14);
+  --terminal-button: calc(22rem / 14);
   /* The drawer's height: 24 rows at the current zoom, set by terminal/controller.ts before the drawer shows. */
   --terminal-height: 360px;
 

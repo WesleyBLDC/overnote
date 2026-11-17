@@ -45,6 +45,7 @@ class FakeTerminal {
     this.onDataHandler = handler;
   }
   onBinary() {}
+  onTitleChange() {}
   open() {}
   write(data: string | Uint8Array) {
     if (typeof data === "string") this.written.push(data);

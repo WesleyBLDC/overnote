@@ -9,8 +9,12 @@ import { matches, type Shortcut } from "../lib/keys";
 /** ⌃` opens the drawer from the note and closes it from the terminal. */
 export const TOGGLE_TERMINAL: Shortcut = { code: "Backquote", ctrl: true };
 
+/** ⇧⌘↩ turns the drawer into the full-panel terminal and back. */
+export const EXPAND_TERMINAL: Shortcut = { code: "Enter", meta: true, shift: true };
+
 const ALLOWED: Shortcut[] = [
   TOGGLE_TERMINAL,
+  EXPAND_TERMINAL,
   { code: "KeyK", meta: true },
   { code: "KeyN", meta: true },
   { code: "KeyW", meta: true },

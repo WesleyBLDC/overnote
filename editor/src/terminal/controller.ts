@@ -30,7 +30,7 @@ export const IDLE_CLOSE_MS = 5 * 60_000;
 /** The terminal's font size at 100% zoom, in points. */
 const FONT_SIZE = 12;
 
-type Session = "none" | "starting" | "live" | "exited";
+export type Session = "none" | "starting" | "live" | "exited";
 
 let xtermModule: Promise<typeof import("./xterm")> | null = null;
 /** Loads the xterm.js chunk once; called on first open and when the editor is idle. */
@@ -42,6 +42,13 @@ export function preloadTerminal(): Promise<typeof import("./xterm")> {
 /** The space the note gives up for the drawer (terminal.css). */
 function setDrawerVar(height: number): void {
   document.documentElement.style.setProperty("--terminal-height", `${height}px`);
+}
+
+/** What the drawer header shows: the session's state, the title the program set (OSC 0 or 2), and the backend. */
+export interface TerminalInfo {
+  status: Session;
+  title: string;
+  backend: "herdr" | "shell" | null;
 }
 
 export class TerminalController {
@@ -59,8 +66,11 @@ export class TerminalController {
   private drawer = initialDrawer;
   private zoom = 1;
   private readonly listeners = new Set<() => void>();
+  /** Replaced, never mutated, on each change, so React reads it as a snapshot (useSyncExternalStore). */
+  private info: TerminalInfo = { status: "none", title: "", backend: null };
   private readonly offs: (() => void)[] = [];
   private resizes: ResizeObserver | null = null;
+  private heightCheck: number | null = null;
   private colors: MediaQueryList | null = null;
 
   constructor(private readonly api: Api) {}
@@ -75,11 +85,31 @@ export class TerminalController {
   /** Whether the drawer is shown: true once the panel has grown for it. */
   getVisible = (): boolean => this.drawer.phase === "shown";
 
+  getInfo = (): TerminalInfo => this.info;
+
+  private notify(): void {
+    for (const listener of [...this.listeners]) listener();
+  }
+
   /** Moves the drawer's machine, and tells React only when the drawer showed or hid. */
   private dispatch(event: DrawerEvent): void {
     const wasVisible = this.getVisible();
     this.drawer = drawerReducer(this.drawer, event);
-    if (this.getVisible() !== wasVisible) for (const listener of [...this.listeners]) listener();
+    if (this.getVisible() !== wasVisible) this.notify();
+  }
+
+  /** Changes what the header shows, and tells React only when something did change. */
+  private setInfo(patch: Partial<TerminalInfo>): void {
+    const next = { ...this.info, ...patch };
+    if (next.status === this.info.status && next.title === this.info.title && next.backend === this.info.backend)
+      return;
+    this.info = next;
+    this.notify();
+  }
+
+  private setSession(session: Session): void {
+    this.session = session;
+    this.setInfo({ status: session });
   }
 
   setHost = (host: HTMLElement | null): void => {
@@ -135,9 +165,12 @@ export class TerminalController {
     const cell = this.cellHeight();
     const host = this.host;
     const style = host ? getComputedStyle(host) : null;
+    const drawer = host?.parentElement ?? null;
+    const header = drawer?.querySelector(".terminal-header");
     const chrome =
       (style ? parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) : 0) +
-      (host?.parentElement ? parseFloat(getComputedStyle(host.parentElement).borderTopWidth) || 0 : 0);
+      (drawer ? parseFloat(getComputedStyle(drawer).borderTopWidth) || 0 : 0) +
+      (header ? parseFloat(getComputedStyle(header).height) || 0 : 0);
     const fit = Math.floor((window.screen.availHeight * MAX_SCREEN_SHARE - chrome) / cell);
     const rows = Math.max(MIN_ROWS, Math.min(DRAWER_ROWS, fit));
     return Math.ceil(rows * cell + chrome);
@@ -197,6 +230,7 @@ export class TerminalController {
     term.attachCustomKeyEventHandler((event) => !reachesOvernote(event));
     term.onData((data) => this.input(new TextEncoder().encode(data)));
     term.onBinary((data) => this.input(binaryBytes(data)));
+    term.onTitleChange((title) => this.setInfo({ title }));
     // Listen before the first term.open, so no early output is dropped.
     this.offs.push(
       this.api.on("term.data", ({ data }) => {
@@ -208,7 +242,10 @@ export class TerminalController {
     term.open(host);
     this.term = term;
     this.fit = fit;
-    this.resizes = new ResizeObserver(() => this.refit());
+    this.resizes = new ResizeObserver(() => {
+      this.refit();
+      this.checkHeightNextFrame();
+    });
     this.resizes.observe(host);
     this.colors = window.matchMedia("(prefers-color-scheme: dark)");
     this.colors.addEventListener("change", this.recolor);
@@ -217,6 +254,20 @@ export class TerminalController {
   private recolor = (): void => {
     if (this.term && this.host) this.term.options.theme = terminalTheme(this.host);
   };
+
+  /**
+   * The drawer's chrome (header, padding) can change size after its height was sent, as when zoom applies after
+   * boot: send the height again so it still holds DRAWER_ROWS. The height depends on the rows, never on the host's
+   * size, so this settles at once and an unchanged height sends nothing. It waits a frame, so it never resizes the
+   * drawer from inside the ResizeObserver callback that noticed the change.
+   */
+  private checkHeightNextFrame(): void {
+    if (this.heightCheck !== null) return;
+    this.heightCheck = requestAnimationFrame(() => {
+      this.heightCheck = null;
+      if (this.getVisible()) void this.sendHeight(this.drawerHeight());
+    });
+  }
 
   /** Fits the grid to the drawer and tells the helper when the size changed. */
   private refit(): void {
@@ -237,21 +288,22 @@ export class TerminalController {
   private ensureSession(): void {
     if (this.session === "live" || this.session === "starting" || !this.term) return;
     if (this.session === "exited") this.term.reset();
-    this.session = "starting";
+    this.setSession("starting");
     const attach = ++this.attachSeq;
     this.api.term.open({ ...this.size }).then(
       ({ backend }) => {
         if (attach !== this.attachSeq) return;
-        this.session = "live";
+        this.setSession("live");
         if (backend === "shell" && this.backend !== "shell") {
           this.term?.write("\x1b[2mHerdr is not installed, so this shell ends when Overnote quits.\x1b[0m\r\n");
         }
         this.backend = backend;
+        this.setInfo({ backend });
         for (const bytes of this.queued.splice(0)) postTerm({ type: "write", data: encodeBase64(bytes) });
       },
       (error: unknown) => {
         if (attach !== this.attachSeq) return;
-        this.session = "exited";
+        this.setSession("exited");
         this.queued = [];
         this.term?.write(
           `\r\n\x1b[2mCould not start the terminal: ${String(error)}. Press any key to try again.\x1b[0m\r\n`,
@@ -275,7 +327,7 @@ export class TerminalController {
 
   private exited(code: number): void {
     if (this.session !== "live") return;
-    this.session = "exited";
+    this.setSession("exited");
     const message =
       this.backend === "herdr"
         ? "Detached from the Herdr terminal. Press any key to attach again."
@@ -289,7 +341,7 @@ export class TerminalController {
     if (this.drawer.phase !== "closed") return;
     if (this.session === "live" || this.session === "starting") void this.api.term.close().catch(() => undefined);
     this.attachSeq++;
-    this.session = "none";
+    this.setSession("none");
     this.queued = [];
     this.term?.reset();
   }
@@ -298,6 +350,7 @@ export class TerminalController {
     if (this.idle) clearTimeout(this.idle);
     for (const off of this.offs.splice(0)) off();
     this.resizes?.disconnect();
+    if (this.heightCheck !== null) cancelAnimationFrame(this.heightCheck);
     this.colors?.removeEventListener("change", this.recolor);
     this.term?.dispose();
     this.term = null;
