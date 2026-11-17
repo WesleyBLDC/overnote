@@ -40,6 +40,7 @@ import {
   useDragRegions,
   useLatest,
   useMinimumSizeReporter,
+  useNearBottom,
   useNotices,
   useResizeReporter,
   useScrollEdges,
@@ -373,6 +374,7 @@ export function App({ api }: { api: Api }) {
   const inList = editor.isActive("list");
   // Before the height reports, so a cold start knows the minimum when it first sizes the panel.
   useMinimumSizeReporter(app, api);
+  useNearBottom(app);
   useResizeReporter(app, api, { autoSize: settings.windowAutoSize, overlayRem });
   useDragRegions(app, api, settings.zoom);
   useScrollEdges(app);

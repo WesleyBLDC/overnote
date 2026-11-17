@@ -28,7 +28,7 @@ const keep = (event: React.MouseEvent) => event.preventDefault();
 /**
  * The bottom row (board 05), an overlay that takes no height from the note. The corner holds the count, one
  * button whose icon says words or characters (click to switch), and Aa, which pins the format island. The
- * island, when pinned, floats in the middle.
+ * island floats in the middle while text is selected, the pointer is near the bottom, or it is pinned.
  */
 export function Footer(props: FooterProps) {
   const mode = props.countMode;
@@ -39,10 +39,8 @@ export function Footer(props: FooterProps) {
   const pinned = props.showFormatBar;
   return (
     <footer className="footer" data-testid="footer">
-      {pinned && props.editor ? (
-        <div className="footer-center">
-          <FormatBar editor={props.editor} openLink={props.openLink} />
-        </div>
+      {props.editor ? (
+        <FormatBar editor={props.editor} openLink={props.openLink} pinned={pinned} shown={pinned || !!props.selected} />
       ) : null}
       <div className="corner" data-testid="corner">
         <button

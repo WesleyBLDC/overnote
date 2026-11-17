@@ -200,14 +200,16 @@ export function measureMinimumSize(app: HTMLElement): { width: number; height: n
     2 * sides +
     2 * (parseFloat(bar.columnGap) || 0) +
     TITLE_MIN_REM * rem;
-  const island = footer.querySelector<HTMLElement>(".footer-center");
-  const counter = footer.querySelector<HTMLElement>(".corner");
+  // The bottom row: the centred island with room for Aa on both sides (the count gives way first when narrow).
+  const island = footer.querySelector<HTMLElement>(".format-bar");
+  const aa = footer.querySelector<HTMLElement>(".corner-aa");
   const footerBox = footer.getBoundingClientRect();
-  const footerWidth = island
-    ? contentWidth(island.querySelector(".format-bar") ?? island) + 2 * (parseFloat(getComputedStyle(island).left) || 0)
-    : counter
-      ? 2 * (footerBox.right - counter.getBoundingClientRect().left)
-      : 0;
+  const side = aa
+    ? footerBox.right -
+      aa.getBoundingClientRect().left +
+      parseFloat(getComputedStyle(footer.querySelector(".corner")!).columnGap || "0")
+    : 0;
+  const footerWidth = (island ? island.offsetWidth : 0) + 2 * side;
   const inner = getComputedStyle(content);
   const height =
     toolbar.getBoundingClientRect().height +
@@ -245,9 +247,7 @@ export function useMinimumSizeReporter(app: HTMLElement | null, api: Api) {
     const resizes = new ResizeObserver(schedule);
     const observeBars = () => {
       resizes.disconnect();
-      for (const bar of Array.from(
-        app.querySelectorAll(".toolbar, .toolbar-actions, .footer, .corner, .footer-center > *"),
-      )) {
+      for (const bar of Array.from(app.querySelectorAll(".toolbar, .toolbar-actions, .footer, .corner, .format-bar"))) {
         resizes.observe(bar);
       }
     };
@@ -526,4 +526,32 @@ function placeDropdownElement(element: HTMLElement | null, target: Box | null, o
   element.dataset.side = placement.side;
   for (const [node, top] of scrolled) if (node.scrollTop !== top) node.scrollTop = top;
   placedFor.set(element, inputs());
+}
+
+/**
+ * Marks the app with data-near-bottom while the pointer is over the bottom row, so the format island fades in
+ * there (SPEC §5). It writes the attribute directly: a pointer move never re-renders React.
+ */
+export function useNearBottom(app: HTMLElement | null) {
+  useEffect(() => {
+    if (!app) return;
+    const set = (near: boolean) => {
+      if (near) app.dataset.nearBottom = "";
+      else delete app.dataset.nearBottom;
+    };
+    const move = (event: PointerEvent) => {
+      const footer = app.querySelector(".footer");
+      if (!footer) return set(false);
+      const box = footer.getBoundingClientRect();
+      set(event.clientY >= box.top && event.clientY <= box.bottom);
+    };
+    const leave = () => set(false);
+    app.addEventListener("pointermove", move);
+    app.addEventListener("pointerleave", leave);
+    return () => {
+      app.removeEventListener("pointermove", move);
+      app.removeEventListener("pointerleave", leave);
+      set(false);
+    };
+  }, [app]);
 }

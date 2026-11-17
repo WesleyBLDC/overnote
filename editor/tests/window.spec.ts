@@ -115,9 +115,9 @@ test("the minimum size is the bars plus one line at the current zoom, never belo
   expect(atDouble.width).toBeGreaterThan(600);
 
   // Every bar fits: the toolbar controls, some of the title, and the format bar all stay inside.
+  // The island is always counted, so pinning it never grows the minimum.
   await page.keyboard.press("Alt+Meta+Comma");
   await expect(page.getByTestId("format-bar")).toBeVisible();
-  await expect.poll(async () => (await minimum()).width).toBeGreaterThan(atDouble.width);
   await expect.poll(async () => (await box()).width).toBe((await minimum()).width);
   const fits = await page.getByTestId("app").evaluate((app) => {
     const edge = app.getBoundingClientRect();
@@ -658,14 +658,6 @@ test("the top bar follows the editor board: a 46 point bar, the Close dot, and 3
   await expect(page.getByTestId("terminal-drawer")).toBeHidden();
   await settle(page);
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
-
-  await page.keyboard.press("Alt+Meta+Comma");
-  const formatIcon = await page
-    .getByTestId("format-bar")
-    .locator(".format-button .icon")
-    .first()
-    .evaluate((el) => el.getBoundingClientRect().width);
-  expect(formatIcon).toBeCloseTo(18.48, 1);
 });
 
 test("panels drop from the toolbar button that opened them, right aligned under the buttons", async ({ page }) => {
@@ -840,8 +832,34 @@ test("the corner: a words or characters count, only the selection while selectin
   await expect(page.getByTestId("format-bar")).toBeVisible();
   await expect(aa).toHaveAttribute("aria-pressed", "true");
   await aa.click();
-  await expect(page.getByTestId("format-bar")).toBeHidden();
   await expect(aa).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("format-bar")).not.toHaveClass(/is-pinned/);
+
+  // Unpinned, the island fades in while text is selected or the pointer is over the bottom row.
+  const island = page.getByTestId("format-bar");
+  const app = (await page.getByTestId("app").boundingBox())!;
+  await page.mouse.move(app.x + app.width / 2, app.y + app.height / 3);
+  await expect(island).toBeHidden();
+  await page.keyboard.press("Shift+Alt+ArrowLeft");
+  await expect(island).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(island).toBeHidden();
+  await page.mouse.move(app.x + app.width / 2, app.y + app.height - 20);
+  await expect(island).toBeVisible();
+  // Board 05: 28 tall with 24 point button faces, centred on the panel, 10 points up.
+  const geometry = await island.evaluate((el) => {
+    const a = el.closest(".app")!.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return {
+      height: r.height,
+      button: parseFloat(getComputedStyle(el.querySelector("button")!, "::before").height),
+      centre: Math.round(r.left + r.width / 2 - (a.left + a.width / 2)),
+      bottom: a.bottom - r.bottom,
+    };
+  });
+  expect(geometry).toEqual({ height: 28, button: 24, centre: 0, bottom: 10 });
+  await page.mouse.move(app.x + app.width / 2, app.y + app.height / 3);
+  await expect(island).toBeHidden();
 
   await page.keyboard.press("Alt+Meta+Comma");
   const bar = page.getByTestId("format-bar");
@@ -860,7 +878,8 @@ test("the corner: a words or characters count, only the selection while selectin
   await page.keyboard.type("Toggle Format Bar");
   await expect(page.locator(".panel-row.is-selected")).toContainText("Toggle Format Bar");
   await page.keyboard.press("Enter");
-  await expect(bar).toHaveCount(0);
+  // Unpinned; it stays shown only because text is still selected.
+  await expect(bar).not.toHaveClass(/is-pinned/);
 });
 
 test("slash menu and link popover", async ({ page }) => {

@@ -1,27 +1,29 @@
-/** The format bar, shown in the bottom bar in place of the counter. */
+/**
+ * The format island (board 05, SPEC §5): H, B, I, then </>, quote, and list, centred on the bottom row.
+ * Heading and list open a small menu that drops up; the rest toggle at once. Everything the island left out
+ * (strikethrough, underline, link, code block) stays on its shortcut, the slash menu, and ⌘K.
+ */
 import type { Editor } from "@tiptap/core";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { activeListKind, isFormatActive, runFormat, type FormatId } from "../editor/commands";
-import { Icon, type IconName } from "./icons";
 import { Menu, type MenuItem } from "./Menu";
+import { Tooltip } from "./Tooltip";
 
 interface FormatBarProps {
   editor: Editor;
   openLink: () => void;
+  /** Pinned with Aa or ⌥⌘,: the island stays and draws on the solid pinned surface. */
+  pinned: boolean;
+  /** Shown: pinned, text selected, or the pointer near the bottom of the note. */
+  shown: boolean;
 }
 
-type MenuName = "heading" | "format" | "list" | null;
+type MenuName = "heading" | "list" | null;
 
 const HEADINGS: [FormatId, string, string][] = [
   ["h1", "Heading 1", "⌥⌘1"],
   ["h2", "Heading 2", "⌥⌘2"],
   ["h3", "Heading 3", "⌥⌘3"],
-];
-const MARKS: [FormatId, string, string][] = [
-  ["bold", "Bold", "⌘B"],
-  ["italic", "Italic", "⌘I"],
-  ["strike", "Strikethrough", "⇧⌘S"],
-  ["underline", "Underline", "⌘U"],
 ];
 const LISTS: [FormatId, string, string][] = [
   ["ordered", "Ordered List", "⇧⌘7"],
@@ -29,7 +31,7 @@ const LISTS: [FormatId, string, string][] = [
   ["task", "Task List", "⇧⌘9"],
 ];
 
-export function FormatBar({ editor, openLink }: FormatBarProps) {
+export function FormatBar({ editor, openLink, pinned, shown }: FormatBarProps) {
   const [open, setOpen] = useState<MenuName>(null);
   // The open menu's button: the menu drops up from it.
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -39,37 +41,48 @@ export function FormatBar({ editor, openLink }: FormatBarProps) {
   };
   const items = (list: [FormatId, string, string][]): MenuItem[] =>
     list.map(([id, title, shortcut]) => ({ id, title, shortcut, checked: isFormatActive(editor, id) }));
-  const listKind = activeListKind(editor);
-  const listIcon: IconName = listKind === "ordered" ? "ordered" : listKind === "task" ? "task" : "bullet";
+  const toggleMenu = (name: Exclude<MenuName, null>) => (target: HTMLElement) => {
+    setAnchor(target);
+    setOpen(open === name ? null : name);
+  };
 
-  const button = (props: { icon: IconName; label: string; active: boolean; onClick: () => void; menu?: boolean }) => (
+  const button = (props: {
+    glyph: ReactNode;
+    label: string;
+    shortcut?: string;
+    active: boolean;
+    onClick: (target: HTMLElement) => void;
+    wide?: boolean;
+    className?: string;
+  }) => (
     <button
       type="button"
-      className={`format-button${props.active ? " is-active" : ""}`}
-      title={props.label}
-      aria-label={props.label}
+      className={`island-button has-tooltip${props.wide ? " is-wide" : ""}${props.className ? ` ${props.className}` : ""}${props.active ? " is-active" : ""}`}
+      aria-label={props.shortcut ? `${props.label} (${props.shortcut})` : props.label}
       aria-pressed={props.active}
       tabIndex={-1}
       onMouseDown={(event) => event.preventDefault()}
-      onClick={(event) => {
-        if (props.menu) setAnchor(event.currentTarget);
-        props.onClick();
-      }}
+      onClick={(event) => props.onClick(event.currentTarget)}
     >
-      <Icon name={props.icon} />
-      {props.menu ? <Icon name="chevronDown" /> : null}
+      {props.glyph}
+      <Tooltip label={props.label} shortcut={props.shortcut} placement="above" />
     </button>
   );
 
   return (
-    <div className="format-bar" data-testid="format-bar" role="toolbar" aria-label="Format">
+    <div
+      className={`format-bar${pinned ? " is-pinned" : ""}`}
+      data-testid="format-bar"
+      data-shown={shown || open !== null}
+      role="toolbar"
+      aria-label="Format"
+    >
       <div className="format-group">
         {button({
-          icon: "heading",
+          glyph: "H",
           label: "Heading",
           active: editor.isActive("heading"),
-          onClick: () => setOpen(open === "heading" ? null : "heading"),
-          menu: true,
+          onClick: toggleMenu("heading"),
         })}
         {open === "heading" ? (
           <Menu
@@ -80,47 +93,39 @@ export function FormatBar({ editor, openLink }: FormatBarProps) {
           />
         ) : null}
       </div>
-      <div className="format-group">
-        {button({
-          icon: "format",
-          label: "Format",
-          active: MARKS.some(([id]) => editor.isActive(id)),
-          onClick: () => setOpen(open === "format" ? null : "format"),
-          menu: true,
-        })}
-        {open === "format" ? (
-          <Menu
-            items={items(MARKS)}
-            anchor={anchor}
-            onSelect={(id) => run(id as FormatId)}
-            onClose={() => setOpen(null)}
-          />
-        ) : null}
-      </div>
-      {button({ icon: "link", label: "Link (⌘L)", active: editor.isActive("link"), onClick: openLink })}
-      {button({ icon: "code", label: "Code (⌘E)", active: editor.isActive("code"), onClick: () => run("code") })}
-      <span className="format-divider" />
       {button({
-        icon: "codeBlock",
-        label: "Code Block (⌥⌘C)",
-        active: editor.isActive("codeBlock"),
-        onClick: () => run("codeBlock"),
+        glyph: "B",
+        label: "Bold",
+        shortcut: "⌘B",
+        active: editor.isActive("bold"),
+        onClick: () => run("bold"),
       })}
       {button({
-        icon: "quote",
-        label: "Blockquote (⇧⌘B)",
+        glyph: "I",
+        label: "Italic",
+        shortcut: "⌘I",
+        className: "is-italic",
+        active: editor.isActive("italic"),
+        onClick: () => run("italic"),
+      })}
+      <span className="format-divider" />
+      {button({
+        glyph: "</>",
+        label: "Code",
+        shortcut: "⌘E",
+        wide: true,
+        active: editor.isActive("code"),
+        onClick: () => run("code"),
+      })}
+      {button({
+        glyph: "”",
+        label: "Quote",
+        shortcut: "⇧⌘B",
         active: editor.isActive("blockquote"),
         onClick: () => run("blockquote"),
       })}
-      <span className="format-divider" />
       <div className="format-group">
-        {button({
-          icon: listIcon,
-          label: "List",
-          active: listKind !== null,
-          onClick: () => setOpen(open === "list" ? null : "list"),
-          menu: true,
-        })}
+        {button({ glyph: "☰", label: "List", active: activeListKind(editor) !== null, onClick: toggleMenu("list") })}
         {open === "list" ? (
           <Menu
             items={items(LISTS)}
