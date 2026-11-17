@@ -1,14 +1,14 @@
 /**
- * Code block syntax highlighting that stays smooth while typing: decorations are recomputed right away
- * when a note loads, a code block appears or disappears, or its language changes, but typing inside a
- * code block only maps the existing decorations and schedules one fresh pass after a short pause.
- * Edits outside every code block leave the decorations alone.
+ * Code block syntax highlighting that stays smooth while typing, on Tiptap's Decorations API: decorations
+ * are recomputed right away when a note loads, a code block appears or disappears, or its language
+ * changes, but typing inside a code block only maps the existing decorations and schedules one fresh
+ * pass after a short pause. Edits outside every code block leave the decorations alone.
+ * Tiptap's CodeBlockLowlight re-highlights every code block on each keystroke inside any of them.
  */
-import { findChildren } from "@tiptap/core";
+import { Decoration, Extension, findChildren } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
+import type { Transaction } from "@tiptap/pm/state";
 import { AttrStep, ReplaceStep } from "@tiptap/pm/transform";
-import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { NoteLowlight } from "./lowlight";
 
 const HIGHLIGHT_DELAY_MS = 200;
@@ -19,12 +19,6 @@ interface HastNode {
   properties?: { className?: string[] };
 }
 
-/** The decorations plus whether a debounced pass is still owed for text typed since the last one. */
-interface HighlightState {
-  decorations: DecorationSet;
-  stale: boolean;
-}
-
 function flatten(nodes: HastNode[], classes: string[] = []): { text: string; classes: string[] }[] {
   return nodes.flatMap((node) => {
     const next = [...classes, ...(node.properties?.className ?? [])];
@@ -32,7 +26,7 @@ function flatten(nodes: HastNode[], classes: string[] = []): { text: string; cla
   });
 }
 
-function highlightDoc(doc: PMNode, name: string, lowlight: NoteLowlight): HighlightState {
+function highlightDoc(doc: PMNode, name: string, lowlight: NoteLowlight): Decoration[] {
   const decorations: Decoration[] = [];
   for (const block of findChildren(doc, (node) => node.type.name === name)) {
     const language = (block.node.attrs.language as string | null) ?? null;
@@ -42,11 +36,11 @@ function highlightDoc(doc: PMNode, name: string, lowlight: NoteLowlight): Highli
     let from = block.pos + 1;
     for (const run of flatten(tree.children as HastNode[])) {
       const to = from + run.text.length;
-      if (run.classes.length) decorations.push(Decoration.inline(from, to, { class: run.classes.join(" ") }));
+      if (run.classes.length) decorations.push(Decoration.Inline(from, to, { class: run.classes.join(" ") }));
       from = to;
     }
   }
-  return { decorations: DecorationSet.create(doc, decorations), stale: false };
+  return decorations;
 }
 
 function countBlocks(doc: PMNode, name: string): number {
@@ -85,43 +79,52 @@ function needsImmediate(tr: Transaction, name: string, before: PMNode): boolean 
   return countBlocks(before, name) !== countBlocks(tr.doc, name);
 }
 
-export function debouncedHighlightPlugin(options: { name: string; lowlight: NoteLowlight; delay?: number }): Plugin {
+/** What a document change means for the highlighting: nothing, a pass right away, or one after a pause. */
+function changeKind(tr: Transaction, name: string, before: PMNode): "none" | "now" | "later" {
+  if (!tr.docChanged) return "none";
+  const sameCount = countBlocks(before, name) === countBlocks(tr.doc, name);
+  if (!touchesBlock(tr, name) && sameCount) return "none";
+  return needsImmediate(tr, name, before) ? "now" : "later";
+}
+
+interface HighlightStorage {
+  /** Text was typed in a code block since the last full pass. */
+  stale: boolean;
+  timer: ReturnType<typeof setTimeout> | undefined;
+}
+
+export function CodeBlockHighlight(options: { name: string; lowlight: NoteLowlight; delay?: number }) {
   const { name, lowlight, delay = HIGHLIGHT_DELAY_MS } = options;
-  const refreshKey = new PluginKey<HighlightState>("noteHighlight");
-  return new Plugin<HighlightState>({
-    key: refreshKey,
-    state: {
-      init: (_config, state) => highlightDoc(state.doc, name, lowlight),
-      apply(tr, previous, oldState) {
-        if (tr.getMeta(refreshKey)) return highlightDoc(tr.doc, name, lowlight);
-        if (!tr.docChanged) return previous;
-        const mapped = previous.decorations.map(tr.mapping, tr.doc);
-        if (!touchesBlock(tr, name) && countBlocks(oldState.doc, name) === countBlocks(tr.doc, name)) {
-          return { decorations: mapped, stale: previous.stale };
-        }
-        if (needsImmediate(tr, name, oldState.doc)) return highlightDoc(tr.doc, name, lowlight);
-        return { decorations: mapped, stale: true };
-      },
+  return Extension.create<unknown, HighlightStorage>({
+    name: "codeBlockHighlight",
+    addStorage() {
+      return { stale: false, timer: undefined };
     },
-    view() {
-      let timer: ReturnType<typeof setTimeout> | undefined;
+    addDecorations() {
       return {
-        update(view, previous) {
-          if (view.state.doc === previous.doc) return;
-          clearTimeout(timer);
-          if (!refreshKey.getState(view.state)?.stale) return;
-          timer = setTimeout(() => {
-            if (!view.isDestroyed)
-              view.dispatch(view.state.tr.setMeta(refreshKey, true).setMeta("addToHistory", false));
-          }, delay);
-        },
-        destroy() {
-          clearTimeout(timer);
-        },
+        create: ({ state }) => highlightDoc(state.doc, name, lowlight),
+        shouldUpdate: ({ tr, oldState }) => changeKind(tr, name, oldState.doc) === "now",
       };
     },
-    props: {
-      decorations: (state) => refreshKey.getState(state)?.decorations,
+    // After the decorations were built: track whether typing left them stale, and debounce one fresh pass.
+    onTransaction({ transaction, appendedTransactions }) {
+      const changes = [transaction, ...appendedTransactions].filter((tr) => tr.docChanged);
+      if (!changes.length) return;
+      for (const tr of changes) {
+        const kind = changeKind(tr, name, tr.before);
+        if (kind === "now") this.storage.stale = false;
+        if (kind === "later") this.storage.stale = true;
+      }
+      clearTimeout(this.storage.timer);
+      if (!this.storage.stale) return;
+      this.storage.timer = setTimeout(() => {
+        if (this.editor.isDestroyed) return;
+        this.storage.stale = false;
+        this.editor.commands.updateDecorations(this.name);
+      }, delay);
+    },
+    onDestroy() {
+      clearTimeout(this.storage.timer);
     },
   });
 }
