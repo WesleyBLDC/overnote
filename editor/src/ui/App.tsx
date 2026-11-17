@@ -19,6 +19,7 @@ import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Api } from "../bridge/api";
 import { focusEditorNow, runFormat, type FormatId } from "../editor/commands";
+import { findState, findTransaction } from "../editor/find";
 import { createEditorExtensions } from "../editor/extensions";
 import { createNoteLowlight, loadGrammars } from "../editor/lowlight";
 import { chooseLinkTarget, type LinkTarget } from "../editor/linkRange";
@@ -57,6 +58,15 @@ type ExportFormat = "md" | "html" | "txt";
 /** How long the app may stay unready before it shows the loading status. */
 const BOOT_STATUS_MS = 300;
 
+/** A key per confirm request, so a replaced request unmounts its dialog, which cancels it. */
+const confirmKeys = new WeakMap<ConfirmRequest, number>();
+let nextConfirmKey = 0;
+function confirmKey(request: ConfirmRequest): number {
+  let key = confirmKeys.get(request);
+  if (key === undefined) confirmKeys.set(request, (key = ++nextConfirmKey));
+  return key;
+}
+
 /** Places the caret and scrolls it into view in the same transaction, so the first painted frame is already right. */
 function clampCaret(editor: Editor, caret: number | null): void {
   const { doc } = editor.state;
@@ -68,9 +78,12 @@ function clampCaret(editor: Editor, caret: number | null): void {
 
 /** Replaces the document without an undo step and starts a fresh undo history. */
 function loadIntoEditor(editor: Editor, doc: JSONContent, caret: number | null): void {
+  // A fresh state resets every plugin; an open find keeps its term on the new content.
+  const { term } = findState(editor.state);
   editor.commands.setContent(doc, { emitUpdate: false });
   const { state } = editor;
   editor.view.updateState(EditorState.create({ doc: state.doc, plugins: state.plugins }));
+  if (term) editor.view.dispatch(findTransaction(editor.state, { term, active: 0 }));
   // Every note opens from the top, then the caret is revealed: never the previous note's offset.
   const scroller = editor.view.dom.closest(".content");
   if (scroller) scroller.scrollTop = 0;
@@ -1101,7 +1114,7 @@ export function App({ api }: { api: Api }) {
         className="panel-ghost"
         token="--duration-pop"
       />
-      {confirm ? <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} /> : null}
+      {confirm ? <ConfirmDialog key={confirmKey(confirm)} request={confirm} onClose={() => setConfirm(null)} /> : null}
       <Notices notices={notices} onExited={dismissNotice} onDismiss={dismiss} />
       <TerminalDrawer visible={terminal.visible} setHost={terminal.controller.setHost} />
     </div>

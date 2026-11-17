@@ -9,10 +9,25 @@ export interface Match {
   to: number;
 }
 
+/**
+ * Find's one source of truth, kept in the editor state: the term, the active match, and the matches with their
+ * highlights. Matches are recomputed only when the document or the term changes, never on a plain redraw.
+ */
 export interface FindState {
   term: string;
+  /** Index into `matches`, or -1 when there are none. */
   active: number;
+  matches: Match[];
+  decorations: DecorationSet;
 }
+
+/** What a transaction may change: the term, the active match, or both (findTransaction). */
+export interface FindMeta {
+  term?: string;
+  active?: number;
+}
+
+const EMPTY: FindState = { term: "", active: -1, matches: [], decorations: DecorationSet.empty };
 
 export const findKey = new PluginKey<FindState>("noteFind");
 
@@ -75,31 +90,45 @@ export function selectMatch(state: EditorState, match: Match): Transaction {
   return state.tr.setSelection(TextSelection.create(state.doc, match.from, match.to)).scrollIntoView();
 }
 
+function decorate(doc: PMNode, matches: Match[], active: number): DecorationSet {
+  if (!matches.length) return DecorationSet.empty;
+  return DecorationSet.create(
+    doc,
+    matches.map((match, index) =>
+      Decoration.inline(match.from, match.to, { class: index === active ? "find-match is-active" : "find-match" }),
+    ),
+  );
+}
+
+/** The next find state after a transaction: pure, so it is unit tested. */
+export function nextFindState(value: FindState, tr: Transaction): FindState {
+  const meta = tr.getMeta(findKey) as FindMeta | undefined;
+  if (!meta && !tr.docChanged) return value;
+  const term = meta?.term ?? value.term;
+  if (!term) return EMPTY;
+  const matches = term !== value.term || tr.docChanged ? findMatches(tr.doc, term) : value.matches;
+  const wanted = meta?.active ?? value.active;
+  const active = matches.length ? Math.min(Math.max(wanted, 0), matches.length - 1) : -1;
+  if (matches === value.matches && active === value.active) return value;
+  return { term, active, matches, decorations: decorate(tr.doc, matches, active) };
+}
+
+/** Reads find's state from an editor state. */
+export const findState = (state: EditorState): FindState => findKey.getState(state) ?? EMPTY;
+
+/** A transaction that changes find's term or active match, kept out of undo history. */
+export function findTransaction(state: EditorState, meta: FindMeta): Transaction {
+  return state.tr.setMeta(findKey, meta).setMeta("addToHistory", false);
+}
+
 export const FindHighlight = Extension.create({
   name: "findHighlight",
   addProseMirrorPlugins() {
     return [
       new Plugin<FindState>({
         key: findKey,
-        state: {
-          init: () => ({ term: "", active: -1 }),
-          apply: (tr, value) => tr.getMeta(findKey) ?? value,
-        },
-        props: {
-          decorations(state) {
-            const find = findKey.getState(state);
-            if (!find?.term) return DecorationSet.empty;
-            const matches = findMatches(state.doc, find.term);
-            return DecorationSet.create(
-              state.doc,
-              matches.map((match, index) =>
-                Decoration.inline(match.from, match.to, {
-                  class: index === find.active ? "find-match is-active" : "find-match",
-                }),
-              ),
-            );
-          },
-        },
+        state: { init: () => EMPTY, apply: (tr, value) => nextFindState(value, tr) },
+        props: { decorations: (state) => findState(state).decorations },
       }),
     ];
   },

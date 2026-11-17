@@ -60,3 +60,28 @@ test("the count is blank without a term, reads No results without matches, and f
   await input.fill("");
   await expect(count).toHaveText("");
 });
+
+test("an outside change while find is open keeps the term and recounts the matches", async ({ page }) => {
+  await page.clock.install();
+  await openHarness(page, ["alpha beta alpha"]);
+  await page.keyboard.press("Meta+f");
+  await page.getByTestId("find-input").fill("alpha");
+  await expect(page.getByTestId("find-count")).toHaveText("1 of 2");
+  // Past the typing window, so the outside change reloads the note instead of waiting.
+  await page.clock.runFor(1100);
+  const id = await page.getByTestId("app").getAttribute("data-note-id");
+  await page.evaluate((noteId) => {
+    const text = "alpha alpha alpha";
+    const mock = (window as unknown as { __overnoteMock: { store: { externalUpdate(id: string, c: object): void } } })
+      .__overnoteMock;
+    mock.store.externalUpdate(noteId ?? "", {
+      rawContent: JSON.stringify({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] }),
+      text,
+      title: text,
+      markdown: text,
+    });
+  }, id);
+  await expect(editor(page)).toHaveText("alpha alpha alpha");
+  await expect(page.getByTestId("find-count")).toHaveText("1 of 3");
+  await expect(editor(page).locator(".find-match")).toHaveCount(3);
+});

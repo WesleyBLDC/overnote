@@ -1,8 +1,8 @@
 /** Find and replace bar. */
 import type { Editor } from "@tiptap/core";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { focusEditorNow } from "../editor/commands";
-import { findKey, findMatches, replaceAll, replaceOne, selectMatch } from "../editor/find";
+import { findKey, findState, replaceAll, replaceOne, selectMatch, findTransaction } from "../editor/find";
 import { Icon } from "./icons";
 
 export interface FindBarHandle {
@@ -17,43 +17,40 @@ interface FindBarProps {
 }
 
 export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar({ editor, initialTerm, onClose }, ref) {
+  // The input's text is local; the term, matches, and active match live in the editor state (find.ts), so a reload,
+  // an undo, or an outside change can never leave them out of step with the document.
   const [term, setTerm] = useState(initialTerm);
   const [replacement, setReplacement] = useState("");
   const [showReplace, setShowReplace] = useState(false);
-  const [active, setActive] = useState(0);
-  const [doc, setDoc] = useState(editor.state.doc);
   const findRef = useRef<HTMLInputElement>(null);
+  const { matches, active: index } = findState(editor.state);
 
+  /** Applies the term (from the first match) and selects the active match. */
+  const search = useCallback(
+    (next: string) => {
+      setTerm(next);
+      editor.view.dispatch(findTransaction(editor.state, { term: next, active: 0 }));
+      const first = findState(editor.state).matches[0];
+      if (first) editor.view.dispatch(selectMatch(editor.state, first));
+    },
+    [editor],
+  );
+
+  // Mount and unmount: the opening term applies once; later terms go through search().
+  const opening = useRef(initialTerm);
   useEffect(() => {
-    const track = () => setDoc(editor.state.doc);
-    editor.on("update", track);
-    return () => {
-      editor.off("update", track);
-    };
-  }, [editor]);
-
-  const matches = useMemo(() => findMatches(doc, term), [doc, term]);
-  const index = matches.length ? Math.min(active, matches.length - 1) : -1;
-
-  useEffect(() => {
-    editor.view.dispatch(editor.state.tr.setMeta(findKey, { term, active: index }).setMeta("addToHistory", false));
-  }, [editor, term, index, matches.length]);
-
-  useEffect(() => {
+    editor.view.dispatch(findTransaction(editor.state, { term: opening.current, active: 0 }));
     findRef.current?.focus();
     findRef.current?.select();
-    return () => {
-      editor.view.dispatch(editor.state.tr.setMeta(findKey, { term: "", active: -1 }).setMeta("addToHistory", false));
-    };
+    return () => editor.view.dispatch(findTransaction(editor.state, { term: "" }));
   }, [editor]);
 
   const goTo = useCallback(
     (next: number) => {
       if (!matches.length) return;
       const wrapped = (next + matches.length) % matches.length;
-      setActive(wrapped);
       const match = matches[wrapped];
-      if (match) editor.view.dispatch(selectMatch(editor.state, match));
+      if (match) editor.view.dispatch(selectMatch(editor.state, match).setMeta(findKey, { active: wrapped }));
     },
     [editor, matches],
   );
@@ -61,7 +58,7 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
   useImperativeHandle(ref, () => ({
     focusOrClose(selection: string) {
       if (document.activeElement === findRef.current) return false;
-      if (selection) setTerm(selection);
+      if (selection) search(selection);
       findRef.current?.focus();
       findRef.current?.select();
       return true;
@@ -73,27 +70,27 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
     focusEditorNow(editor);
   };
 
+  /** After a replace, the next match at or after `from` becomes active, wrapping to the first. */
+  const selectFrom = (from: number) => {
+    const remaining = findState(editor.state).matches;
+    const next = remaining.findIndex((match) => match.from >= from);
+    const chosen = next === -1 ? 0 : next;
+    const match = remaining[chosen];
+    if (match) editor.view.dispatch(selectMatch(editor.state, match).setMeta(findKey, { active: chosen }));
+  };
+
   const replaceCurrent = () => {
-    if (!matches.length) return;
-    const { from } = editor.state.selection;
-    const target = matches.find((match) => match.from >= from) ?? matches[0];
+    const target = matches[index];
     if (!target) return;
     editor.view.dispatch(replaceOne(editor.state, target, replacement));
-    const remaining = findMatches(editor.state.doc, term);
-    const next = remaining.findIndex((match) => match.from >= target.from + replacement.length);
-    const chosen = next === -1 ? 0 : next;
-    setActive(chosen);
-    const match = remaining[chosen];
-    if (match) editor.view.dispatch(selectMatch(editor.state, match));
+    selectFrom(target.from + replacement.length);
   };
 
   const replaceEverything = () => {
     const tr = replaceAll(editor.state, term, replacement);
     if (!tr) return;
     editor.view.dispatch(tr);
-    setActive(0);
-    const first = findMatches(editor.state.doc, term)[0];
-    if (first) editor.view.dispatch(selectMatch(editor.state, first));
+    selectFrom(0);
   };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
@@ -123,12 +120,7 @@ export const FindBar = forwardRef<FindBarHandle, FindBarProps>(function FindBar(
           aria-label="Find"
           spellCheck={false}
           data-testid="find-input"
-          onChange={(event) => {
-            setTerm(event.target.value);
-            setActive(0);
-            const first = findMatches(editor.state.doc, event.target.value)[0];
-            if (first) editor.view.dispatch(selectMatch(editor.state, first));
-          }}
+          onChange={(event) => search(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
