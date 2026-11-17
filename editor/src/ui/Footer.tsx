@@ -21,7 +21,15 @@ interface FooterProps {
   onToggleCount: () => void;
   onToggleFormatBar: () => void;
   openLink: () => void;
+  /** The empty note's keycap hints, fading once the note has text; null when the note did not open empty. */
+  hints: "shown" | "faded" | null;
 }
+
+const HINTS: [string, string][] = [
+  ["/", "Blocks"],
+  ["⌘K", "Actions"],
+  ["⌘P", "Notes"],
+];
 
 const keep = (event: React.MouseEvent) => event.preventDefault();
 
@@ -39,6 +47,21 @@ export function Footer(props: FooterProps) {
   const pinned = props.showFormatBar;
   return (
     <footer className="footer" data-testid="footer">
+      {props.hints ? (
+        <div
+          className="footer-hints"
+          data-testid="empty-hints"
+          data-faded={props.hints === "faded" || undefined}
+          aria-hidden={props.hints === "faded" || undefined}
+        >
+          {HINTS.map(([key, label]) => (
+            <span key={key} className="footer-hint">
+              <kbd className="keycap is-outline">{key}</kbd>
+              {label}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {props.editor ? (
         <FormatBar editor={props.editor} openLink={props.openLink} pinned={pinned} shown={pinned || !!props.selected} />
       ) : null}

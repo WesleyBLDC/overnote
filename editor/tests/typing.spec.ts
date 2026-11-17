@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("block rules create headings, lists, quotes, code, and rules", async ({ page }) => {
-  await expect(editor(page).locator("p.is-empty")).toHaveAttribute("data-placeholder", "Start writing…");
+  await expect(editor(page).locator("p.is-empty")).toHaveAttribute("data-placeholder", "Untitled");
   await page.keyboard.type("# One");
   await page.keyboard.press("Enter");
   await page.keyboard.type("#### four");
@@ -143,33 +143,33 @@ test("emoji picker inserts Unicode emoji", async ({ page }) => {
   expect(await calls(page, "window.hide")).toHaveLength(0);
 });
 
-test("empty note hints are an overlay: never content, never height, gone once there is text", async ({ page }) => {
-  const hints = page.getByTestId("empty-hints");
-  await expect(hints).toBeVisible();
-  await expect(hints).toContainText("Type / to insert a block");
-  await expect(hints).toContainText("Press ⌘K for actions");
-  await expect(hints).toContainText("Press the panel hotkey again to hide");
-  expect(await hints.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
-  await expect(editor(page)).not.toContainText("Press ⌘K");
+test("an empty note: ghost title, hints that fade once, and the first line becomes the title", async ({ page }) => {
+  const keys = page.getByTestId("empty-hints");
+  const line = page.getByTestId("empty-hint");
+  await expect(keys).toHaveText("/Blocks⌘KActions⌘PNotes");
+  await expect(line).toHaveText("Start with a title, or just write.");
+  await expect(editor(page).locator(":scope > p")).toHaveAttribute("data-placeholder", "Untitled");
+  expect(await line.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
   const height = () => page.locator(".content-inner").evaluate((el) => el.getBoundingClientRect().height);
   const before = await height();
 
-  await page.keyboard.type("hello");
-  await expect(hints).toHaveCount(0);
+  await page.keyboard.type("Groceries");
+  await expect(keys).toHaveAttribute("data-faded", "true");
+  await expect(line).toHaveAttribute("data-faded", "true");
+  await expect(editor(page).locator("h1")).toHaveText("Groceries");
   expect(await height()).toBe(before);
-
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("milk");
+  await expect(editor(page).locator(":scope > p")).toHaveText("milk");
+  await expect.poll(async () => String((await lastSave(page)).markdown)).toBe("# Groceries\n\nmilk");
   const save = await lastSave(page);
-  console.log("saved payload", JSON.stringify(save));
   for (const field of ["rawContent", "markdown", "text"] as const) {
-    expect(String(save[field])).not.toMatch(/Type \/|Press ⌘K|hotkey again/);
+    expect(String(save[field])).not.toMatch(/Start with a title|Blocks|Actions/);
   }
-  expect(save.text).toBe("hello");
-  expect(save.markdown).toBe("hello");
 
+  // Emptied again: the ghost title returns, the hints do not.
+  await page.keyboard.press("Meta+a");
   await page.keyboard.press("Backspace");
-  await page.keyboard.press("Backspace");
-  await page.keyboard.press("Backspace");
-  await page.keyboard.press("Backspace");
-  await page.keyboard.press("Backspace");
-  await expect(hints).toBeVisible();
+  await expect(editor(page).locator(":scope > :first-child")).toHaveAttribute("data-placeholder", "Untitled");
+  await expect(keys).toHaveAttribute("data-faded", "true");
 });

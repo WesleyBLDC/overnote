@@ -5,9 +5,11 @@ import { CodeBlock } from "@tiptap/extension-code-block";
 import { Dropcursor, Gapcursor, Placeholder } from "@tiptap/extensions";
 import { createCodeBlockView, type CodeBlockViewOptions } from "./codeBlockView";
 import { NoteDomBehavior, linkRangeAt, type DomOptions } from "./domExtensions";
+import { BLOCK_LABELS } from "./commands";
 import { FindHighlight } from "./find";
 import { debouncedHighlightPlugin } from "./highlight";
 import type { NoteLowlight } from "./lowlight";
+import { TitleLine } from "./titleLine";
 
 export interface EditorExtensionOptions extends DomOptions, CodeBlockViewOptions {
   lowlight: NoteLowlight;
@@ -71,11 +73,15 @@ export function createEditorExtensions(options: EditorExtensionOptions): AnyExte
       includeChildren: false,
       placeholder: ({ editor, node, pos }) => {
         if (pos !== 0) return "";
-        if (node.type.name === "heading") return `Heading ${String(node.attrs.level)}`;
-        if (node.type.name === "paragraph" && editor.state.doc.childCount === 1) return "Start writing…";
+        // An empty note shows the ghost title "Untitled" on its one line (SPEC §9).
+        const alone = editor.state.doc.childCount === 1;
+        if (alone && (node.type.name === "paragraph" || (node.type.name === "heading" && node.attrs.level === 1)))
+          return "Untitled";
+        if (node.type.name === "heading") return BLOCK_LABELS[`h${String(node.attrs.level)}` as "h1" | "h2" | "h3"];
         return "";
       },
     }),
+    TitleLine,
     Dropcursor.configure({ width: 2, class: "drop-cursor" }),
     Gapcursor,
     codeBlockHighlight(codeBlock.name, options.lowlight),

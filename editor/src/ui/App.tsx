@@ -945,6 +945,18 @@ export function App({ api }: { api: Api }) {
     setLinkTarget(null);
   }
 
+  // The empty note hints (SPEC §9) show on a note that opens entirely empty, fade on its first keystroke, and stay
+  // gone for that note even if it is emptied again. One small state per shown note, set during render with the switch.
+  const [hints, setHints] = useState<{ id: NoteId | null; phase: "none" | "shown" | "faded" }>({
+    id: null,
+    phase: "none",
+  });
+  if (state.ready && !preview) {
+    if (hints.id !== currentId) setHints({ id: currentId, phase: entirelyEmpty ? "shown" : "none" });
+    else if (hints.phase === "shown" && !entirelyEmpty) setHints({ id: currentId, phase: "faded" });
+  }
+  const hintsPhase = state.ready && !preview && hints.id === currentId ? hints.phase : "none";
+
   const runSlash = (item: SlashItem) => {
     if (!slash) return;
     focusEditorNow(editor);
@@ -1022,12 +1034,10 @@ export function App({ api }: { api: Api }) {
       >
         <div className="content-inner">
           <EditorContent editor={editor} />
-          {entirelyEmpty && state.ready ? (
-            <div className="empty-hints" data-testid="empty-hints">
-              <p>Type / to insert a block</p>
-              <p>Press ⌘K for actions</p>
-              <p>Press the panel hotkey again to hide</p>
-            </div>
+          {hintsPhase !== "none" ? (
+            <p className="empty-hint" data-testid="empty-hint" data-faded={hintsPhase === "faded" || undefined}>
+              Start with a title, or just write.
+            </p>
           ) : null}
         </div>
       </main>
@@ -1040,6 +1050,7 @@ export function App({ api }: { api: Api }) {
         onToggleCount={() => updateSettings({ countMode: settings.countMode === "words" ? "characters" : "words" })}
         onToggleFormatBar={() => updateSettings({ showFormatBar: !settings.showFormatBar })}
         openLink={openLink}
+        hints={hintsPhase === "none" ? null : hintsPhase}
       />
       {slash && slashItems.length ? (
         <SlashMenu
