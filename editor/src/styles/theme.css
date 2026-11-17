@@ -205,6 +205,8 @@
   --inner-gap: calc(5rem / 14);
   /* Each nested list starts 20 to the right of its parent's marker. */
   --list-indent: calc(20rem / 14);
+  /* Space between an ordered item's number and its text, like a native list's outside marker. */
+  --list-marker-gap: 0.35em;
 
   /* ---- spacing and shape (rem, so zoom scales them) ---- */
   --space-0: 0.125rem;

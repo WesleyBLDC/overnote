@@ -153,7 +153,7 @@
 /* ---- flat lists ---- */
 
 /*
- * Board 10: the marker starts at the text edge and the item's text follows it (bullets 9 pt, numbers 14 pt,
+ * Board 10: the marker starts at the text edge and the item's text follows it (bullets 9 pt, numbers 19 pt,
  * tasks 25 pt), and each nested list starts --list-indent to the right of its parent's marker.
  */
 .note-editor .prosemirror-flat-list {
@@ -164,7 +164,8 @@
 }
 
 .note-editor .prosemirror-flat-list[data-list-kind="ordered"] {
-  --list-gutter: calc(14em / 15);
+  /* Wide enough for 1. to 9. plus the gap, so single digit numbers start at the text edge. */
+  --list-gutter: calc(19em / 15);
 }
 
 /* The parent's gutter, read by a nested list to place itself --list-indent from the parent's marker. */
@@ -218,15 +219,17 @@
 
 /*
  * Ordered markers come from data-list-marker, set by the editor's orderedMarkerPlugin: 3. at the top
- * level, 3.1 and 3.1.1 when nested in ordered items. Numbers are in the accent at 600. The marker ends a
- * quarter em before the text, so a long number grows to the left, into the note's padding.
+ * level, 3.1 and 3.1.1 when nested in ordered items. Numbers are in the accent at 600, with tabular figures
+ * so 1. to 9. line up on both edges. The marker ends --list-marker-gap before the text, as a native list's
+ * outside marker does, so a long number grows to the left, into the note's padding.
  */
 .note-editor .prosemirror-flat-list[data-list-kind="ordered"]::before {
   content: attr(data-list-marker);
   position: absolute;
-  right: calc(100% - var(--list-gutter) + 0.25em);
+  right: calc(100% - var(--list-gutter) + var(--list-marker-gap));
   white-space: nowrap;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
 
