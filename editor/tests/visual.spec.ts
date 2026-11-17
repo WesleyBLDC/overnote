@@ -339,7 +339,8 @@ test.describe("chrome sizing", () => {
       });
     const expectRing = async (what: string) =>
       expect.poll(async () => outer((await active()).shadow), { message: what }).toEqual([rgb(gap), rgb(color)]);
-    await expectRing("panel search");
+    // Search's field is the box itself: it shows the caret, not a ring.
+    expect(outer((await active()).shadow)).toEqual([]);
     // Rows, toolbar buttons, and menu items take focus by script after a key press, as a Tab would.
     for (const selector of [".panel-row", "[data-testid=new-note]"]) {
       await page

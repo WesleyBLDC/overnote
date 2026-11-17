@@ -23,8 +23,8 @@ test("⌘K runs actions, ⌘N refuses a blank note, history goes back and forwar
 
   await page.keyboard.press("Meta+n");
   await expect(page.getByTestId("notices")).toContainText("You already have an empty note");
-  await page.keyboard.press("Meta+k");
-  await expect(page.getByTestId("action-new")).toHaveAttribute("aria-disabled", "true");
+  await page.keyboard.press("Meta+p");
+  await expect(page.getByTestId("chip-new")).toHaveAttribute("aria-disabled", "true");
   await page.keyboard.press("Escape");
 
   await page.keyboard.type("Beta");
@@ -170,7 +170,9 @@ test("copy as, export, and zoom", async ({ page }) => {
   await editor(page).getByText("Body").click();
   await page.keyboard.press("Alt+Shift+ArrowLeft");
   await page.keyboard.press("Meta+k");
-  await expect(page.getByTestId("action-copyAs")).toHaveText(/Copy Selection As/);
+  await page.keyboard.type("markdown");
+  await expect(page.getByTestId("action-copy-md")).toHaveText(/Copy Selection As Markdown/);
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
 
@@ -232,8 +234,8 @@ test("⌘K and ⌘P open inside a roomy window without resizing it and scroll wi
   await expect(page.getByTestId("command-panel")).toBeVisible();
   await settle(page);
   expect(await temporaryReports()).toEqual([]);
-  // The root list is longer than the panel, so it scrolls inside the window instead of growing it.
-  expect(await fitsInside()).toEqual({ inside: true, appHeight: 560, scrolls: true, overflowing: true });
+  // Search stays inside the window instead of growing it, and its list scrolls within it.
+  expect(await fitsInside()).toMatchObject({ inside: true, appHeight: 560, scrolls: true });
   await page.keyboard.press("Escape");
 
   await page.keyboard.press("Meta+p");

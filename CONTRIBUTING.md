@@ -69,7 +69,7 @@ Add `?seed=empty` to the URL to start with no notes.
 | `src/domain/` | Helper launcher, socket client, read-only database queries, and other logic with no Raycast imports |
 | `src/api/`, `src/hooks/`, `src/components/` | Calls into the helper, React hooks, and shared list and detail views |
 | `packages/core/` | `@overnote/core`: the ProseMirror schema, Markdown, HTML, and text serializers, and title rules, shared by the editor and the extension |
-| `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/`; the terminal drawer (xterm.js) is in `editor/src/terminal/` |
+| `editor/` | The Vite, React, and Tiptap editor that runs inside the panel; builds to `assets/editor/`; Search (⌘P and ⌘K) is `editor/src/ui/CommandPanel.tsx` with its All actions layout and match marks in `editor/src/search/`; the terminal drawer (xterm.js) is in `editor/src/terminal/` |
 | `helper/` | `OvernoteHelper`, a Swift package: the floating panel, the web view, the socket server, and the SQLite repository; the same binary runs as `Overnote.app` in app mode (`AppMode.swift`, plus `GlobalHotkey.swift`, `StatusMenu.swift`, and `LoginItem.swift`); the terminal drawer's pseudo terminal is `TerminalBridge.swift`, with `TerminalSession` and `TerminalLauncher` in `OvernoteCore` |
 | `packages/core/tests/fixtures/` | Serialization fixtures: input Markdown and the exact expected outputs |
 | `dist-app/` | `Overnote.app`, built by `scripts/build-app.sh` (`npm run build:app`); generated, not committed |
@@ -85,7 +85,7 @@ Add `?seed=empty` to the URL to start with no notes.
 ## Screenshots (README)
 
 `media/` is the product showcase in the README.
-Refresh it in the same change whenever user-visible chrome that those shots show moves (accent, toolbar, ⌘K icons or Fill actions, Browse section badges, hero content, panel size).
+Refresh it in the same change whenever user-visible chrome that those shots show moves (accent, toolbar, Search and its All actions, hero content, panel size).
 
 ```sh
 npm run dev -w editor -- --port 5299 --strictPort --host 127.0.0.1

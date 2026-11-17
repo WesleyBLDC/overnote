@@ -230,7 +230,7 @@ The helper stores `NoteContent` verbatim.
 | `notes.unpin` | `{ id }` | `Note` | Does not change `updatedAt` |
 | `notes.movePinnedUp` / `notes.movePinnedDown` | `{ id }` | `{}` | Swap keys with the neighbor pin; no-op at the ends |
 | `notes.list` | `{ filter?: string, limit?: number (100), cursor?: string }` | `{ items: NoteSummary[], nextCursor: string \| null }` | Live notes. Order: pinned key asc (pinned first), then `updatedAt` desc, then `id` asc. Used by Search Notes |
-| `notes.browse` | `{ filter?: string, limit?: number (100), cursor?: string }` | same shape | Live notes. Order: pinned key asc, then `lastAccessedAt` desc, then `id` asc. With a filter, title matches come before text-only matches (each group in that order). Used by ⌘P |
+| `notes.browse` | `{ filter?: string, limit?: number (100), cursor?: string }` | same shape | Live notes. Order: pinned key asc, then `lastAccessedAt` desc, then `id` asc. With a filter, title matches come before text-only matches (each group in that order). Used by Search (⌘P) |
 | `notes.listDeleted` | `{}` | `{ items: (NoteSummary & { markdown: string, rawContent: string })[] }` | All trashed notes, `deletedAt` desc, no paging |
 | `notes.count` | `{}` | `{ count: number }` | Live notes |
 | `notes.setCurrentNote` | `{ noteId: NoteId }` | `{}` | Persists the current note id (settings key `currentNoteId`) |
@@ -298,7 +298,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 **Editor-owned behavior (no helper state):**
 - Zoom is applied by the editor in CSS; `window.resize.contentHeight` is in points (CSS px times zoom), measured from the content wrapper (never `documentElement.scrollHeight`).
 - While a confirmation dialog is open the editor reports a larger `contentHeight` (about 34rem) and restores it on close; the helper treats every `window.resize` as programmatic (never as a user resize).
-- Panels (⌘K, browse, settings) and dropdowns (the slash menu, the emoji picker, the link popover, and the format bar's menus) never resize the panel and never draw past it.
+- Panels (Search, its actions, settings) and dropdowns (the slash menu, the emoji picker, the link popover, and the format bar's menus) never resize the panel and never draw past it.
   The panels drop from the toolbar and their lists scroll when the panel is short.
   Each dropdown opens next to its anchor on its preferred side when it fits there, else on the side with more room, capped to that room so it scrolls inside, and slides sideways to stay inside.
   All of them keep clear of the drag strip and of the 10 pt resize zones.
@@ -322,7 +322,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   Turning windowAutoSize on clears the stored placement on every display and forgets the stored height, because auto-sizing owns the height on all of them.
   Unplugging a display clears the placement stored for that display only, and the system move onto the display that remains keeps that display's placement.
   A placement clear that finds no display stays pending until a save that has one.
-  The editor offers Fill Left, Fill Right, Fill Screen, and Centre in the command panel's window section, with ⌃⌥←, ⌃⌥→, ⌃⌥↑, and ⌃⌥↓, and the menu bar's Window section shows the panel first and then places it.
+  The editor offers Fill Left, Fill Right, Fill Screen, and Centre in Search's All actions under Window, with ⌃⌥←, ⌃⌥→, ⌃⌥↑, and ⌃⌥↓, and the menu bar's Window section shows the panel first and then places it.
 - Temporary growth only grows: if the panel is already at least the requested height, nothing changes (so a dialog never resizes a roomy window).
 - The editor owns the panel background: it paints the theme's solid `--bg-panel` over the whole panel, so text keeps its contrast whatever is behind the window; the helper keeps the vibrancy material underneath, and its 1 pt rim uses the theme's `--border-strong`.
 - One minimum size covers every way the panel's size is set: user resizing, auto-sizing, temporary growth, restored frames (a smaller saved frame grows to it), frames set from outside (tiling, window managers), and zoom.
@@ -338,7 +338,7 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 ### The terminal drawer
 
 - A drawer under the note, the panel's width, sized to 24 rows at the current zoom (fewer when that would take more than half the screen, never fewer than 8), so a full screen program such as an agent keeps its header in view, drawn by xterm.js inside the editor's web view (loaded lazily, in its own chunk, also preloaded 1.5 s after boot).
-  The toolbar's Terminal button, ⌘K's Open Terminal or Close Terminal, and ⌃` toggle it; from the note ⌃` opens the drawer (or focuses an open one) and focuses the terminal, and from the terminal it closes the drawer and puts the caret back in the note.
+  The toolbar's Terminal button, Search's Terminal key action (or Open Terminal and Close Terminal by name), and ⌃` toggle it; from the note ⌃` opens the drawer (or focuses an open one) and focuses the terminal, and from the terminal it closes the drawer and puts the caret back in the note.
   The open state is the `terminal.open` setting, so the drawer comes back after a reload or restart, without taking focus from the note.
 - Geometry: `window.setDrawer` grows the panel down by the drawer, or up when that would leave the screen, and shrinks it back on close.
   Every frame the helper remembers or computes is the note's: the saved `panelFrame`, auto-sizing and its 860 pt cap, the minimum size, and placements, which use the visible frame minus the drawer, so Fill, Left, and Right take the drawer's space from the note.

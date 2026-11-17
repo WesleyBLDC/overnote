@@ -1,11 +1,27 @@
-/** The ⌘K action panel with pushed views: Format, Copy As, Export, Browse, Recently Deleted, Settings. */
-import { displayTitle, type NoteId, type NoteSummary, type rpc, type Settings } from "@overnote/core";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+/**
+ * Search (board 07, SPEC §7): one box over the note for notes (⌘P) and all actions (⌘K or ">"), plus the pushed
+ * list views (Format, Heading, Copy As, Export, Recently Deleted, Settings) in the same shell.
+ */
+import {
+  countWords,
+  displayTitle,
+  type Note,
+  type NoteId,
+  type NoteSummary,
+  type rpc,
+  type Settings,
+} from "@overnote/core";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
 import { fuzzyScore } from "../editor/slash";
 import { revealSelected } from "../lib/motion";
-import { characterLabel } from "../lib/count";
+import { characterLabel, wordLabel } from "../lib/count";
 import { relativeTime } from "../lib/relativeTime";
+import { allActionsMenu, leafActions, type MenuEntry } from "../search/menu";
+import { Highlight, snippetAround } from "../search/Highlight";
+import { currentView, initialSearch, searchReducer } from "../search/state";
+import { useNoteBrowse } from "../search/useNoteBrowse";
+import { useOrderedQuery } from "../search/useOrderedQuery";
 import { Icon, type IconName } from "./icons";
 import { adjustSetting, filterSettings, SettingsList } from "./SettingsView";
 import { Keys } from "./Keys";
@@ -23,8 +39,6 @@ export interface PanelAction {
   run?: () => void;
   push?: PanelViewName;
 }
-
-type LoadStatus = "loading" | "loaded" | "error";
 
 export type PanelViewName = "root" | "format" | "heading" | "copyAs" | "export" | "browse" | "deleted" | "settings";
 
@@ -44,15 +58,38 @@ interface CommandPanelProps {
   /** Settles once the note is deleted or the confirmation is cancelled. */
   onPermanentlyDelete: (id: NoteId) => Promise<void>;
   onPreview: (note: rpc.DeletedItem) => void;
+  /** Search's "New note ‘query’": a new note that starts with the query. */
+  onCreateNote: (title: string) => void;
 }
 
+/** The key actions row (SPEC §7): five fixed chips, by action id, with their short names. */
+const KEY_ACTIONS: { id: string; label: string; icon: IconName }[] = [
+  { id: "new", label: "New", icon: "edit" },
+  { id: "pin", label: "Pin", icon: "pin" },
+  { id: "deeplink", label: "Copy link", icon: "link" },
+  { id: "terminal", label: "Terminal", icon: "terminal" },
+  { id: "settings", label: "Settings", icon: "sliders" },
+];
+
+/** Matching actions shown under the notes while typing. */
+const MATCHING_ACTIONS = 4;
+
+/** One row of the left-hand list. */
+type Row =
+  | { kind: "note"; note: NoteSummary }
+  | { kind: "action"; action: PanelAction; divider?: boolean }
+  | { kind: "submenu"; entry: Extract<MenuEntry, { kind: "submenu" }> }
+  | { kind: "create" };
+
+const shortDate = (time: number) => new Date(time).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
 const PLACEHOLDERS: Record<PanelViewName, string> = {
-  root: "Search for actions…",
+  root: "Search actions",
   format: "Format as…",
   heading: "Heading…",
   copyAs: "Copy as…",
   export: "Export as…",
-  browse: "Search notes…",
+  browse: "Search notes or type > for actions",
   deleted: "Search deleted notes…",
   settings: "Search settings…",
 };
@@ -71,160 +108,115 @@ function filterActions(actions: PanelAction[], query: string): PanelAction[] {
 }
 
 export function CommandPanel(props: CommandPanelProps) {
-  const [stack, setStack] = useState<PanelViewName[]>([props.initial]);
-  const [query, setQuery] = useState("");
-  const [index, setIndex] = useState(0);
-  const [browse, setBrowse] = useState<{ items: NoteSummary[]; cursor: string | null; loading: boolean }>({
-    items: [],
-    cursor: null,
-    loading: false,
-  });
-  // Empty states wait for the first answer, so an empty list never flashes before the rows arrive.
-  const [deleted, setDeleted] = useState<{ items: rpc.DeletedItem[]; status: LoadStatus }>({
-    items: [],
-    status: "loading",
-  });
-  // Rows already shown stay through a later load or failure; only an empty list shows the status.
-  const [browseStatus, setBrowseStatus] = useState<LoadStatus>("loading");
+  const [state, dispatch] = useReducer(searchReducer, props.initial, initialSearch);
+  const { query } = state;
+  const view = currentView(state);
+  const { api, currentId } = props;
+  const split = view === "browse" || view === "root";
+  const inSubmenu = state.submenu.open;
   const [version, setVersion] = useState(0);
+  const refresh = () => setVersion((v) => v + 1);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
 
-  // The panel grows out of the toolbar button that stands for its first view: Browse Notes for
-  // browse, Actions for everything else. Measured once, so moving between views keeps the origin.
-  useLayoutEffect(() => {
-    const panel = panelRef.current;
-    const button = document.querySelector(`[data-anchor="${props.initial === "browse" ? "browse" : "actions"}"]`);
-    if (!panel || !button) return;
-    // Layout positions, not the bounding box: the entrance animation already scales the panel.
-    const parentLeft = (panel.offsetParent as HTMLElement | null)?.getBoundingClientRect().left ?? 0;
-    const b = button.getBoundingClientRect();
-    panel.style.setProperty("--origin-x", `${Math.round(b.left + b.width / 2 - parentLeft - panel.offsetLeft)}px`);
-  }, [props.initial]);
-  const view = stack[stack.length - 1] ?? "root";
-  const { api, currentId } = props;
-
-  // Focus in the same commit that shows the panel, so keys typed right after ⌘K land in the search field.
-  useLayoutEffect(() => inputRef.current?.focus(), [view]);
-
-  // The first page for the current search. Answers apply in request order: one that arrives after a
-  // newer answer is dropped, but every search typed so far still narrows the list as soon as it answers.
-  const requested = useRef(0);
-  const applied = useRef(0);
-  // Enter pressed before the answer for the latest search arrived: open its first note once it does.
-  const openWhenLoaded = useRef(false);
+  // Effects leave through props: the reducer only records that Search closed, or that a note should open.
   const callbacks = useRef(props);
   useLayoutEffect(() => {
     callbacks.current = props;
   });
-  // One request per search: StrictMode's second effect run in development would otherwise ask twice,
-  // and a failed answer could hide behind the repeat's success.
-  const browseKey = useRef<string | null>(null);
   useEffect(() => {
-    if (view !== "browse") {
-      browseKey.current = null;
-      return;
-    }
-    const key = JSON.stringify([query, version, currentId]);
-    if (browseKey.current === key) return;
-    browseKey.current = key;
-    const request = ++requested.current;
-    const filter = query.trim();
-    api.notes.browse({ filter: filter || undefined, limit: 50 }).then(
-      (page) => {
-        if (request < applied.current) return;
-        applied.current = request;
-        setBrowse({ items: page.items, cursor: page.nextCursor, loading: false });
-        setBrowseStatus("loaded");
-        if (openWhenLoaded.current && request === requested.current) {
-          openWhenLoaded.current = false;
-          const first = page.items[0];
-          if (first) {
-            callbacks.current.onClose();
-            callbacks.current.onOpenNote(first.id);
-          }
-          return;
-        }
-        if (!filter)
-          setIndex(
-            Math.max(
-              0,
-              page.items.findIndex((item) => item.id === currentId),
-            ),
-          );
-      },
-      () => {
-        if (request < applied.current) return;
-        applied.current = request;
-        if (request === requested.current) openWhenLoaded.current = false;
-        setBrowseStatus("error");
-      },
-    );
-  }, [api, currentId, view, query, version]);
+    if (state.closed) callbacks.current.onClose();
+  }, [state.closed]);
 
-  const loadMore = (cursor: string) => {
-    setBrowse((state) => ({ ...state, loading: true }));
-    api.notes.browse({ filter: query.trim() || undefined, limit: 50, cursor }).then(
-      (page) =>
-        setBrowse((state) =>
-          state.cursor === cursor
-            ? { items: [...state.items, ...page.items], cursor: page.nextCursor, loading: false }
-            : state,
-        ),
-      () => setBrowse((state) => ({ ...state, loading: false })),
-    );
-  };
+  // Focus in the same commit that shows the panel, so keys typed right after ⌘K land in the search field.
+  useLayoutEffect(() => inputRef.current?.focus(), [view]);
+
+  const filter = query.trim();
+  const pendingOpen = useRef(state.openFirstWhenLoaded);
+  useLayoutEffect(() => {
+    pendingOpen.current = state.openFirstWhenLoaded;
+  });
+  const notes = useNoteBrowse(
+    api,
+    view === "browse" ? JSON.stringify([filter, version, currentId]) : null,
+    filter,
+    (result, latest) => {
+      // Only the newest search may act: open its first note for an Enter pressed early, or land on the current note.
+      if (!latest) return;
+      const items = result.ok ? result.value.items : [];
+      if (pendingOpen.current && items[0]) {
+        callbacks.current.onClose();
+        callbacks.current.onOpenNote(items[0].id);
+      }
+      const current = items.findIndex((item) => item.id === currentId);
+      dispatch({ type: "answered", landOn: result.ok && !filter ? Math.max(0, current) : null });
+    },
+  );
+  const browse = { items: notes.items, cursor: notes.cursor };
+  const browseStatus = notes.status;
+  const retryBrowse = notes.retry;
 
   // Searching deleted notes filters the loaded list locally; only the view and refreshes refetch.
+  const deletedQuery = useOrderedQuery(view === "deleted" ? `deleted#${version}` : null, () => api.notes.listDeleted());
+  const deleted = { items: deletedQuery.value?.items ?? [], status: deletedQuery.status };
+  const retryDeleted = deletedQuery.retry;
+
+  const leaves = useMemo(() => leafActions(props.lists), [props.lists]);
+  const byId = useMemo(() => new Map(leaves.map((a) => [a.id, a])), [leaves]);
+
+  // The left-hand rows of the search views and the pushed action lists.
+  const rows = useMemo((): Row[] => {
+    if (view === "browse") {
+      const found: Row[] = notes.items.map((note) => ({ kind: "note", note }));
+      if (!filter) return found;
+      const actions: Row[] = filterActions(leaves, filter)
+        .slice(0, MATCHING_ACTIONS)
+        .map((action) => ({ kind: "action", action }));
+      return [...found, ...actions, { kind: "create" }];
+    }
+    if (view === "root") {
+      if (filter) return filterActions(leaves, filter).map((action) => ({ kind: "action", action }));
+      return allActionsMenu(props.lists).map((entry): Row =>
+        entry.kind === "action"
+          ? { kind: "action", action: entry.action, divider: entry.divider }
+          : { kind: "submenu", entry },
+      );
+    }
+    if (view === "deleted" || view === "settings") return [];
+    return filterActions(props.lists[view], filter).map((action) => ({ kind: "action", action }));
+  }, [view, filter, notes.items, leaves, props.lists]);
+
+  const deletedRows = useMemo(() => {
+    const q = filter.toLocaleLowerCase();
+    if (deleted.status === "error") return [];
+    return q ? deleted.items.filter((n) => `${n.title}\n${n.preview}`.toLocaleLowerCase().includes(q)) : deleted.items;
+  }, [deleted.items, deleted.status, filter]);
+
+  const settingRows = useMemo(() => (view === "settings" ? filterSettings(query) : []), [view, query]);
+
+  const rowCount = view === "deleted" ? deletedRows.length : view === "settings" ? settingRows.length : rows.length;
+  const selected = Math.min(state.index, Math.max(0, rowCount - 1));
+  const selectedRow = view === "deleted" || view === "settings" ? undefined : rows[selected];
+  const submenu = selectedRow?.kind === "submenu" ? selectedRow.entry : null;
+  const subSelected = submenu ? Math.min(state.submenu.index, Math.max(0, submenu.children.length - 1)) : 0;
+  const setIndex = (index: number) => dispatch({ type: "select", index });
+
+  // The highlighted note's full text for the preview, fetched once per note while the panel is open.
+  const previewNote = selectedRow?.kind === "note" ? selectedRow.note : null;
+  const [fullNotes, setFullNotes] = useState<Map<NoteId, Note>>(() => new Map());
   useEffect(() => {
-    if (view !== "deleted") return;
+    if (!previewNote || fullNotes.has(previewNote.id)) return;
     let stale = false;
-    api.notes.listDeleted().then(
-      (result) => {
-        if (!stale) setDeleted({ items: result.items, status: "loaded" });
+    api.notes.get(previewNote.id).then(
+      (note) => {
+        if (!stale) setFullNotes((map) => new Map(map).set(note.id, note));
       },
-      () => {
-        if (!stale) setDeleted((state) => ({ ...state, status: "error" }));
-      },
+      () => undefined,
     );
     return () => {
       stale = true;
     };
-  }, [api, view, version]);
-
-  const retryBrowse = () => {
-    setBrowseStatus("loading");
-    setVersion((v) => v + 1);
-  };
-
-  const retryDeleted = () => {
-    setDeleted((state) => ({ ...state, status: "loading" }));
-    setVersion((v) => v + 1);
-  };
-
-  const actions = useMemo(() => {
-    if (view === "browse" || view === "deleted" || view === "settings") return [];
-    return filterActions(props.lists[view], query);
-  }, [view, query, props.lists]);
-
-  const deletedRows = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase();
-    if (deleted.status === "error") return [];
-    return q ? deleted.items.filter((n) => `${n.title}\n${n.preview}`.toLocaleLowerCase().includes(q)) : deleted.items;
-  }, [deleted, query]);
-
-  const settingRows = useMemo(() => (view === "settings" ? filterSettings(query) : []), [view, query]);
-
-  const rowCount =
-    view === "browse"
-      ? browse.items.length
-      : view === "deleted"
-        ? deletedRows.length
-        : view === "settings"
-          ? settingRows.length
-          : actions.length;
-  const selected = Math.min(index, Math.max(0, rowCount - 1));
+  }, [api, previewNote, fullNotes]);
 
   // The selection glides into view on keyboard steps; a new view lands on it at once.
   const revealedView = useRef<PanelViewName | null>(null);
@@ -242,37 +234,40 @@ export function CommandPanel(props: CommandPanelProps) {
     if (row && row !== active && !row.contains(active)) row.focus({ preventScroll: true });
   }, [selected, view]);
 
-  const push = (next: PanelViewName) => {
-    setStack((s) => [...s, next]);
-    setQuery("");
-    setIndex(0);
-  };
-  const pop = () => {
-    if (stack.length <= 1) {
-      props.onClose();
-      return;
-    }
-    setStack((s) => s.slice(0, -1));
-    setQuery("");
-    setIndex(0);
-  };
+  const swap = (next: "browse" | "root") => dispatch({ type: "swap", view: next });
 
   const runAction = (action: PanelAction | undefined) => {
     if (!action || action.enabled === false) return;
     if (action.push) {
-      push(action.push);
+      dispatch({ type: "push", view: action.push });
       return;
     }
     props.onClose();
     action.run?.();
   };
-
-  const selectedNote =
-    view === "browse" ? browse.items[selected] : view === "deleted" ? deletedRows[selected] : undefined;
+  const openNote = (id: NoteId) => {
+    props.onClose();
+    props.onOpenNote(id);
+  };
+  const createNote = () => {
+    props.onClose();
+    props.onCreateNote(filter);
+  };
+  const activate = (row: Row | undefined) => {
+    if (!row) return;
+    if (row.kind === "note") openNote(row.note.id);
+    else if (row.kind === "action") runAction(row.action);
+    else if (row.kind === "create") createNote();
+    else dispatch({ type: "enterSubmenu" });
+  };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "ArrowDown") setIndex(rowCount ? (selected + 1) % rowCount : 0);
-    else if (event.key === "ArrowUp") setIndex(rowCount ? (selected - 1 + rowCount) % rowCount : 0);
+    const step = (delta: number) =>
+      inSubmenu && submenu
+        ? dispatch({ type: "moveInSubmenu", delta, count: submenu.children.length })
+        : dispatch({ type: "move", delta, count: rowCount });
+    if (event.key === "ArrowDown") step(1);
+    else if (event.key === "ArrowUp") step(-1);
     else if (
       view === "settings" &&
       (event.key === "Enter" || event.key === "ArrowLeft" || event.key === "ArrowRight")
@@ -287,30 +282,35 @@ export function CommandPanel(props: CommandPanelProps) {
       // Arrows on a row they do not adjust keep moving the caret in the search field.
       if (!patch && direction !== 0) return;
       if (patch) props.onSettings(patch);
+    } else if (event.key === "ArrowRight" && submenu && !inSubmenu) dispatch({ type: "enterSubmenu" });
+    else if (event.key === "ArrowLeft" && inSubmenu) dispatch({ type: "leaveSubmenu" });
+    else if (event.key === "Enter" && event.metaKey && view === "browse") {
+      if (filter) createNote();
+      else runAction(byId.get("new"));
     } else if (event.key === "Enter") {
-      if (view === "browse" && browseStatus === "error" && !browse.items.length) {
-        retryBrowse();
-      } else if (view === "browse" && applied.current < requested.current) {
-        // The list still shows an older search; act on the answer for what was typed.
-        openWhenLoaded.current = true;
-      } else if (view === "browse" && selectedNote) {
-        props.onClose();
-        props.onOpenNote(selectedNote.id);
-      } else if (view === "deleted") {
+      if (inSubmenu && submenu) runAction(submenu.children[subSelected]);
+      else if (view === "browse" && browseStatus === "error" && !browse.items.length) retryBrowse();
+      // The list still shows an older search; act on the answer for what was typed.
+      else if (view === "browse" && notes.pending()) dispatch({ type: "openFirstWhenLoaded" });
+      else if (view === "deleted") {
         const note = deletedRows[selected];
         if (deleted.status === "error") retryDeleted();
         else if (note) {
           props.onClose();
           props.onPreview(note);
         }
-      } else runAction(actions[selected]);
-    } else if (event.key === "Escape") {
-      if (query) setQuery("");
-      else pop();
-    } else if (view === "browse" && selectedNote && event.metaKey && event.shiftKey && event.code === "KeyP") {
-      void props.onTogglePin(selectedNote.id, selectedNote.pinned === null).then(() => setVersion((v) => v + 1));
-    } else if (view === "browse" && selectedNote && event.ctrlKey && !event.shiftKey && event.code === "KeyX") {
-      void props.onDeleteNote(selectedNote.id).then(() => setVersion((v) => v + 1));
+      } else activate(selectedRow);
+    } else if (event.key === "Escape") dispatch({ type: "escape" });
+    else if (event.key === "Backspace" && view === "root" && !query && !event.metaKey) swap("browse");
+    else if (view === "browse" && event.key === ">" && !query) swap("root");
+    else if (
+      view === "browse" &&
+      previewNote &&
+      ((event.metaKey && event.key === "Backspace") || (event.ctrlKey && !event.shiftKey && event.code === "KeyX"))
+    ) {
+      void props.onDeleteNote(previewNote.id).then(refresh);
+    } else if (view === "browse" && previewNote && event.metaKey && event.shiftKey && event.code === "KeyP") {
+      void props.onTogglePin(previewNote.id, previewNote.pinned === null).then(refresh);
     } else return;
     event.preventDefault();
     event.stopPropagation();
@@ -318,264 +318,394 @@ export function CommandPanel(props: CommandPanelProps) {
 
   const onScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const el = event.currentTarget;
-    if (
-      view === "browse" &&
-      browse.cursor &&
-      !browse.loading &&
-      el.scrollTop + el.clientHeight >= el.scrollHeight - 24
-    ) {
-      loadMore(browse.cursor);
-    }
+    if (view === "browse" && el.scrollTop + el.clientHeight >= el.scrollHeight - 24) notes.loadMore();
   };
 
-  const pinnedRows = browse.items.filter((n) => n.pinned !== null);
+  const q = query.trim();
+  const pinnedCount = browse.items.filter((n) => n.pinned !== null).length;
+  const noteHeader = (i: number) => {
+    if (q) return i === 0 ? "Notes" : null;
+    if (i === 0 && pinnedCount) return "Pinned";
+    return i === pinnedCount ? "Recent" : null;
+  };
+
+  const renderRow = (row: Row, i: number) => {
+    const isSelected = i === selected && !inSubmenu;
+    const common = {
+      role: "option" as const,
+      "aria-selected": i === selected,
+      tabIndex: i === selected ? 0 : -1,
+      onMouseDown: keepFocus,
+      onMouseEnter: () => setIndex(i),
+    };
+    if (row.kind === "note") {
+      const { note } = row;
+      const title = displayTitle({ title: note.title, text: note.preview });
+      // A match in the body shows the passage around it; otherwise the row says when it was edited.
+      const bodyMatch = q && !title.toLocaleLowerCase().includes(q.toLocaleLowerCase());
+      const header = noteHeader(i);
+      return (
+        <div key={note.id}>
+          {header ? <div className="menu-section">{header}</div> : null}
+          <div
+            {...common}
+            className={`panel-row${isSelected ? " is-selected" : ""}`}
+            data-testid="browse-row"
+            onClick={() => openNote(note.id)}
+          >
+            <Icon name="browse" />
+            <div className="panel-row-text">
+              <span className="panel-row-title">
+                <Highlight text={title} query={q} />
+              </span>
+              <span className="panel-row-subtitle">
+                {bodyMatch ? (
+                  <Highlight text={snippetAround(note.preview, q, 12)} query={q} />
+                ) : note.id === props.currentId ? (
+                  `Current · edited ${relativeTime(note.updatedAt)}`
+                ) : (
+                  `${relativeTime(note.lastAccessedAt ?? note.updatedAt)} · ${characterLabel(note.charCount)}`
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (row.kind === "create") {
+      return (
+        <div
+          key="create"
+          {...common}
+          className={`panel-row${isSelected ? " is-selected" : ""}`}
+          data-testid="search-create"
+          onClick={createNote}
+        >
+          <Icon name="edit" />
+          <span className="panel-row-title">{`New note “${q}”`}</span>
+          <Keys shortcut="⌘↩" />
+        </div>
+      );
+    }
+    if (row.kind === "submenu") {
+      const { entry } = row;
+      return (
+        <div key={entry.id}>
+          {entry.divider ? <div className="menu-divider" /> : null}
+          <div
+            {...common}
+            className={`panel-row${i === selected ? " is-selected" : ""}`}
+            data-testid={`submenu-${entry.id}`}
+            onClick={() => activate(row)}
+          >
+            <Icon name={entry.icon} />
+            <span className="panel-row-title">{entry.title}</span>
+            <Icon name="chevron" />
+          </div>
+        </div>
+      );
+    }
+    const { action } = row;
+    const previous = rows[i - 1];
+    // Matching actions under the notes get their own header; pushed lists divide their sections.
+    const header =
+      view === "browse" && previous?.kind === "note" ? "Actions" : view === "browse" && i === 0 ? "Actions" : null;
+    const divider =
+      row.divider || (!split && !q && previous?.kind === "action" && previous.action.section !== action.section);
+    return (
+      <div key={action.id}>
+        {header ? <div className="menu-section">{header}</div> : null}
+        {divider ? <div className="menu-divider" /> : null}
+        <ActionRow action={action} selected={isSelected} common={common} onRun={() => runAction(action)} />
+      </div>
+    );
+  };
+
+  const side = () => {
+    if (submenu) {
+      return (
+        <div className="search-submenu" data-testid="search-submenu" role="listbox" aria-label={submenu.title}>
+          <div className="menu-section">{submenu.title}</div>
+          {submenu.children.map((action, i) => (
+            <ActionRow
+              key={action.id}
+              action={action}
+              selected={inSubmenu && i === subSelected}
+              common={{
+                role: "option",
+                "aria-selected": inSubmenu && i === subSelected,
+                tabIndex: -1,
+                onMouseDown: keepFocus,
+                onMouseEnter: () => dispatch({ type: "selectInSubmenu", index: i }),
+              }}
+              onRun={() => runAction(action)}
+            />
+          ))}
+        </div>
+      );
+    }
+    if (!previewNote) return null;
+    const full = fullNotes.get(previewNote.id);
+    const title = displayTitle({ title: previewNote.title, text: previewNote.preview });
+    const text = full?.text ?? previewNote.preview;
+    // The body without its first line, which is the title above it.
+    const body = text.slice(text.indexOf("\n") >= 0 ? text.indexOf("\n") + 1 : text.length).trim();
+    return (
+      <div className="search-preview" data-testid="search-preview">
+        <div className="search-preview-title">
+          <Highlight text={title} query={q} />
+        </div>
+        <div className="search-preview-body">
+          <Highlight text={snippetAround(body, q, 80)} query={q} />
+        </div>
+        <div className="search-preview-meta">
+          <span>Created {shortDate(previewNote.createdAt)}</span>
+          <span>Edited {relativeTime(previewNote.updatedAt)}</span>
+          <span>{full ? wordLabel(countWords(full.text)) : characterLabel(previewNote.charCount)}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const keyActions = KEY_ACTIONS.map((chip) => ({ ...chip, action: byId.get(chip.id) })).filter(
+    (chip): chip is typeof chip & { action: PanelAction } => chip.action !== undefined,
+  );
 
   return (
     <div className="panel-backdrop" onMouseDown={props.onClose}>
       <div
-        ref={panelRef}
-        className="popover panel"
+        className={`popover panel${split ? " is-split" : ""}${inSubmenu && submenu ? " is-in-submenu" : ""}`}
         data-testid="command-panel"
         data-view={view}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={onKeyDown}
       >
-        <input
-          ref={inputRef}
-          className="panel-search"
-          value={query}
-          placeholder={PLACEHOLDERS[view]}
-          aria-label={PLACEHOLDERS[view]}
-          spellCheck={false}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setIndex(0);
-          }}
-        />
-        <div className="panel-list" key={view} ref={listRef} onScroll={onScroll} role="listbox">
-          {view === "browse" && !browse.items.length && browseStatus === "loading" ? <SkeletonRows /> : null}
-          {view === "browse" && !browse.items.length && browseStatus === "error" ? (
-            <EmptyState
-              icon="search"
-              title="Could Not Load Notes"
-              hint="Something went wrong while reading your notes."
-              error
-              action={{ title: "Try Again", run: retryBrowse }}
-            />
-          ) : null}
-          {view === "browse"
-            ? browse.items.map((note, i) => {
-                const header = i === 0 && pinnedRows.length ? "Pinned" : i === pinnedRows.length ? "Notes" : null;
-                const isCurrent = note.id === props.currentId;
-                return (
-                  <div key={note.id}>
-                    {header ? <div className="menu-section">{header}</div> : null}
-                    <div
-                      role="option"
-                      aria-selected={i === selected}
-                      className={`panel-row${i === selected ? " is-selected" : ""}`}
-                      data-testid="browse-row"
-                      tabIndex={i === selected ? 0 : -1}
-                      onMouseEnter={() => setIndex(i)}
-                      onClick={() => {
-                        props.onClose();
-                        props.onOpenNote(note.id);
-                      }}
-                    >
-                      {pinnedRows.length ? (
-                        <span className="panel-row-leading" aria-hidden="true">
-                          {note.pinned !== null ? <Icon name="pin" /> : null}
-                        </span>
-                      ) : null}
-                      <div className="panel-row-text">
-                        <span className="panel-row-title">
-                          {displayTitle({ title: note.title, text: note.preview })}
-                        </span>
-                        <span className="panel-row-subtitle">
-                          {isCurrent ? (
-                            <>
-                              <span className="dot" /> Current · {characterLabel(note.charCount)}
-                            </>
-                          ) : (
-                            `Opened ${relativeTime(note.lastAccessedAt ?? note.updatedAt)} · ${characterLabel(note.charCount)}`
-                          )}
-                        </span>
-                      </div>
-                      {i === selected ? (
-                        <span className="panel-row-buttons">
-                          <button
-                            type="button"
-                            className="icon-button"
-                            title={note.pinned === null ? "Pin Note (⇧⌘P)" : "Unpin Note (⇧⌘P)"}
-                            aria-label={note.pinned === null ? "Pin Note" : "Unpin Note"}
-                            tabIndex={-1}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void props
-                                .onTogglePin(note.id, note.pinned === null)
-                                .then(() => setVersion((v) => v + 1));
-                            }}
-                          >
-                            <Icon name="pin" />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button"
-                            title="Delete Note (⌃X)"
-                            aria-label="Delete Note"
-                            tabIndex={-1}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void props.onDeleteNote(note.id).then(() => setVersion((v) => v + 1));
-                            }}
-                          >
-                            <Icon name="trash" />
-                          </button>
-                        </span>
-                      ) : null}
-                    </div>
+        <div className="search-field">
+          {view === "root" ? (
+            <span className="search-token" data-testid="search-token">
+              Actions
+            </span>
+          ) : (
+            <Icon name="search" />
+          )}
+          <input
+            ref={inputRef}
+            className="panel-search"
+            value={query}
+            placeholder={PLACEHOLDERS[view]}
+            aria-label={PLACEHOLDERS[view]}
+            spellCheck={false}
+            onChange={(event) => dispatch({ type: "type", query: event.target.value })}
+          />
+        </div>
+        {view === "browse" && !q ? (
+          <div className="search-chips" data-testid="key-actions">
+            {keyActions.map(({ id, label, icon, action }) => (
+              <button
+                key={id}
+                type="button"
+                className="search-chip"
+                data-testid={`chip-${id}`}
+                aria-label={action.shortcut ? `${label} (${action.shortcut})` : label}
+                title={label}
+                aria-disabled={action.enabled === false}
+                tabIndex={-1}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => runAction(action)}
+              >
+                <Icon name={icon} />
+                <span className="search-chip-label">{label}</span>
+                {action.shortcut ? <kbd>{action.shortcut}</kbd> : null}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="search-chip is-outlined"
+              data-testid="chip-actions"
+              tabIndex={-1}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => swap("root")}
+            >
+              <span className="search-chip-label">All actions</span>
+              <kbd>⌘K</kbd>
+            </button>
+          </div>
+        ) : null}
+        <div className="search-body">
+          <div className="panel-list" key={view} ref={listRef} onScroll={onScroll} role="listbox">
+            {view === "browse" && !browse.items.length && browseStatus === "loading" ? <SkeletonRows /> : null}
+            {view === "browse" && !browse.items.length && browseStatus === "error" ? (
+              <EmptyState
+                icon="search"
+                title="Could Not Load Notes"
+                hint="Something went wrong while reading your notes."
+                error
+                action={{ title: "Try Again", run: retryBrowse }}
+              />
+            ) : null}
+            {view === "browse" && !browse.items.length && browseStatus === "loaded" && !q ? (
+              <EmptyState icon="search" title="No Notes Yet" hint="Notes you write show up here." />
+            ) : null}
+            {view !== "deleted" && view !== "settings" ? rows.map(renderRow) : null}
+            {view === "deleted" ? (
+              <>
+                {!query && deletedRows.length ? (
+                  <div className="panel-banner">
+                    Notes in Recently Deleted will be permanently removed after 60 days.
                   </div>
-                );
-              })
-            : null}
-          {view === "browse" && !browse.items.length && browseStatus === "loaded" ? (
-            <EmptyState
-              icon="search"
-              title="No Matching Notes"
-              hint={query.trim() ? "Try a different search." : "Notes you write show up here."}
-            />
-          ) : null}
-          {view === "deleted" ? (
-            <>
-              {!query && deletedRows.length ? (
-                <div className="panel-banner">Notes in Recently Deleted will be permanently removed after 60 days.</div>
-              ) : null}
-              {deleted.status === "loading" && !deletedRows.length ? <SkeletonRows /> : null}
-              {deleted.status === "error" ? (
-                <EmptyState
-                  icon="trash"
-                  title="Could Not Load Deleted Notes"
-                  hint="Something went wrong while reading Recently Deleted."
-                  error
-                  action={{ title: "Try Again", run: retryDeleted }}
-                />
-              ) : null}
-              {!deletedRows.length && deleted.status === "loaded" ? (
-                query ? (
-                  <EmptyState icon="search" title="No Matching Deleted Notes" hint="Try a different search." />
-                ) : (
+                ) : null}
+                {deleted.status === "loading" && !deletedRows.length ? <SkeletonRows /> : null}
+                {deleted.status === "error" ? (
                   <EmptyState
                     icon="trash"
-                    title="No Recently Deleted Notes"
-                    hint="Deleted notes stay here for 60 days before they are removed."
+                    title="Could Not Load Deleted Notes"
+                    hint="Something went wrong while reading Recently Deleted."
+                    error
+                    action={{ title: "Try Again", run: retryDeleted }}
                   />
-                )
-              ) : null}
-              {deletedRows.map((note, i) => (
-                <div
-                  key={note.id}
-                  role="option"
-                  aria-selected={i === selected}
-                  className={`panel-row${i === selected ? " is-selected" : ""}`}
-                  data-testid="deleted-row"
-                  tabIndex={i === selected ? 0 : -1}
-                  onMouseEnter={() => setIndex(i)}
-                  onClick={() => {
-                    props.onClose();
-                    props.onPreview(note);
-                  }}
-                >
-                  <div className="panel-row-text">
-                    <span className="panel-row-title">{displayTitle({ title: note.title, text: note.preview })}</span>
-                    <span className="panel-row-subtitle">{`Deleted ${relativeTime(note.deletedAt ?? note.updatedAt)} · ${characterLabel(note.charCount)}`}</span>
+                ) : null}
+                {!deletedRows.length && deleted.status === "loaded" ? (
+                  query ? (
+                    <EmptyState icon="search" title="No Matching Deleted Notes" hint="Try a different search." />
+                  ) : (
+                    <EmptyState
+                      icon="trash"
+                      title="No Recently Deleted Notes"
+                      hint="Deleted notes stay here for 60 days before they are removed."
+                    />
+                  )
+                ) : null}
+                {deletedRows.map((note, i) => (
+                  <div
+                    key={note.id}
+                    role="option"
+                    aria-selected={i === selected}
+                    className={`panel-row${i === selected ? " is-selected" : ""}`}
+                    data-testid="deleted-row"
+                    tabIndex={i === selected ? 0 : -1}
+                    onMouseEnter={() => setIndex(i)}
+                    onClick={() => {
+                      props.onClose();
+                      props.onPreview(note);
+                    }}
+                  >
+                    <div className="panel-row-text">
+                      <span className="panel-row-title">{displayTitle({ title: note.title, text: note.preview })}</span>
+                      <span className="panel-row-subtitle">{`Deleted ${relativeTime(note.deletedAt ?? note.updatedAt)} · ${characterLabel(note.charCount)}`}</span>
+                    </div>
+                    {i === selected ? (
+                      <span className="panel-row-buttons">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          title="Restore"
+                          aria-label="Restore"
+                          tabIndex={-1}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void props.onRecover(note.id).then(refresh);
+                          }}
+                        >
+                          <Icon name="restore" />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          title="Delete Permanently"
+                          aria-label="Delete Permanently"
+                          tabIndex={-1}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void props.onPermanentlyDelete(note.id).then(refresh);
+                          }}
+                        >
+                          <Icon name="trash" />
+                        </button>
+                      </span>
+                    ) : null}
                   </div>
-                  {i === selected ? (
-                    <span className="panel-row-buttons">
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title="Restore"
-                        aria-label="Restore"
-                        tabIndex={-1}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void props.onRecover(note.id).then(() => setVersion((v) => v + 1));
-                        }}
-                      >
-                        <Icon name="restore" />
-                      </button>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title="Delete Permanently"
-                        aria-label="Delete Permanently"
-                        tabIndex={-1}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void props.onPermanentlyDelete(note.id).then(() => setVersion((v) => v + 1));
-                        }}
-                      >
-                        <Icon name="trash" />
-                      </button>
-                    </span>
-                  ) : null}
-                </div>
-              ))}
-            </>
-          ) : null}
-          {view === "settings" ? (
-            <SettingsList
-              rows={settingRows}
-              settings={props.settings}
-              selected={selected}
-              grouped={!query.trim()}
-              onHover={setIndex}
-              onChange={props.onSettings}
-              onReset={props.onResetSettings}
-            />
-          ) : null}
-          {view !== "browse" && view !== "deleted" && view !== "settings" && !actions.length ? (
-            <EmptyState icon="search" title="No Matching Actions" />
-          ) : null}
-          {view === "settings" && !settingRows.length ? (
-            <EmptyState icon="search" title="No Matching Settings" />
-          ) : null}
-          {view !== "browse" && view !== "deleted" && view !== "settings"
-            ? actions.map((action, i) => {
-                const previous = actions[i - 1];
-                const divider = !query && previous !== undefined && action.section !== previous.section;
-                return (
-                  <div key={action.id}>
-                    {divider ? <div className="menu-divider" /> : null}
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={i === selected}
-                      aria-disabled={action.enabled === false}
-                      className={`panel-row${i === selected ? " is-selected" : ""}${action.destructive ? " is-destructive" : ""}${action.enabled === false ? " is-disabled" : ""}`}
-                      data-testid={`action-${action.id}`}
-                      onMouseEnter={() => setIndex(i)}
-                      onClick={() => runAction(action)}
-                      tabIndex={i === selected ? 0 : -1}
-                    >
-                      {action.icon ? <Icon name={action.icon} /> : null}
-                      <span className="panel-row-title">{action.title}</span>
-                      {action.push ? (
-                        <Icon name="chevron" />
-                      ) : action.shortcut ? (
-                        <Keys shortcut={action.shortcut} />
-                      ) : null}
-                    </button>
-                  </div>
-                );
-              })
-            : null}
+                ))}
+              </>
+            ) : null}
+            {view === "settings" ? (
+              <SettingsList
+                rows={settingRows}
+                settings={props.settings}
+                selected={selected}
+                grouped={!query.trim()}
+                onHover={setIndex}
+                onChange={props.onSettings}
+                onReset={props.onResetSettings}
+              />
+            ) : null}
+            {view !== "browse" && view !== "deleted" && view !== "settings" && !rows.length ? (
+              <EmptyState icon="search" title="No Matching Actions" />
+            ) : null}
+            {view === "settings" && !settingRows.length ? (
+              <EmptyState icon="search" title="No Matching Settings" />
+            ) : null}
+          </div>
+          {split ? <div className="search-side">{side()}</div> : null}
         </div>
+        {view === "browse" ? (
+          <div className="search-footer" data-testid="search-footer">
+            <span>
+              <kbd>↩</kbd> Open
+            </span>
+            <span>
+              <kbd>⌘↩</kbd> New note
+            </span>
+            <span>
+              <kbd>⌘⌫</kbd> Delete
+            </span>
+            <span className="search-footer-count">
+              {`${browse.items.length}${browse.cursor ? "+" : ""} ${browse.items.length === 1 && !browse.cursor ? "note" : "notes"}`}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
+interface RowProps {
+  role: "option";
+  "aria-selected": boolean;
+  tabIndex: number;
+  onMouseDown: (event: React.MouseEvent) => void;
+  onMouseEnter: () => void;
+}
+
+/** A click on a row keeps focus in the search field, so the keys still reach Search after a click. */
+const keepFocus = (event: React.MouseEvent) => event.preventDefault();
+
+/** An action row, shared by every list: icon, title, then its shortcut or a chevron when it opens a view. */
+function ActionRow({
+  action,
+  selected,
+  common,
+  onRun,
+}: {
+  action: PanelAction;
+  selected: boolean;
+  common: RowProps;
+  onRun: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      {...common}
+      aria-disabled={action.enabled === false}
+      className={`panel-row${selected ? " is-selected" : ""}${action.destructive ? " is-destructive" : ""}${action.enabled === false ? " is-disabled" : ""}`}
+      data-testid={`action-${action.id}`}
+      onClick={onRun}
+    >
+      {action.icon ? <Icon name={action.icon} /> : null}
+      <span className="panel-row-title">{action.title}</span>
+      {action.push ? <Icon name="chevron" /> : action.shortcut ? <Keys shortcut={action.shortcut} /> : null}
+    </button>
+  );
+}
 /**
  * Inert stand-ins for a first load that has not answered yet: two line rows built from the real row
  * classes, so they take the same height as the notes they make room for at every panel size and zoom.

@@ -25,7 +25,7 @@ Ship user-visible changes with their docs:
 - `README.md` Features, Usage, Install, or command tables, when behaviour, shortcuts, requirements, or install steps change.
 - `docs/install.md`, when install, update, backup, or uninstall steps change.
 - `docs/writing-notes.md`, when Markdown rendering or writing guidance changes.
-- `media/*.png`, when chrome the README shows changes (accent, toolbar, ⌘K icons or rows, Browse badges, hero note, panel geometry): refresh with `npm run shots:readme` as `CONTRIBUTING.md` Screenshots describes, and never copy Playwright baselines into `media/`.
+- `media/*.png`, when chrome the README shows changes (accent, toolbar, Search and its All actions, hero note, panel geometry): refresh with `npm run shots:readme` as `CONTRIBUTING.md` Screenshots describes, and never copy Playwright baselines into `media/`.
 - `CHANGELOG.md` only when the maintainer asks.
 
 Keep the README short; long guides belong under `docs/`.

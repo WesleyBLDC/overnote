@@ -5,6 +5,7 @@
  */
 import {
   buildNoteContent,
+  docFromPlainText,
   emptyDoc,
   loadDoc,
   mergeDocs,
@@ -492,9 +493,9 @@ export class NoteSession {
     return false;
   }
 
-  /** Creates an empty note and makes it current. `previous` is pushed on the back stack. */
-  private async createAndOpen(previous: NoteId | null): Promise<Note> {
-    const note = await this.api.notes.create(buildNoteContent(emptyDoc()));
+  /** Creates a note (empty, or starting with `title`) and makes it current. `previous` is pushed on the back stack. */
+  private async createAndOpen(previous: NoteId | null, title?: string): Promise<Note> {
+    const note = await this.api.notes.create(buildNoteContent(title ? docFromPlainText(title) : emptyDoc()));
     const windowData = await this.api.notes.windowData({ noteId: note.id });
     if (previous && previous !== note.id) this.history.visit(previous);
     this.apply({ ...windowData, current: windowData.current ?? note }, true);
@@ -503,13 +504,16 @@ export class NoteSession {
     return note;
   }
 
-  /** ⌘N: refuses on a blank note, otherwise creates an empty note. */
-  newNote(): Promise<boolean> {
-    return this.guard("create a note", () => this.newNoteNow());
+  /**
+   * ⌘N: refuses on a blank note, otherwise creates an empty note. With a title (Search's "New note ‘query’")
+   * the new note starts with that line, and a blank current note is no reason to refuse.
+   */
+  newNote(title?: string): Promise<boolean> {
+    return this.guard("create a note", () => this.newNoteNow(title?.trim() || undefined));
   }
 
-  private async newNoteNow(): Promise<boolean> {
-    if (this.state.current && this.isBlank()) {
+  private async newNoteNow(title?: string): Promise<boolean> {
+    if (!title && this.state.current && this.isBlank()) {
       this.notify("You already have an empty note", "info");
       return false;
     }
@@ -519,7 +523,7 @@ export class NoteSession {
       return false;
     }
     if (token !== this.transition) return false;
-    await this.createAndOpen(this.state.current?.id ?? null);
+    await this.createAndOpen(this.state.current?.id ?? null, title);
     return true;
   }
 

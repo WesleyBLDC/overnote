@@ -660,37 +660,27 @@ test("the top bar follows the editor board: a 46 point bar, the Close dot, and 3
   await expect(page.getByTestId("command-panel")).toHaveCount(0);
 });
 
-test("panels drop from the toolbar button that opened them, right aligned under the buttons", async ({ page }) => {
+test("Search opens centred from either toolbar button: notes from Notes, All actions from Actions", async ({
+  page,
+}) => {
   await openHarness(page, ["Anchored"]);
-  const geometry = async () =>
-    page.evaluate(() => {
-      const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
-      const panel = document.querySelector<HTMLElement>("[data-testid=command-panel]")!;
-      const p = panel.getBoundingClientRect();
-      const origin = parseFloat(getComputedStyle(panel).transformOrigin.split(" ")[0] ?? "0");
-      return {
-        originX: p.left + origin,
-        top: p.top,
-        right: p.right,
-        actions: box("[data-anchor=actions]"),
-        browse: box("[data-anchor=browse]"),
-        plus: box("[data-testid=new-note]"),
-      };
-    });
   const settled = () => page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+  const centre = () =>
+    page.evaluate(() => {
+      const app = document.querySelector("[data-testid=app]")!.getBoundingClientRect();
+      const p = document.querySelector("[data-testid=command-panel]")!.getBoundingClientRect();
+      return Math.round(p.left + p.width / 2 - (app.left + app.width / 2));
+    });
   await page.mouse.move(320, 200);
   await page.locator("[data-anchor=actions]").click();
+  await expect(page.getByTestId("command-panel")).toHaveAttribute("data-view", "root");
   await settled();
-  let g = await geometry();
-  expect(Math.abs(g.originX - (g.actions.left + g.actions.width / 2))).toBeLessThanOrEqual(1);
-  expect(g.top).toBeGreaterThan(g.actions.bottom);
-  expect(Math.abs(g.right - g.plus.right)).toBeLessThanOrEqual(1);
+  expect(await centre()).toBe(0);
   await page.keyboard.press("Escape");
   await page.locator("[data-anchor=browse]").click();
   await expect(page.getByTestId("command-panel")).toHaveAttribute("data-view", "browse");
   await settled();
-  g = await geometry();
-  expect(Math.abs(g.originX - (g.browse.left + g.browse.width / 2))).toBeLessThanOrEqual(1);
+  expect(await centre()).toBe(0);
 });
 
 test("toolbar drag regions cover the empty toolbar and exclude every button", async ({ page }) => {
@@ -1100,7 +1090,7 @@ test("Fill Left, Fill Right, Fill Screen, and Centre place the window from ‚åÉ‚å
     }
   }
 
-  // The action panel lists all four in its window section; running one closes it.
+  // All actions lists all four under Window; running one closes Search.
   for (const [id, title, placement] of [
     ["fillLeft", "Fill Left", "left"],
     ["fillRight", "Fill Right", "right"],
@@ -1109,6 +1099,7 @@ test("Fill Left, Fill Right, Fill Screen, and Centre place the window from ‚åÉ‚å
   ] as const) {
     if (placement === "center") await shrinkForCentre();
     await page.keyboard.press("Meta+k");
+    await page.getByTestId("submenu-window").hover();
     const action = page.getByTestId(`action-${id}`);
     await expect(action).toContainText(title);
     await action.click();

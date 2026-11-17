@@ -22,4 +22,5 @@ description: Take an Overnote change from a branch to a merged pull request with
    Always pass `--subject` and `--body`: GitHub's generated squash message appends a `Co-authored-by` trailer, which the maintainer's rules forbid.
    "Base branch was modified" means another PR just merged; wait a few seconds and run it again.
    When several PRs are ready, merge them in dependency order, and merge `origin/main` into each later branch and verify again before merging it.
+   A branch cut from another PR's branch conflicts with `main` once that PR squash-merges ("not mergeable"): merge `origin/main` into it, keep the branch side where the squash is the same content (`git diff <old tip> origin/main` is empty), push, and wait for CI again. Cutting the next branch from `main` after each merge avoids it.
 7. Record any lesson from this run as a rule or skill step (see "Learning" in `AGENTS.md`).
