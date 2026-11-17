@@ -69,12 +69,14 @@ test("resize reports follow content, zoom, and overlays", async ({ page }) => {
   await settle(page);
   expect((await reports()).length).toBe(count);
 
-  // The top 12 points stay free of controls for the native drag strip.
+  // The top bar's icons stay below the native 12 point drag strip.
   await page.mouse.move(300, 120);
-  const buttonTop = await page
+  const iconTop = await page
     .getByTestId("new-note")
-    .evaluate((el) => el.getBoundingClientRect().top - el.closest(".app")!.getBoundingClientRect().top);
-  expect(buttonTop).toBeGreaterThanOrEqual(12);
+    .evaluate(
+      (el) => el.querySelector(".icon")!.getBoundingClientRect().top - el.closest(".app")!.getBoundingClientRect().top,
+    );
+  expect(iconTop).toBeGreaterThanOrEqual(12);
 });
 
 test("the minimum size is the bars plus one line at the current zoom, never below 405 x 197", async ({ page }) => {
@@ -265,13 +267,12 @@ test("the first line renders exactly like body text and still names the note", a
   await expect(page.getByTestId("title")).toHaveText("Say Hello");
   await expect.poll(async () => String((await lastSave(page)).title)).toBe("Say Hello");
 
-  // An empty note shows the placeholder in plain body style and a quiet "Untitled".
+  // An empty note shows the placeholder in plain body style and names itself "Untitled".
   await openHarness(page);
   await expect(editor(page).locator(":scope > p")).toHaveAttribute("data-placeholder", "Start writing…");
   await expect(page.getByTestId("title")).toHaveText("Untitled");
-  await expect(page.getByTestId("title")).toHaveClass(/is-untitled/);
   await page.keyboard.type("T");
-  await expect(page.getByTestId("title")).not.toHaveClass(/is-untitled/);
+  await expect(page.getByTestId("title")).toHaveText("T");
 });
 
 test("decorations, chrome, and panels never churn window.resize reports", async ({ page }) => {
@@ -349,7 +350,7 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
     page.evaluate(() => {
       const css = (sel: string) => getComputedStyle(document.querySelector(sel)!);
       return {
-        chrome: `${css(".toolbar-actions").transitionDuration} ${css(".toolbar-actions").transitionTimingFunction}`,
+        chrome: `${css(".tooltip").transitionDuration} ${css(".tooltip").transitionTimingFunction}`,
         panel: document.querySelector("[data-testid=command-panel]")
           ? `${css("[data-testid=command-panel]").animationName} ${css("[data-testid=command-panel]").animationDuration}`
           : "",
@@ -617,39 +618,27 @@ test("the top bar follows the editor board: a 46 point bar, the Close dot, and 3
     expect(w).toBeCloseTo(30, 1);
     expect(h).toBeCloseTo(30, 1);
   }
-  // Controls stay clear of the helper's resize zones: 10 points along edges, 24 point squares at corners.
-  // Close is measured by its visible dot, which sits on the corner square's lower edge (within a point);
-  // its hit area keeps the 28 point floor and only stays out of the edge zone.
+  // What you aim at stays clear of the helper's resize zones (10 points along edges, 24 point squares at the
+  // bottom corners, 12 point squares at the top corners): the top bar's visible glyphs, and the footer's buttons.
+  // The top bar's hit areas may reach a point or two into the top edge zone, where the helper takes the pointer.
   const clearance = await page.evaluate(() => {
     const app = document.querySelector("[data-testid=app]")!.getBoundingClientRect();
     const targets = [
-      ...document.querySelectorAll(
-        "[data-testid=toolbar] button:not([data-testid=close]), [data-testid=footer] button",
-      ),
+      ...document.querySelectorAll("[data-testid=close-dot], .toolbar-actions .icon, [data-testid=footer] button"),
     ];
-    const close = document.querySelector("[data-testid=close]")!;
-    const closeBox = close.getBoundingClientRect();
-    const dot = document.querySelector("[data-testid=close-dot]")!.getBoundingClientRect();
-    return [
-      {
-        name: "Close",
-        edge: Math.min(closeBox.left - app.left, closeBox.top - app.top),
-        inCorner: dot.top - app.top < 23,
-      },
-      ...targets.map((el) => {
-        const r = el.getBoundingClientRect();
-        const left = r.left - app.left;
-        const top = r.top - app.top;
-        const right = app.right - r.right;
-        const bottom = app.bottom - r.bottom;
-        const inCorner = Math.min(left, right) < 24 && Math.min(top, bottom) < 24;
-        return {
-          name: el.getAttribute("aria-label") ?? el.textContent,
-          edge: Math.min(left, top, right, bottom),
-          inCorner,
-        };
-      }),
-    ];
+    return targets.map((el) => {
+      const r = el.getBoundingClientRect();
+      const left = r.left - app.left;
+      const top = r.top - app.top;
+      const right = app.right - r.right;
+      const bottom = app.bottom - r.bottom;
+      const corner = top < bottom ? 12 : 24;
+      return {
+        name: el.closest("button")?.getAttribute("aria-label") ?? el.textContent,
+        edge: Math.min(left, top, right, bottom),
+        inCorner: Math.min(left, right) < corner && Math.min(top, bottom) < corner,
+      };
+    });
   });
   for (const c of clearance) {
     expect(c.edge, String(c.name)).toBeGreaterThanOrEqual(10);
@@ -787,12 +776,18 @@ test("toolbar drag regions cover the empty toolbar and exclude every button", as
   await verify();
 });
 
-test("hover chrome and the Close control", async ({ page }) => {
+test("the top bar shows at rest, centred in 46 points, and Close hides the panel", async ({ page }) => {
   await openHarness(page, ["Text"]);
   await page.mouse.move(320, 700);
-  await expect(page.getByTestId("close")).toHaveCSS("opacity", "0");
-  await page.getByTestId("title").hover();
   await expect(page.getByTestId("close")).toHaveCSS("opacity", "1");
+  await expect(page.locator(".toolbar-actions")).toHaveCSS("opacity", "1");
+  // Board 04: the buttons sit on the bar's centre line, the last one 12 points from the right edge.
+  const geometry = await page.evaluate(() => {
+    const bar = document.querySelector(".toolbar")!.getBoundingClientRect();
+    const last = document.querySelector("[data-testid=new-note]")!.getBoundingClientRect();
+    return { height: bar.height, centre: last.top + last.height / 2 - bar.top, right: bar.right - last.right };
+  });
+  expect(geometry).toEqual({ height: 46, centre: 23, right: 12 });
   await page.getByTestId("close").click();
   await expect.poll(async () => (await calls(page, "window.hide")).length).toBe(1);
 });

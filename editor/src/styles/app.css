@@ -141,16 +141,6 @@ kbd {
   background: var(--bg-panel);
 }
 
-/* Chrome shows only while the pointer is over the panel. Opacity only, so nothing shifts. */
-.chrome {
-  transition: opacity var(--duration-fast) var(--ease-out);
-}
-
-.app:not(:hover) .chrome {
-  opacity: 0;
-  pointer-events: none;
-}
-
 .app:not(:hover) .format-bar {
   opacity: 0.3;
 }
@@ -207,9 +197,9 @@ kbd {
 }
 
 /*
- * The helper's invisible drag strip covers the top 12 points; keep it free of controls.
- * Close, the title, and the buttons share one row, centred in the 34 points under the strip.
- * Everything in the toolbar that is not a control drags the window (window.setDragRegions).
+ * The top bar (board 04): 46 points, Close inset 16 on the left, the four buttons inset 12 on the right, all on
+ * the bar's centre line, always shown. The helper's 12 point drag strip and 12 point top corner squares stay
+ * clear of the icons. Everything in the bar that is not a control drags the window (window.setDragRegions).
  */
 .toolbar {
   position: relative;
@@ -220,7 +210,7 @@ kbd {
   align-items: center;
   gap: var(--space-2);
   min-height: var(--topbar-height);
-  padding: var(--drag-strip) var(--topbar-inset-right) 0 var(--topbar-inset-left);
+  padding: 0 var(--topbar-inset-right) 0 var(--topbar-inset-left);
   -webkit-user-select: none;
   user-select: none;
 }
@@ -246,10 +236,10 @@ kbd {
 /* No repeated title while the note shows its own first line; it fades in once that line scrolls away. */
 .toolbar-title {
   margin: 0;
-  font-size: var(--font-size-secondary);
-  font-weight: var(--font-weight-heading);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-secondary);
   line-height: var(--topbar-button);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -259,10 +249,6 @@ kbd {
 
 .app[data-scroll~="title"] .toolbar-title {
   opacity: 1;
-}
-
-.toolbar-title.is-untitled {
-  color: var(--text-tertiary);
 }
 
 .toolbar-leading {
@@ -293,18 +279,16 @@ kbd {
   stroke-width: var(--topbar-stroke);
 }
 
-/* The tooltip pill: the button's name and its shortcut, shown after a short hover. */
+/* The tooltip pill: the button's name and its shortcut, 6 points under the button, shown after a short hover. */
 .tooltip {
   position: absolute;
-  top: calc(100% + var(--space-1));
+  top: calc(100% + var(--space-1) + var(--space-0));
   right: 0;
   z-index: 30;
-  padding: calc(4rem / 14) calc(8rem / 14);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-chip);
   background: var(--tooltip-bg);
-  box-shadow:
-    0 0 0 0.5px var(--tooltip-ring),
-    var(--shadow-small);
+  box-shadow: 0 0 0 0.5px var(--tooltip-ring);
   color: var(--text);
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-secondary);
@@ -312,11 +296,12 @@ kbd {
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--duration-pop) var(--ease-out);
+  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .tooltip kbd {
   margin-left: var(--space-0);
+  font-family: var(--font-mono);
   color: var(--tooltip-key);
 }
 
@@ -889,16 +874,13 @@ html[data-high-zoom="true"] .find-bar {
  */
 .panel {
   --panel-gap: 0.6rem;
-  top: calc(var(--drag-strip) + var(--topbar-button) + var(--panel-gap));
+  top: calc(var(--topbar-button-bottom) + var(--panel-gap));
   right: var(--topbar-inset-right);
   display: flex;
   flex-direction: column;
   width: min(var(--panel-width), calc(100% - 2 * var(--topbar-inset-right)));
   /* Inside the panel, whatever its size: the list scrolls when the panel is short. */
-  max-height: min(
-    30rem,
-    calc(100% - var(--drag-strip) - var(--topbar-button) - var(--panel-gap) - var(--dropdown-inset))
-  );
+  max-height: min(30rem, calc(100% - var(--topbar-button-bottom) - var(--panel-gap) - var(--dropdown-inset)));
   padding: 0 var(--space-2) var(--space-2);
   overflow: hidden;
   transform-origin: var(--origin-x, calc(100% - 3rem)) 0;

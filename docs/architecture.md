@@ -303,10 +303,10 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
   Each dropdown opens next to its anchor on its preferred side when it fits there, else on the side with more room, capped to that room so it scrolls inside, and slides sideways to stay inside.
   All of them keep clear of the drag strip and of the 10 pt resize zones.
 - The helper provides a standard Edit menu (⌘C, ⌘X, ⌘V, ⌘Z, ⇧⌘Z, ⌘A) and maps ⇧⌘V to a real paste event in the web view; the editor turns that paste into plain text and never reads the clipboard itself.
-- The panel is borderless: the editor draws its own Close control (`window.hide`) and the hover-only chrome. ⌘W hides the panel (helper menu item, like closing a window in any app).
-- The helper gives the borderless panel generous resize hit zones: 10 pt along edges and 24 pt squares at corners, with the matching resize cursors.
+- The panel is borderless: the editor draws its own Close control (`window.hide`) and the top bar, always shown. ⌘W hides the panel (helper menu item, like closing a window in any app).
+- The helper gives the borderless panel generous resize hit zones: 10 pt along edges, 24 pt squares at the bottom corners, and 12 pt squares at the top corners (so the top bar's last button, 12 pt from the edge, stays clickable), with the matching resize cursors.
   The top 10 pt of the drag strip is a resize zone.
-  Keep interactive controls at least 24 pt from the panel corners.
+  Keep interactive controls at least 24 pt from the bottom corners and 12 pt from the top corners.
 - The panel is resizable (`.resizable`) and reports the standard window subrole (`AXStandardWindow`) to Accessibility, not the system dialog subrole a non activating panel gets by default, so system tiling and window managers can place and size it like an app window.
   Drags in the drag regions and the drag strip hand off to the window server (`performDrag`), the system's own window move.
   A frame the helper did not set itself (system tiling, a window manager through Accessibility, the system's own sliver of edge resize) is kept as the person's resize: it is stored like a drag in the resize zones, and a new height turns windowAutoSize off.
