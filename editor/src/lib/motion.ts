@@ -1,6 +1,6 @@
 /** Motion helpers that respect the reduced motion preference and read durations from the CSS tokens. */
 
-export type MotionToken = "--motion-fast" | "--motion" | "--motion-slow";
+export type MotionToken = "--duration-pop" | "--duration-fast" | "--duration-slide";
 
 export function prefersReducedMotion(): boolean {
   return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;

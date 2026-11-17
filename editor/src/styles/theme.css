@@ -1,16 +1,23 @@
 /*
- * Overnote theme: every color, type, size, spacing, radius, and motion token lives here.
- * Colors are the Graphite theme from the branding guide: neutral graphite surfaces, with near black (light)
- * or near white (dark) as the accent. Components refer to these tokens only, never to raw color values.
- * The guide's tokens come first, exactly as the guide gives them; the tokens after them are Overnote's own,
- * derived from the guide's palette.
- * Rules from the guide: links are --accent-strong with an underline in --link-underline; an active button is an
+ * Overnote theme: every color, type, size, spacing, radius, and motion token lives here, and components refer to
+ * these tokens only, never to raw values.
+ *
+ * Three parts:
+ * 1. The finalized design's tokens (design/overnote/tokens/theme.css), with the same names and values. Sizes are
+ *    written in rem so ⌘= and ⌘- zoom scales them; at 100% (1rem = 14 px) each one equals the design's px value.
+ * 2. Overnote's own tokens, derived from the design's palette and sizes, for what the design leaves to the app.
+ * 3. Legacy tokens kept only until the design task that replaces them lands; each one names that task.
+ *
+ * Rules from the design: links are --accent-strong with an underline in --link-underline; an active button is an
  * --accent-soft fill with an --accent-strong icon, and hover is --accent-soft at two thirds strength; text under
- * 14 px is never lighter than --text-tertiary.
+ * 14 px is never lighter than --text-tertiary; terminal ANSI blue and magenta map to --accent-strong.
  */
 
-/* Geist and Geist Mono (SIL Open Font License 1.1, see THIRD_PARTY_NOTICES.md), bundled with the editor build. */
-/* block: the panel stays hidden until the editor is ready, so the fallback face is never painted. */
+/*
+ * Geist and Geist Mono (SIL Open Font License 1.1, see THIRD_PARTY_NOTICES.md), bundled with the editor build.
+ * The design's files plus the two italic faces, so italic text never falls back to a slanted roman.
+ * block, not the design's swap: the panel stays hidden until the editor is ready, so the fallback face never paints.
+ */
 @font-face {
   font-family: "Geist";
   src: url("../fonts/Geist-Variable.woff2") format("woff2");
@@ -43,15 +50,15 @@
   font-display: block;
 }
 
+/* ==== 1. The design's tokens ==== */
+
 :root {
   color-scheme: light dark;
-  --zoom: 1;
 
-  /* ---- Graphite: type ---- */
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* ---- Graphite: light ---- */
+  /* ---- colors: light ---- */
   --bg-panel: #fbfbfc;
   --bg-raised: #ffffff;
   --bg-sunken: #f1f1f3;
@@ -74,32 +81,106 @@
   --success: #1f7a45;
   --warning: #9a5b00;
   --island: rgba(255, 255, 255, 0.88);
-  /* For an island pinned open over the note; the format bar today always floats, so it uses --island. */
   --island-pinned: #ffffff;
   --island-blur: 20px;
+  --row-selected: rgba(24, 24, 27, 0.06);
+  --search-glass: rgba(255, 255, 255, 0.82);
+  --search-blur: 30px;
+  --shadow-menu: 0 16px 40px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
+  --shadow-search: 0 24px 60px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
+  --find-match: rgba(154, 91, 0, 0.16);
+  --find-current: #9a5b00;
+
+  /* ---- type ---- */
+  --font-size-title: calc(23rem / 14);
+  --font-weight-title: 600;
+  --tracking-title: -0.01em;
+  --font-size-heading: calc(18rem / 14);
+  --font-size-subheading: calc(15rem / 14);
+  --font-weight-heading: 600;
+  --font-size-body: calc(15rem / 14);
+  --line-height-body: 1.6;
+  --font-size-secondary: calc(13rem / 14);
+  --font-size-small: calc(11.5rem / 14);
+  --font-size-label: calc(11rem / 14);
+  --tracking-label: 0.06em;
+  --font-size-code: calc(13rem / 14);
+  --font-size-terminal: calc(12rem / 14);
+
+  /* ---- layout ---- */
+  --topbar-height: calc(46rem / 14);
+  --topbar-button: calc(30rem / 14);
+  --topbar-icon: calc(17rem / 14);
+  --note-padding-x: calc(28rem / 14);
+  --note-padding-bottom: calc(48rem / 14);
+  --corner-chip-height: calc(24rem / 14);
+  --corner-inset: calc(12rem / 14);
+  --corner-max-width: calc(110rem / 14);
+  --island-height: calc(28rem / 14);
+  --island-button: calc(24rem / 14);
+  --island-bottom: calc(10rem / 14);
+  --island-width: calc(176rem / 14);
+  /* Window geometry, in points: zoom never changes it. */
+  --panel-min-width: 440px;
+  --radius-panel: 14px;
+  --radius-menu: calc(12rem / 14);
+  --radius-search: calc(18rem / 14);
+  --radius-row: calc(8rem / 14);
+  --radius-chip: calc(6rem / 14);
+
+  /* ---- motion: fades 150 ms; durations a toast stays up ---- */
+  --duration-fast: 150ms;
+  --duration-toast: 2500ms;
+  --duration-toast-action: 6000ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-panel: #18181a;
+    --bg-raised: #232326;
+    --bg-sunken: #111113;
+    --bg-code: #26262a;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text: #ededef;
+    --text-secondary: #a1a1a8;
+    --text-tertiary: #8e8e95;
+    --accent: #e4e4e7;
+    --accent-strong: #ffffff;
+    --accent-soft: rgba(255, 255, 255, 0.12);
+    --on-accent: #18181a;
+    --selection: rgba(255, 255, 255, 0.18);
+    --focus-ring: rgba(255, 255, 255, 0.55);
+    --cursor: #e4e4e7;
+    --link-underline: rgba(255, 255, 255, 0.35);
+    --danger: #ff7b72;
+    --success: #7dd69a;
+    --warning: #e6b673;
+    --island: rgba(35, 35, 38, 0.88);
+    --island-pinned: #232326;
+    --island-blur: 20px;
+    --row-selected: rgba(255, 255, 255, 0.08);
+    --search-glass: rgba(38, 38, 42, 0.8);
+    --shadow-menu: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.16);
+    --shadow-search: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.18);
+    --find-match: rgba(230, 182, 115, 0.22);
+    --find-current: #e6b673;
+  }
+}
+
+/* ==== 2. Overnote's tokens ==== */
+
+:root {
+  --zoom: 1;
 
   /*
-   * ---- type scale ----
-   * The UI base is 14 px at 100% zoom (1rem), and zoom scales the root font size, so every size here is in rem:
-   * at 100% each one is exactly the guide's pixel size, and zoom scales them all together.
+   * ---- type ----
+   * The UI base is 14 px at 100% zoom (1rem), and zoom scales the root font size, so every size is in rem.
    */
   --font-size: 14px;
-  --type-title: calc(23rem / 14);
-  --type-heading: calc(18rem / 14);
-  --type-subheading: calc(16rem / 14);
-  --type-body: calc(15rem / 14);
-  --type-secondary: calc(13rem / 14);
-  --type-small: calc(11.5rem / 14);
-  --type-label: calc(11rem / 14);
-  --type-code: calc(13rem / 14);
-  --weight-heading: 600;
-  --weight-secondary: 500;
-  --weight-label: 600;
-  --line-height: 1.6;
+  --font-weight-secondary: 500;
+  --font-weight-label: 600;
   --line-height-code: 1.65;
-  /* Tracking tightens as size grows: 0 at body size, -1% at 20 px and above; uppercase labels open up. */
-  --tracking-title: -0.01em;
-  --tracking-label: 0.06em;
 
   /* ---- spacing and shape (rem, so zoom scales them) ---- */
   --space-0: 0.125rem;
@@ -121,28 +202,27 @@
   /* Interactive hit areas never shrink below 28 points on screen, whatever the zoom. */
   --hit-floor: 28px;
 
-  /* ---- motion: short and ease-out, so things arrive fast and settle softly ---- */
+  /*
+   * ---- motion: short and ease-out, so things arrive fast and settle softly ----
+   * --duration-fast (150 ms, fades) is the design's; pops such as Search's scale-in take 120 ms, and slides such as
+   * the find bar and toasts 180 ms.
+   */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
-  --motion-fast: 120ms;
-  --motion: 150ms;
-  --motion-slow: 180ms;
+  --duration-pop: 120ms;
+  --duration-slide: 180ms;
   --pop-offset: -0.3rem;
   --pop-scale: 0.98;
   --panel-scale: 0.92;
 
-  /* ---- colors derived from Graphite ---- */
+  /* ---- colors derived from the palette ---- */
   /* Hover is the active fill at two thirds strength. */
   --accent-soft-hover: color-mix(in srgb, var(--accent-soft) 67%, transparent);
   --shadow:
     0 0.6rem 2rem rgba(10, 12, 16, 0.16), 0 0.1rem 0.35rem rgba(10, 12, 16, 0.06), 0 0 0 0.5px rgba(10, 12, 16, 0.12);
   --shadow-small: 0 0.15rem 0.6rem rgba(10, 12, 16, 0.1), 0 0 0 0.5px rgba(10, 12, 16, 0.1);
-  /* Find highlights are --warning washes; the current match adds a solid --warning outline. */
-  --find-match: color-mix(in srgb, var(--warning) 20%, transparent);
-  --find-active: color-mix(in srgb, var(--warning) 40%, transparent);
-  --find-active-outline: var(--warning);
   --dialog-scrim: rgba(0, 0, 0, 0.12);
-  /* From the editor board: the quote bar and text, the task box ring, the count pill, tooltips, and the panel. */
+  /* Colors the design gives only as values: the quote bar and text, the task box ring. */
   --quote-bar: rgba(0, 0, 0, 0.18);
   --text-quote: #3a3d43;
   --checkbox-ring: #b4b6bb;
@@ -168,8 +248,8 @@
   --code-title: #1f5bb5;
   --code-attr: #7a5800;
 
-  /* The terminal drawer: a sunken well under the note, Graphite text, cursor, and selection. ANSI colors map to the
-     syntax and status colors in terminal/theme.ts, so they keep their contrast on the well in both modes. */
+  /* The terminal drawer: a sunken well under the note, with the palette's text, cursor, and selection. ANSI colors map
+     to the syntax and status colors in terminal/theme.ts, so they keep their contrast on the well in both modes. */
   --terminal-bg: var(--bg-sunken);
   --terminal-text: var(--text);
   --terminal-cursor: var(--cursor);
@@ -185,40 +265,26 @@
   --edge-zone: 10px;
   /* Dropdowns keep this far from the panel's sides and bottom: clear of the edge zones, and never touching. */
   --dropdown-inset: max(var(--edge-zone), var(--space-2));
-  /*
-   * The editor board's layout, in rem so zoom scales it (px at 100%): a 46 pt top bar with 30 pt icon buttons,
-   * note text inset 28 pt, 6 pt below the bar, and 60 pt of room at the bottom for the overlaid count pill and
-   * format island. One line note at 100%: 46 + 6 + 24 (one 15 px line at 1.6) + 60, about 136 points.
-   */
-  --toolbar-height: calc(46rem / 14);
-  --toolbar-inset-left: calc(16rem / 14);
-  --toolbar-button: calc(30rem / 14);
-  --toolbar-button-radius: calc(8rem / 14);
-  --toolbar-icon: calc(17rem / 14);
-  --toolbar-stroke: calc(1.6rem / 14);
+  /* The top bar: the window control inset 16, buttons 30 with 8 corners, icons drawn with a 1.6 stroke. */
+  --topbar-inset-left: calc(16rem / 14);
+  /* The board insets the last button 12 pt; it stays clear of the helper's 24 pt corner square. */
+  --topbar-inset-right: max(var(--corner-clearance), calc(12rem / 14));
+  --topbar-button-radius: calc(8rem / 14);
+  --topbar-stroke: calc(1.6rem / 14);
   --close-dot: calc(12rem / 14);
+  --close: #ec6559;
+  --close-glyph: rgba(0, 0, 0, 0.6);
+  /* Note text starts 6 pt below the top bar. */
   --content-top: calc(6rem / 14);
-  --content-bottom: calc(60rem / 14);
-  --footer-inset: calc(12rem / 14);
-  --count-height: calc(24rem / 14);
-  /* The format island stays this far from both sides, clear of the count pill. */
-  --count-room: calc(max(var(--corner-clearance), var(--footer-inset)) + 6rem);
-  --radius-pill: calc(6rem / 14);
-  --radius-panel: 14px;
-  /* Content that scrolls under the toolbar fades out over this height. */
+  /* Content that scrolls under the top bar fades out over this height. */
   --scroll-fade: 1.4rem;
   /* Format bar icons are about a third larger than the 1rem base, with hit targets to match. */
   --chrome-icon: 1.32rem;
   --chrome-hit: 2.25rem;
   /* Buttons in the panels and the popovers. */
   --button-size: 1.87rem;
-  /* The board insets the last button 12 pt; it stays clear of the helper's 24 pt corner square. */
-  --toolbar-inset-right: max(var(--corner-clearance), calc(12rem / 14));
-  --close: #ec6559;
-  --close-glyph: rgba(0, 0, 0, 0.6);
   /* In em, so it resolves against the note text where it is used. */
   --list-gutter: 1.55em;
-  --content-x: 2rem;
   /* Panels (⌘K, browse, settings): row heights and widths. */
   --row-height: 2.4rem;
   --row-height-tall: 3.2rem;
@@ -231,37 +297,9 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* ---- Graphite: dark ---- */
-    --bg-panel: #18181a;
-    --bg-raised: #232326;
-    --bg-sunken: #111113;
-    --bg-code: #26262a;
-    --border: rgba(255, 255, 255, 0.08);
-    --border-strong: rgba(255, 255, 255, 0.14);
-    --text: #ededef;
-    --text-secondary: #a1a1a8;
-    --text-tertiary: #8e8e95;
-    --accent: #e4e4e7;
-    --accent-strong: #ffffff;
-    --accent-soft: rgba(255, 255, 255, 0.12);
-    --on-accent: #18181a;
-    --selection: rgba(255, 255, 255, 0.18);
-    --focus-ring: rgba(255, 255, 255, 0.55);
-    --cursor: #e4e4e7;
-    --link-underline: rgba(255, 255, 255, 0.35);
-    --danger: #ff7b72;
-    --success: #7dd69a;
-    --warning: #e6b673;
-    --island: rgba(35, 35, 38, 0.88);
-    --island-pinned: #232326;
-    --island-blur: 20px;
-
-    /* ---- derived ---- */
     --shadow:
       0 0.6rem 2rem rgba(0, 0, 0, 0.45), 0 0.1rem 0.35rem rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
     --shadow-small: 0 0.15rem 0.6rem rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
-    --find-match: color-mix(in srgb, var(--warning) 22%, transparent);
-    --find-active: color-mix(in srgb, var(--warning) 40%, transparent);
     --dialog-scrim: rgba(0, 0, 0, 0.3);
     --quote-bar: rgba(255, 255, 255, 0.22);
     --text-quote: #d4d4d8;
@@ -282,12 +320,24 @@
   }
 }
 
-/* Reduced motion: nothing slides or scales, and state changes land at once. */
+/* ==== 3. Legacy tokens, each removed by the design task named beside it ==== */
+
+:root {
+  /* Task 10 (find): the current match becomes solid --find-current with --bg-panel text. */
+  --find-active: color-mix(in srgb, var(--warning) 40%, transparent);
+  --find-active-outline: var(--warning);
+  /* Tasks 4 and 5 (bottom row): room for the old count pill and island; the design's is --note-padding-bottom. */
+  --content-bottom: calc(60rem / 14);
+  /* Task 5 (format island): the old island's side clearance; the design centres it on the panel instead. */
+  --count-room: calc(max(var(--corner-clearance), var(--corner-inset)) + 6rem);
+}
+
+/* Reduced motion: nothing slides or scales, and state changes land at once. Toast durations are not motion. */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --motion-fast: 0ms;
-    --motion: 0ms;
-    --motion-slow: 0ms;
+    --duration-fast: 0ms;
+    --duration-pop: 0ms;
+    --duration-slide: 0ms;
     --pop-offset: 0rem;
     --pop-scale: 1;
     --panel-scale: 1;

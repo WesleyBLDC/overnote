@@ -1114,7 +1114,7 @@ export function App({ api }: { api: Api }) {
         root={app}
         selector=".panel-backdrop"
         className="panel-ghost"
-        token="--motion-fast"
+        token="--duration-pop"
       />
       {confirm ? <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} /> : null}
       <Notices notices={notices} onExited={dismissNotice} onDismiss={dismiss} />
