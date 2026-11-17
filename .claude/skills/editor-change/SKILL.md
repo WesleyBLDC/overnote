@@ -5,7 +5,8 @@ description: Change Overnote's Tiptap editor (schema, extensions, plugins, decor
 
 # Editor change
 
-Adapted from Tiptap's official agent skill (`ueberdosis/tiptap`, `.agents/skills/tiptap`, MIT), plus Overnote's own rules.
+Adapted from Tiptap's official agent skill, plus Overnote's own rules.
+The upstream skill, its setup reference, and the key Tiptap docs links (as Markdown) are in [`references/tiptap/`](references/tiptap/README.md); read the README there first.
 
 1. Match the installed version, not remembered examples.
    Read the installed source in `node_modules/@tiptap/*` (and `node_modules/prosemirror-flat-list` for lists), and the docs as Markdown: append `.md` to any `https://tiptap.dev/docs` page, or start from `https://tiptap.dev/docs/llms.txt`.
