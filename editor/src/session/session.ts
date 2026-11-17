@@ -601,16 +601,22 @@ export class NoteSession {
     const { nextNoteId, previousNoteId } = this.state;
     await this.api.notes.delete(note.id);
     this.history.remove(note.id);
-    this.notify("Note deleted", "info");
     // Deleted either way; what shows next is decided only if nothing else was opened meanwhile.
-    if (!live()) return true;
-    const target = nextNoteId ?? previousNoteId;
+    await this.showAfterDelete(nextNoteId ?? previousNoteId, live);
+    this.notify("Note deleted", "info");
+    return true;
+  }
+
+  private async showAfterDelete(target: NoteId | null, live: () => boolean): Promise<void> {
+    if (!live()) return;
     const windowData = target ? await this.api.notes.windowData({ noteId: target }) : null;
-    if (!live()) return true;
-    if (!windowData?.current) return this.createAndOpen(null, live).then(() => true);
+    if (!live()) return;
+    if (!windowData?.current) {
+      await this.createAndOpen(null, live);
+      return;
+    }
     this.apply(windowData, true);
     this.touch(windowData.current.id);
-    return true;
   }
 
   /** ⌃⇧X after the UI confirmed: everything goes to the trash, one fresh note remains. */
@@ -623,8 +629,9 @@ export class NoteSession {
     if (!(await this.flushBefore(live))) return false;
     await this.api.notes.deleteAll();
     this.history.clear();
-    this.notify("All notes moved to Recently Deleted", "info");
     await this.createAndOpen(null, live);
+    // Told once what shows next is settled, so the notice never runs ahead of the editor.
+    this.notify("All notes moved to Recently Deleted", "info");
     return true;
   }
 
