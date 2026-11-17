@@ -1,48 +1,77 @@
 /** Small React hooks for notices, settings, and content-driven window height. */
 import { DEFAULT_SETTINGS, type rpc, type Settings } from "@overnote/core";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
 import { exitFallbackMs } from "../lib/motion";
 import { placeDropdown, type Box, type PlacementOptions } from "../lib/placement";
-
-export type NoticeKind = "info" | "error";
-
-export interface Notice {
-  id: number;
-  message: string;
-  kind: NoticeKind;
-  /** Set when the notice's time is up: the stylesheet fades it out, then it is removed. */
-  leaving: boolean;
-}
+import { noticesReducer, type NoticeKind } from "./noticeState";
 
 /** How long a polite notice stays before it starts to leave. Error notices stay until dismissed. */
 export const NOTICE_MS = 2000;
 
 /**
- * Notices: JS decides when each one leaves (NOTICE_MS for a polite notice, the dismiss button for
- * an error), the stylesheet decides how (the .notice[data-leaving] transition on --duration-slide). A
- * notice is removed when its exit transition ends, or by a fallback timer derived from the same
- * token when no transition runs (reduced motion). A timed exit and a dismissal share one path.
+ * Notices: noticesReducer (noticeState.ts) holds the lifecycle, and this hook owns its timers. JS decides
+ * when each notice leaves (NOTICE_MS for a polite notice, the dismiss button for an error), the stylesheet
+ * decides how (the .notice[data-leaving] transition on --duration-slide). A notice is removed when its
+ * exit transition ends, or by a fallback timer derived from the same token when no transition runs
+ * (reduced motion). Each notice has at most one pending timer, cleared when it is replaced, when the
+ * notice goes, and on unmount, so a second dismiss schedules nothing.
  */
 export function useNotices() {
-  const [notices, setNotices] = useState<Notice[]>([]);
+  const [notices, dispatch] = useReducer(noticesReducer, []);
   const next = useRef(1);
-  const remove = useCallback((id: number) => setNotices((list) => list.filter((notice) => notice.id !== id)), []);
+  const timers = useRef(new Map<number, { leaving: boolean; handle: ReturnType<typeof setTimeout> }>());
+  const clear = useCallback((id: number) => {
+    const timer = timers.current.get(id);
+    if (timer) clearTimeout(timer.handle);
+    timers.current.delete(id);
+  }, []);
+  const schedule = useCallback(
+    (id: number, leaving: boolean, ms: number, run: () => void) => {
+      clear(id);
+      const handle = setTimeout(() => {
+        timers.current.delete(id);
+        run();
+      }, ms);
+      timers.current.set(id, { leaving, handle });
+    },
+    [clear],
+  );
+  const remove = useCallback(
+    (id: number) => {
+      clear(id);
+      dispatch({ type: "remove", id });
+    },
+    [clear],
+  );
   const dismiss = useCallback(
     (id: number) => {
-      setNotices((list) => list.map((notice) => (notice.id === id ? { ...notice, leaving: true } : notice)));
-      setTimeout(() => remove(id), exitFallbackMs("--duration-slide"));
+      if (timers.current.get(id)?.leaving) return;
+      dispatch({ type: "expire", id });
+      schedule(id, true, exitFallbackMs("--duration-slide"), () => dispatch({ type: "remove", id }));
     },
-    [remove],
+    [schedule],
   );
   const notify = useCallback(
     (message: string, kind: NoticeKind = "info") => {
       const id = next.current++;
-      setNotices((list) => [...list.slice(-2), { id, message, kind, leaving: false }]);
-      if (kind !== "error") setTimeout(() => dismiss(id), NOTICE_MS);
+      dispatch({ type: "add", id, message, kind });
+      if (kind !== "error") schedule(id, false, NOTICE_MS, () => dismiss(id));
     },
-    [dismiss],
+    [schedule, dismiss],
   );
+  // A notice pushed out by a newer one drops its timer; unmounting drops them all.
+  useEffect(() => {
+    const live = new Set(notices.map((notice) => notice.id));
+    for (const id of timers.current.keys()) if (!live.has(id)) clear(id);
+  }, [notices, clear]);
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending.values()) clearTimeout(timer.handle);
+      pending.clear();
+    };
+  }, []);
   return { notices, notify, remove, dismiss };
 }
 
