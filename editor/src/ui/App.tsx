@@ -949,7 +949,6 @@ export function App({ api }: { api: Api }) {
     >
       <Toolbar
         title={title}
-        untitled={blank}
         onClose={() => {
           session.saveInBackground();
           void api.window.hide().catch(() => undefined);

@@ -178,6 +178,8 @@
    * The UI base is 14 px at 100% zoom (1rem), and zoom scales the root font size, so every size is in rem.
    */
   --font-size: 14px;
+  /* 12.5 px: the faded title in the top bar, Search's chips, and toasts. */
+  --font-size-caption: calc(12.5rem / 14);
   --font-weight-secondary: 500;
   --font-weight-label: 600;
   --line-height-code: 1.65;
@@ -259,7 +261,6 @@
   --terminal-height: 360px;
 
   /* ---- window layout ---- */
-  --drag-strip: 12px;
   /* The helper's resize zones: 10 pt along edges, 24 pt squares at corners; controls stay outside. */
   --corner-clearance: 24px;
   --edge-zone: 10px;
@@ -267,10 +268,12 @@
   --dropdown-inset: max(var(--edge-zone), var(--space-2));
   /* The top bar: the window control inset 16, buttons 30 with 8 corners, icons drawn with a 1.6 stroke. */
   --topbar-inset-left: calc(16rem / 14);
-  /* The board insets the last button 12 pt; it stays clear of the helper's 24 pt corner square. */
-  --topbar-inset-right: max(var(--corner-clearance), calc(12rem / 14));
+  /* The last button sits 12 pt from the edge, clear of the helper's 12 pt top corner square. */
+  --topbar-inset-right: calc(12rem / 14);
   --topbar-button-radius: calc(8rem / 14);
   --topbar-stroke: calc(1.6rem / 14);
+  /* Where the top bar buttons end: popovers that hang from them start here. */
+  --topbar-button-bottom: calc((var(--topbar-height) + var(--topbar-button)) / 2);
   --close-dot: calc(12rem / 14);
   --close: #ec6559;
   --close-glyph: rgba(0, 0, 0, 0.6);

@@ -2,8 +2,6 @@ import { Icon, type IconName } from "./icons";
 
 interface ToolbarProps {
   title: string;
-  /** No text yet: the title is the "Untitled" fallback and is drawn quieter. */
-  untitled?: boolean;
   onClose: () => void;
   onActions: () => void;
   onBrowse: () => void;
@@ -48,25 +46,16 @@ function ToolbarButton({ icon, label, shortcut, onClick, anchor, testId, active 
 }
 
 /**
- * Top bar: Close on the left, an empty middle that drags the window, and the icon buttons on the right.
+ * Top bar: Close on the left, an empty middle that drags the window, and the icon buttons on the right, always shown.
  * The title fades into the middle only once the note's first line has scrolled away (useScrollEdges).
  */
-export function Toolbar({
-  title,
-  untitled,
-  onClose,
-  onActions,
-  onBrowse,
-  onNew,
-  terminalOpen,
-  onTerminal,
-}: ToolbarProps) {
+export function Toolbar({ title, onClose, onActions, onBrowse, onNew, terminalOpen, onTerminal }: ToolbarProps) {
   return (
     <header className="toolbar" data-testid="toolbar">
       <div className="toolbar-leading">
         <button
           type="button"
-          className="close-button chrome"
+          className="close-button"
           title="Close"
           aria-label="Close"
           data-testid="close"
@@ -79,10 +68,10 @@ export function Toolbar({
           </span>
         </button>
       </div>
-      <h1 className={`toolbar-title${untitled ? " is-untitled" : ""}`} data-testid="title" title={title}>
+      <h1 className="toolbar-title" data-testid="title" title={title}>
         {title}
       </h1>
-      <div className="toolbar-actions chrome">
+      <div className="toolbar-actions">
         <ToolbarButton
           icon="terminal"
           label="Terminal"
