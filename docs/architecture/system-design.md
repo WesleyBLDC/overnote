@@ -55,7 +55,7 @@ Details are in "App mode and handover" in [`../architecture.md`](../architecture
 - **The editor owns interaction state.**
   `NoteSession` (`editor/src/session/session.ts`) owns which note is open, autosave, history, and merging outside changes; the helper keeps only what must persist (current note id, settings, panel frame).
 - **The panel geometry rules are pure.**
-  `PanelGeometry` and `PanelSizing` in `OvernoteCore` compute placements and minimum sizes with no AppKit, so they are unit tested; `PanelController` applies them.
+  `PanelGeometry` and `PanelSizing` in `OvernoteCore` compute placements and minimum sizes, and `PanelShowState` and `PanelHeightState` hold the show and height rules (when a show waits for the first height report, what completes it, and temporary growth), all with no AppKit, so they are unit tested; `PanelController` applies them.
 - **`OvernoteCore` has no AppKit.**
   The Swift package splits into `OvernoteCore` (repository, dispatcher, socket, backups, lifecycle) and `OvernoteHelper` (the AppKit and WebKit shell).
   `OvernoteCore` talks to the window only through the `HelperHost` protocol, which `PanelController` implements in the app and `RecordingHost` implements for `--headless` runs and tests.
