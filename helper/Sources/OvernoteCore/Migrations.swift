@@ -5,12 +5,14 @@ import Foundation
 /// Each entry upgrades the schema from `version - 1` to `version`, inside one transaction
 /// together with the `user_version` bump. Append new versions; never edit shipped ones.
 enum Migrations {
-    struct Migration {
+    struct Migration: Sendable {
         let version: Int
         let sql: String
         /// Full text index statements for this version, run only when FTS5 with the trigram
         /// tokenizer is available in the linked SQLite.
         var ftsSQL: String? = nil
+        /// Values SQL cannot derive (the word counts), filled in the same transaction after `sql`.
+        var backfill: (@Sendable (SQLiteDatabase) throws -> Void)? = nil
     }
 
     static let all: [Migration] = [
@@ -70,6 +72,29 @@ enum Migrations {
                 END;
                 """
         ),
+        Migration(
+            version: 3,
+            sql: """
+                ALTER TABLE notes ADD COLUMN word_count INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE notes ADD COLUMN sort_created_neg INTEGER GENERATED ALWAYS AS (-created_at) VIRTUAL;
+                ALTER TABLE notes ADD COLUMN sort_words_neg INTEGER GENERATED ALWAYS AS (-word_count) VIRTUAL;
+                ALTER TABLE notes ADD COLUMN sort_title TEXT GENERATED ALWAYS AS (
+                  CASE WHEN title_fold = '' THEN 'untitled' ELSE substr(title_fold, 1, 100) END) VIRTUAL;
+                DROP INDEX notes_browse_order;
+                DROP INDEX notes_browse_page;
+                CREATE INDEX notes_opened_page   ON notes (deleted_at, sort_accessed_neg, id);
+                CREATE INDEX notes_modified_page ON notes (deleted_at, sort_updated_neg, id);
+                CREATE INDEX notes_created_page  ON notes (deleted_at, sort_created_neg, id);
+                CREATE INDEX notes_title_page    ON notes (deleted_at, sort_title, id);
+                CREATE INDEX notes_length_page   ON notes (deleted_at, sort_words_neg, id);
+                """,
+            backfill: { database in
+                let counts = try database.query("SELECT id, text FROM notes") { ($0.text(0), NoteText.wordCount($0.text(1))) }
+                for (id, count) in counts {
+                    try database.run("UPDATE notes SET word_count = ? WHERE id = ?", [.int(Int64(count)), .text(id)])
+                }
+            }
+        ),
     ]
 
     static var latestVersion: Int { all.last?.version ?? 0 }
@@ -102,6 +127,7 @@ enum Migrations {
                 if ftsAvailable, let ftsSQL = migration.ftsSQL {
                     try database.execute(ftsSQL)
                 }
+                try migration.backfill?(database)
                 // PRAGMA does not accept bound parameters; the value is an integer constant.
                 try database.execute("PRAGMA user_version = \(migration.version)")
             }

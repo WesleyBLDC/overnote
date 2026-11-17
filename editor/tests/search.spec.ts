@@ -69,3 +69,56 @@ test("Search: matches with actions and New note, > and the Actions token, submen
   await expect(page.getByTestId("action-duplicate")).toBeVisible();
   await expect(page.getByTestId("action-fillLeft")).toBeHidden();
 });
+
+test("Search sort: the pill's menu orders notes, the meta line follows it and persists; snippets come from the helper", async ({
+  page,
+}) => {
+  const filler = "lorem ipsum ".repeat(30);
+  await openHarness(page, ["Banana bread\n\none two three", `Apple notes\n\n${filler}the deep marker here`, "Cherry"]);
+  await page.mouse.move(0, 0);
+  await page.keyboard.press("Meta+p");
+  const pill = page.getByTestId("search-sort");
+  const titles = page.getByTestId("browse-row").locator(".panel-row-title");
+  const metas = page.getByTestId("browse-row").locator(".panel-row-subtitle");
+  await expect(pill).toHaveText("Modified ▾");
+  await expect(metas).toHaveText([
+    "Current · edited just now",
+    "Edited just now · 66 words",
+    "Edited just now · 5 words",
+  ]);
+
+  // Title runs A to Z, and the choice is stored as the searchSort setting.
+  await pill.click();
+  await page.getByRole("menuitemcheckbox", { name: "Title" }).click();
+  await expect(pill).toHaveText("Title ▾");
+  await expect(titles).toHaveText(["Apple notes", "Banana bread", "Cherry"]);
+  await expect
+    .poll(async () => (await calls(page, "settings.set")).at(-1)?.params)
+    .toEqual({ searchSort: { field: "title", direction: "asc", pinnedFirst: true } });
+
+  // Length puts the longest first and leads the meta line with the word count; the toggle reverses it in place.
+  await pill.click();
+  await page.getByRole("menuitemcheckbox", { name: "Length" }).click();
+  await expect(titles).toHaveText(["Apple notes", "Banana bread", "Cherry"]);
+  await expect(metas.first()).toHaveText("66 words · Edited just now");
+  await pill.click();
+  await page.getByRole("menuitemcheckbox", { name: "Longest first" }).click();
+  await expect(titles).toHaveText(["Cherry", "Banana bread", "Apple notes"]);
+  await expect(metas.first()).toHaveText("Current · 1 word");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".menu")).toHaveCount(0);
+
+  // Created reads as a date; the sort survives closing Search.
+  await pill.click();
+  await page.getByRole("menuitemcheckbox", { name: "Created" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("command-panel")).toHaveCount(0);
+  await page.keyboard.press("Meta+p");
+  await expect(pill).toHaveText("Created ▾");
+  await expect(metas.nth(1)).toHaveText(/^Created [A-Z][a-z]{2} \d{1,2} · \d+ words$/);
+
+  // A match past the row's preview still shows the passage around it, from the helper's snippet.
+  await page.keyboard.type("marker");
+  await expect(metas).toHaveText(["…the deep marker here"]);
+  await expect(metas.first().locator(".search-match")).toHaveText("marker");
+});

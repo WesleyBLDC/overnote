@@ -31,7 +31,7 @@ Press it again and it is gone.
 - Floating panel over full-screen apps and every Space; typing without stealing focus
 - Markdown as you type, `/` slash menu, emoji picker, a format island you can pin with Aa (⌥⌘,), and a corner count that switches between words and characters
 - Tasks (⌘↩), nested lists, syntax-highlighted code, find and replace (⌘F)
-- Search (⌘P): notes with a live preview, key actions, and every action behind ⌘K or `>`
+- Search (⌘P): notes with a live preview and match snippets, a sort menu (last opened, modified, created, title, length), key actions, and every action behind ⌘K or `>`
 - Pins (⇧⌘P, ⌘1–⌘9), history (⌘[ / ⌘])
 - Window placement: Fill Left / Right / Screen / Centre (⌃⌥ arrows, ⌘K, or the menu bar)
 - Terminal drawer under the note (⌃` or the toolbar), backed by a kept Herdr terminal when `hc` is installed, else your login shell

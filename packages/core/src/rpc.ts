@@ -3,6 +3,8 @@
  * Both the socket client (extension) and the bridge client (editor) use these.
  */
 import type {
+  BrowseItem,
+  BrowseSort,
   Millis,
   Note,
   NoteContent,
@@ -169,6 +171,19 @@ export interface ListResult {
   nextCursor: string | null;
 }
 
+/** Params for notes.browse (v3.7 adds the order; without it, last opened first with pinned notes on top). */
+export interface BrowseParams extends ListParams {
+  /** Default `{ field: "opened", direction: "desc" }`. A cursor is valid only for the order and filter that issued it. */
+  sort?: BrowseSort;
+  /** Default true: pinned notes first, in pin order. */
+  pinnedFirst?: boolean;
+}
+
+export interface BrowseResult {
+  items: BrowseItem[];
+  nextCursor: string | null;
+}
+
 export interface DeletedItem extends NoteSummary {
   markdown: string;
   rawContent: string;
@@ -251,7 +266,7 @@ export interface Methods {
   "notes.movePinnedUp": { params: { id: NoteId }; result: Empty };
   "notes.movePinnedDown": { params: { id: NoteId }; result: Empty };
   "notes.list": { params: ListParams; result: ListResult };
-  "notes.browse": { params: ListParams; result: ListResult };
+  "notes.browse": { params: BrowseParams; result: BrowseResult };
   "notes.listDeleted": { params: Empty; result: { items: DeletedItem[] } };
   "notes.count": { params: Empty; result: { count: number } };
   "notes.setCurrentNote": { params: { noteId: NoteId }; result: Empty };

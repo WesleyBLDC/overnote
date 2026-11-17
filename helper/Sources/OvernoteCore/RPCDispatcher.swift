@@ -294,8 +294,9 @@ public final class RPCDispatcher: Sendable {
             ).json
         case "notes.browse":
             return try repository.browse(
-                filter: try p.optionalString("filter"), limit: try p.limit(default: NotesRepository.defaultListLimit),
-                cursor: try p.optionalString("cursor")
+                filter: try p.optionalString("filter"),
+                order: try BrowseOrder(sort: p.values["sort"], pinnedFirst: try p.optionalBool("pinnedFirst") ?? true),
+                limit: try p.limit(default: NotesRepository.defaultListLimit), cursor: try p.optionalString("cursor")
             ).json
         case "notes.listDeleted":
             return ["items": .array(try repository.listDeleted().map(\.json))]

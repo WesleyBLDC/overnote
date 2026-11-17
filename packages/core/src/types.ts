@@ -43,7 +43,29 @@ export interface NoteSummary {
   lastAccessedAt: Millis | null;
 }
 
+/** A Search row (`notes.browse`): a list row plus its word count, and with a filter the passage around the first text match. */
+export interface BrowseItem extends NoteSummary {
+  /** Words of text (UAX #29 word-like segments, as countWords counts them). */
+  wordCount: number;
+  /** With a filter: the passage around the first match in text, starting up to 40 characters ahead of it on a word. */
+  snippet?: string;
+}
+
 export type CountMode = "characters" | "words";
+
+/** What Search orders notes by: Last opened, Modified, Created, Title, Length. */
+export type BrowseSortField = "opened" | "modified" | "created" | "title" | "length";
+
+export interface BrowseSort {
+  field: BrowseSortField;
+  /** "desc" is newest, longest, or Z to A first. */
+  direction: "asc" | "desc";
+}
+
+/** Search's persisted sort: the order, and whether pinned notes stay on top. */
+export interface SearchSort extends BrowseSort {
+  pinnedFirst: boolean;
+}
 
 /** Where `window.place` puts the panel inside one display, named exactly as the protocol names it on the wire. */
 export type PanelPlacement = "left" | "right" | "fill" | "center";
@@ -90,6 +112,8 @@ export interface Settings {
   panelFrame: PanelFrame | null;
   /** The terminal drawer. Default `{ open: false }`; the drawer height is a fixed 260 pt. */
   terminal: TerminalSettings;
+  /** Search's sort menu (v3.7). Default `{ field: "modified", direction: "desc", pinnedFirst: true }`. */
+  searchSort: SearchSort;
 }
 
 export interface TerminalSettings {
@@ -125,4 +149,5 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   countMode: "words",
   panelFrame: null,
   terminal: Object.freeze({ open: false }),
+  searchSort: Object.freeze({ field: "modified", direction: "desc", pinnedFirst: true }),
 });

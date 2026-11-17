@@ -16,7 +16,7 @@ export interface PlacementOptions {
   /** Space between the anchor and the dropdown. */
   gap: number;
   /** Which anchor edge the dropdown lines up with, before it is kept inside the bounds. */
-  align: "start" | "center";
+  align: "start" | "center" | "end";
 }
 
 export interface Placement {
@@ -55,7 +55,12 @@ export function placeDropdown(
 
   const maxWidth = Math.max(0, Math.floor(bounds.right - bounds.left));
   const width = Math.min(size.width, maxWidth);
-  const wanted = options.align === "center" ? (anchor.left + anchor.right - width) / 2 : anchor.left;
+  const wanted =
+    options.align === "center"
+      ? (anchor.left + anchor.right - width) / 2
+      : options.align === "end"
+        ? anchor.right - width
+        : anchor.left;
   const left = Math.max(bounds.left, Math.min(wanted, bounds.right - width));
   return { top: Math.round(top), left: Math.round(left), maxHeight, maxWidth, side };
 }

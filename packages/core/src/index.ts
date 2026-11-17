@@ -36,6 +36,10 @@ export type {
   PanelRect,
   RpcErrorPayload,
   TerminalSettings,
+  BrowseItem,
+  BrowseSort,
+  BrowseSortField,
+  SearchSort,
 } from "./types";
 export type { JSONContent } from "@tiptap/core";
 export * as rpc from "./rpc";

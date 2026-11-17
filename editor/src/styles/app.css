@@ -1048,6 +1048,21 @@ html[data-high-zoom="true"] .find-bar {
   color: var(--text);
 }
 
+/* The sort pill on the right of the field: the token's chip, 12 px, opening the sort menu. */
+.search-sort {
+  border: 0;
+  font-size: var(--font-size-pill);
+  font-weight: var(--font-weight-secondary);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: background-color var(--duration-pop) var(--ease-out);
+}
+
+.search-sort:hover,
+.search-sort[aria-expanded="true"] {
+  background: linear-gradient(var(--accent-soft-hover), var(--accent-soft-hover)), var(--accent-soft);
+}
+
 .panel-search,
 .panel-search:focus {
   height: 100%;

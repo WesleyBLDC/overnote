@@ -126,6 +126,8 @@ public struct Settings: Equatable, Sendable {
     public var panelFrame: PanelFrame?
     /// Whether the terminal drawer is open (`terminal: { open }`), so it reopens after a restart.
     public var terminalOpen = false
+    /// Search's sort menu (`searchSort: { field, direction, pinnedFirst }`); the design's default is Modified.
+    public var searchSort = BrowseOrder(field: .modified, direction: .desc, pinnedFirst: true)
 
     public static let zoomRange = 0.75...2.0
     public static let zoomStep = 0.05
@@ -136,7 +138,7 @@ public struct Settings: Equatable, Sendable {
     /// Every key, in the order used for storage and JSON.
     public static let keys = [
         "escapeLosesFocus", "hideWhileScreenSharing", "zoom", "showFormatBar", "countMode", "windowAutoSize", "panelFrame",
-        "terminal",
+        "terminal", "searchSort",
     ]
 
     public var json: JSONValue {
@@ -153,6 +155,11 @@ public struct Settings: Equatable, Sendable {
         case "windowAutoSize": return .bool(windowAutoSize)
         case "panelFrame": return .optional(panelFrame) { $0.json }
         case "terminal": return ["open": .bool(terminalOpen)]
+        case "searchSort":
+            return [
+                "field": .string(searchSort.field.rawValue), "direction": .string(searchSort.direction.rawValue),
+                "pinnedFirst": .bool(searchSort.pinnedFirst),
+            ]
         default: return .null
         }
     }
@@ -191,6 +198,13 @@ public struct Settings: Equatable, Sendable {
                 throw RPCError.badParams("terminal must be { open: boolean }")
             }
             terminalOpen = open
+        case "searchSort":
+            guard let object = value.objectValue, object.count == 3, let pinnedFirst = object["pinnedFirst"]?.boolValue,
+                let order = try? BrowseOrder(sort: value, pinnedFirst: pinnedFirst)
+            else {
+                throw RPCError.badParams("searchSort must be { field, direction, pinnedFirst }")
+            }
+            searchSort = order
         default:
             throw RPCError.badParams("Unknown setting: \(key)")
         }

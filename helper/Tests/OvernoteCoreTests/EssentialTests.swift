@@ -17,17 +17,7 @@ struct FoldTests {
         // from every client: packages/core/tests/fold-corpus.json. Walk up from this file
         // until the corpus is found, so moving this file within the repository (or adding a
         // folder level above it) cannot silently point the test at the wrong place.
-        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        var url: URL?
-        while url == nil {
-            let candidate = directory.appendingPathComponent("packages/core/tests/fold-corpus.json")
-            if FileManager.default.fileExists(atPath: candidate.path) { url = candidate }
-            let parent = directory.deletingLastPathComponent()
-            if parent.path == directory.path { break }
-            directory = parent
-        }
-        let corpusURL = try #require(url)
-        let corpus = try JSONDecoder().decode([FoldCase].self, from: Data(contentsOf: corpusURL))
+        let corpus = try JSONDecoder().decode([FoldCase].self, from: Data(contentsOf: try Self.corpus("fold-corpus.json")))
         #expect(corpus.count >= 20)
         for entry in corpus {
             #expect(TextFolding.fold(entry.input) == entry.folded, "fold(\(entry.input))")
@@ -37,6 +27,29 @@ struct FoldTests {
     private struct FoldCase: Decodable {
         let input: String
         let folded: String
+    }
+
+    @Test func wordCountMatchesTheSharedGoldenCorpus() throws {
+        struct WordCase: Decodable {
+            let input: String
+            let words: Int
+        }
+        let corpus = try JSONDecoder().decode([WordCase].self, from: Data(contentsOf: try Self.corpus("word-corpus.json")))
+        #expect(corpus.count >= 10)
+        for entry in corpus {
+            #expect(NoteText.wordCount(entry.input) == entry.words, "wordCount(\(entry.input))")
+        }
+    }
+
+    /// A file in packages/core/tests, found by walking up from this file.
+    static func corpus(_ name: String) throws -> URL {
+        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        while directory.path != "/" {
+            let candidate = directory.appendingPathComponent("packages/core/tests/\(name)")
+            if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+            directory = directory.deletingLastPathComponent()
+        }
+        throw CocoaError(.fileNoSuchFile)
     }
 
     @Test func asciiFastPathMatchesTheGeneralRuleForEveryAsciiScalar() {
@@ -85,7 +98,7 @@ struct SearchIndexTests {
 
     @Test func theIndexFollowsEveryWrite() throws {
         let f = try Fixture()
-        #expect(try f.repository.schemaVersion() == 2)
+        #expect(try f.repository.schemaVersion() == Migrations.latestVersion)
         let note = try f.make("alpha bravo\nbody")
         #expect(try Self.indexedIds(f, "bravo") == [note.id])
         #expect(try f.browseIds(filter: "bravo") == [note.id])
@@ -122,7 +135,8 @@ struct SearchIndexTests {
         #expect(try side.run("DELETE FROM notes_fts WHERE id = ?", [.text(id)]) == 1)
     }
 
-    /// A version 1 database gains the index and the paging indexes, and its notes stay findable.
+    /// A version 1 database gains the index, the paging indexes, and the word counts, and its
+    /// notes stay findable.
     @Test func versionOneMigratesAndStaysFindable() throws {
         let directory = TempDirectory()
         let path = directory.file("notes.sqlite")
@@ -131,12 +145,19 @@ struct SearchIndexTests {
         try Self.insertRaw(db, id: "01HF7YAT000000000000000001", text: "Café old\nquixotic body")
         db.close()
         let repository = try NotesRepository(path: path, clock: TestClock().function)
-        #expect(try repository.schemaVersion() == 2)
+        #expect(try repository.schemaVersion() == 3)
         #expect(try repository.browse(filter: "quixotic").items.map(\.id) == ["01HF7YAT000000000000000001"])
+        #expect(try repository.browse().items.map(\.wordCount) == [4])
         #expect(try repository.list(filter: "CAFÉ").items.map(\.id) == ["01HF7YAT000000000000000001"])
         let check = try SQLiteDatabase(path: path, readOnly: true)
-        let objects = try check.query("SELECT name FROM sqlite_master WHERE name IN ('notes_fts', 'notes_list_page', 'notes_browse_page') ORDER BY name") { $0.text(0) }
-        #expect(objects == ["notes_browse_page", "notes_fts", "notes_list_page"])
+        let objects = try check.query(
+            "SELECT name FROM sqlite_master WHERE name = 'notes_fts' OR name LIKE 'notes\\_%\\_page' ESCAPE '\\' ORDER BY name"
+        ) { $0.text(0) }
+        #expect(
+            objects == [
+                "notes_created_page", "notes_fts", "notes_length_page", "notes_list_page", "notes_modified_page",
+                "notes_opened_page", "notes_title_page",
+            ])
     }
 
     /// Where the trigram tokenizer is missing, version 2 still applies without the index, and
@@ -145,7 +166,7 @@ struct SearchIndexTests {
         let directory = TempDirectory()
         let path = directory.file("notes.sqlite")
         let db = try SQLiteDatabase(path: path)
-        #expect(try Migrations.migrate(db, fts: false) == [1, 2])
+        #expect(try Migrations.migrate(db, fts: false) == [1, 2, 3])
         #expect(try db.queryFirst("SELECT count(*) FROM sqlite_master WHERE name = 'notes_fts'") { $0.int(0) } == 0)
         try Self.insertRaw(db, id: "01HF7YAT000000000000000002", text: "Café plain\nquixotic")
         db.close()
@@ -199,7 +220,7 @@ struct SearchIndexTests {
         try source.execute("CREATE TABLE notes_fts (id TEXT, title_fold TEXT, text_fold TEXT)")
         source.close()
         #expect(throws: (any Error).self) { try f.repository.restore(from: backup) }
-        #expect(try f.repository.schemaVersion() == 2)
+        #expect(try f.repository.schemaVersion() == Migrations.latestVersion)
         #expect(try f.listIds() == [kept.id])
         #expect(try f.browseIds(filter: "kept") == [kept.id])
     }
@@ -235,8 +256,8 @@ struct OrderingTests {
         #expect(try f.browseIds() == [b.id, d.id, a.id, c.id])
     }
 
-    @Test(arguments: [ListCursor.Kind.list, .browse])
-    func pagingCoversEveryRowOnceAcrossThePinBoundary(kind: ListCursor.Kind) throws {
+    @Test(arguments: ["list", "browse"])
+    func pagingCoversEveryRowOnceAcrossThePinBoundary(kind: String) throws {
         let f = try Fixture()
         let notes = try (0..<5).map { try f.make("note \($0)") }
         _ = try f.repository.pin(notes[3].id)
@@ -245,7 +266,7 @@ struct OrderingTests {
         try f.repository.touchAccessed(notes[0].id)
         try f.repository.touchAccessed(notes[2].id)
         func fetch(_ cursor: String?) throws -> NotePage {
-            kind == .list ? try f.repository.list(limit: 2, cursor: cursor) : try f.repository.browse(limit: 2, cursor: cursor)
+            kind == "list" ? try f.repository.list(limit: 2, cursor: cursor) : try f.repository.browse(limit: 2, cursor: cursor)
         }
         var pages: [[String]] = []
         var cursor: String?
@@ -254,7 +275,7 @@ struct OrderingTests {
             pages.append(page.items.map(\.id))
             cursor = page.nextCursor
         } while cursor != nil && pages.count < 10
-        let all = kind == .list ? try f.listIds() : try f.browseIds()
+        let all = kind == "list" ? try f.listIds() : try f.browseIds()
         #expect(pages.count == 3)
         #expect(pages.flatMap { $0 } == all)
         #expect(Array(all.prefix(2)) == [notes[3].id, notes[1].id])
@@ -276,6 +297,108 @@ struct OrderingTests {
             cursor = page.nextCursor
         } while cursor != nil
         #expect(ids == Array(titleHits.reversed()) + Array(textHits.reversed()))
+    }
+
+    /// Every browse order, in both directions, with and without pins on top, pages through every
+    /// row exactly once in the order the field defines, ties broken by id.
+    @Test(arguments: BrowseOrder.Field.allCases)
+    func everyBrowseOrderPagesEveryRowOnce(field: BrowseOrder.Field) throws {
+        let f = try Fixture()
+        // Distinct created times; equal word counts and titles exercise the id tie break.
+        let texts = ["beta one two", "Alpha", "gamma one", "alpha", "delta one two three", ""]
+        let notes = try texts.map { try f.make($0) }
+        _ = try f.repository.pin(notes[4].id)
+        _ = try f.repository.pin(notes[0].id)
+        for note in [notes[2], notes[5], notes[1]] {
+            f.clock.advance()
+            try f.repository.touchAccessed(note.id)
+        }
+        f.clock.advance()
+        _ = try f.repository.update(notes[3].id, NotePatch(text: "alpha"))
+        let stored = try notes.map { try f.repository.get($0.id) }
+        func key(_ note: Note) -> (Int64, String) {
+            switch field {
+            case .opened: return (note.lastAccessedAt ?? -1, "")
+            case .modified: return (note.updatedAt, "")
+            case .created: return (note.createdAt, "")
+            case .length: return (Int64(NoteText.wordCount(note.content.text)), "")
+            case .title: return (0, note.content.title.isEmpty ? "untitled" : TextFolding.fold(note.content.title))
+            }
+        }
+        for direction in BrowseOrder.Direction.allCases {
+            for pinnedFirst in [true, false] {
+                let order = BrowseOrder(field: field, direction: direction, pinnedFirst: pinnedFirst)
+                // Natural direction: newest, longest, or A to Z first, ties by id ascending; the
+                // other direction is the exact reverse.
+                var expected = stored.sorted { a, b in
+                    let (ka, kb) = (key(a), key(b))
+                    if field == .title { return ka.1 != kb.1 ? ka.1 < kb.1 : a.id < b.id }
+                    return ka.0 != kb.0 ? ka.0 > kb.0 : a.id < b.id
+                }
+                if order.reversed { expected.reverse() }
+                if pinnedFirst {
+                    let pinned = stored.filter { $0.pinned != nil }.sorted { $0.pinned! < $1.pinned! }
+                    expected = pinned + expected.filter { $0.pinned == nil }
+                }
+                var ids: [String] = []
+                var cursor: String?
+                repeat {
+                    let page = try f.repository.browse(order: order, limit: 2, cursor: cursor)
+                    ids += page.items.map(\.id)
+                    cursor = page.nextCursor
+                } while cursor != nil && ids.count <= texts.count
+                #expect(ids == expected.map(\.id), "\(field) \(direction) pinnedFirst \(pinnedFirst)")
+            }
+        }
+        // A cursor belongs to its order.
+        let page = try f.repository.browse(order: BrowseOrder(field: field), limit: 2)
+        let other = BrowseOrder(field: field == .title ? .length : .title)
+        #expect(throws: RPCError.self) { try f.repository.browse(order: other, limit: 2, cursor: page.nextCursor) }
+    }
+
+    /// Every unfiltered page seeks an index: no table scan, and no sort beyond the few pinned notes.
+    @Test func everyUnfilteredBrowseRunSeeksAnIndex() throws {
+        let f = try Fixture()
+        let db = try SQLiteDatabase(path: f.directory.file("notes.sqlite"), readOnly: true)
+        defer { db.close() }
+        for field in BrowseOrder.Field.allCases {
+            for direction in BrowseOrder.Direction.allCases {
+                for pinnedFirst in [true, false] {
+                let order = BrowseOrder(field: field, direction: direction, pinnedFirst: pinnedFirst)
+                for segment in NotesRepository.plan(.browse(order), filtered: false, matchGroup: "0").segments {
+                    let placeholders = segment.keys.indices.map { "?\($0 + 1)" }
+                    let sql = """
+                        EXPLAIN QUERY PLAN SELECT notes.id FROM notes WHERE notes.deleted_at IS NULL \(segment.predicate)
+                        AND \(segment.after(placeholders)) ORDER BY \(segment.order) LIMIT 50
+                        """
+                    let values = segment.keys.map { $0.expression.hasSuffix("title") || $0.expression == "notes.id" ? SQLValue.text("x") : .int(0) }
+                    let plan = try db.query(sql, values) { $0.text(3) }.joined(separator: " | ")
+                    #expect(plan.contains("USING") && plan.contains("INDEX"), "\(field) \(direction): \(plan)")
+                    #expect(!plan.contains("TEMP B-TREE") || segment.predicate.contains("NOT NULL"), "\(field) \(direction): \(plan)")
+                }
+                }
+            }
+        }
+    }
+
+    /// A filtered browse row carries the passage around its first text match, found by the fold
+    /// rule, even deep in a long note and where folding moves the match out of the read window.
+    @Test func filteredBrowseRowsCarrySnippets() throws {
+        let f = try Fixture()
+        let filler = String(repeating: "lorem ipsum dolor ", count: 40)
+        let deep = try f.make("Deep note\n\(filler)the quixotic Café sits here")
+        // Each ﬁ folds to two scalars, so the folded offset runs 300 ahead of the text's.
+        let drift = try f.make("Drift\n" + String(repeating: "ﬁ", count: 300) + " then quixotic end")
+        let titled = try f.make("Quixotic plans\nbody", title: "Quixotic plans")
+        let rows = try f.repository.browse(filter: "QUIXOTIC").items
+        let byId = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        #expect(rows.first?.id == titled.id)
+        #expect(byId[deep.id]?.snippet == "…lorem ipsum dolor lorem ipsum dolor the quixotic Café sits here")
+        #expect(byId[drift.id]?.snippet == "…then quixotic end")
+        #expect(byId[titled.id]?.snippet == "Quixotic plans\nbody")
+        #expect(byId[deep.id]?.wordCount == 127)
+        #expect(try f.repository.browse(filter: "café sits").items.first?.snippet?.contains("Café sits") == true)
+        #expect(try f.repository.browse().items.allSatisfy { $0.snippet == nil })
     }
 
     @Test func ulidsStayOrderedWithinAMillisecondAndUnderClockSkew() {

@@ -86,11 +86,15 @@ public struct NoteSummary: Equatable, Sendable {
     public var updatedAt: Millis
     public var deletedAt: Millis?
     public var lastAccessedAt: Millis?
+    /// Browse rows only: words of `text` (`NoteText.wordCount`).
+    public var wordCount: Int? = nil
+    /// Filtered browse rows only: the passage around the first match in `text`.
+    public var snippet: String? = nil
 
     public static let previewLength = 200
 
     public var json: JSONValue {
-        [
+        var object: [String: JSONValue] = [
             "id": .string(id),
             "title": .string(title),
             "preview": .string(preview),
@@ -101,6 +105,9 @@ public struct NoteSummary: Equatable, Sendable {
             "deletedAt": .optional(deletedAt, JSONValue.int),
             "lastAccessedAt": .optional(lastAccessedAt, JSONValue.int),
         ]
+        if let wordCount { object["wordCount"] = .int(Int64(wordCount)) }
+        if let snippet { object["snippet"] = .string(snippet) }
+        return .object(object)
     }
 }
 

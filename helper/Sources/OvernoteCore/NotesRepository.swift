@@ -5,7 +5,7 @@ import Foundation
 /// All calls are serialized by a lock, so the repository is safe to use from the socket
 /// threads and the main thread at once. SQLite calls are short and local, so a lock is
 /// simpler and cheaper here than an actor hop. Every write that changes `title` or `text`
-/// also writes the folded copies used for filtering, in the same statement.
+/// also writes the folded copies used for filtering and the word count, in the same statement.
 ///
 /// Errors thrown are always `RPCError`; SQLite failures surface as code 500.
 public final class NotesRepository: @unchecked Sendable {
@@ -182,14 +182,14 @@ public final class NotesRepository: @unchecked Sendable {
         let id = ulid.next(now: now)
         try db.run(
             """
-            INSERT INTO notes (id, title, text, markdown, raw_content, title_fold, text_fold, pinned,
+            INSERT INTO notes (id, title, text, markdown, raw_content, title_fold, text_fold, word_count, pinned,
                                created_at, updated_at, deleted_at, last_accessed_at, caret_position)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, ?, 0)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, ?, 0)
             """,
             [
                 .text(id), .text(content.title), .text(content.text), .text(content.markdown), .text(content.rawContent),
                 .text(TextFolding.fold(content.title)), .text(TextFolding.fold(content.text)),
-                .int(now), .int(now), .int(now),
+                .int(Int64(NoteText.wordCount(content.text))), .int(now), .int(now), .int(now),
             ]
         )
         return id
@@ -249,12 +249,13 @@ public final class NotesRepository: @unchecked Sendable {
                 try db.run(
                     """
                     UPDATE notes SET title = ?, text = ?, markdown = ?, raw_content = ?, title_fold = ?, text_fold = ?,
-                                     updated_at = ?, caret_position = COALESCE(?, caret_position)
+                                     word_count = ?, updated_at = ?, caret_position = COALESCE(?, caret_position)
                     WHERE id = ?
                     """,
                     [
                         .text(content.title), .text(content.text), .text(content.markdown), .text(content.rawContent),
                         .text(TextFolding.fold(content.title)), .text(TextFolding.fold(content.text)),
+                        .int(Int64(NoteText.wordCount(content.text))),
                         .int(updatedAt), patch.caretPosition.map(SQLValue.int) ?? .null, .text(id),
                     ]
                 )
@@ -421,108 +422,161 @@ public final class NotesRepository: @unchecked Sendable {
 
     /// Live notes for Search Notes: pinned by key, then `updatedAt` desc, then `id` asc.
     public func list(filter: String? = nil, limit: Int = defaultListLimit, cursor: String? = nil) throws -> NotePage {
-        try page(kind: .list, filter: filter, limit: limit, cursor: cursor)
-    }
-
-    /// Live notes for ⌘P: pinned by key, then `lastAccessedAt` desc, then `id` asc.
-    /// With a filter, notes whose title matches come before text only matches.
-    public func browse(filter: String? = nil, limit: Int = defaultListLimit, cursor: String? = nil) throws -> NotePage {
-        try page(kind: .browse, filter: filter, limit: limit, cursor: cursor)
-    }
-
-    private func page(kind: ListCursor.Kind, filter: String?, limit: Int, cursor: String?) throws -> NotePage {
         try read { connection in
-            try page(kind: kind, filter: filter, limit: limit, cursor: cursor, on: connection)
+            try page(.list, filter: filter, limit: limit, cursor: cursor, on: connection)
+        }
+    }
+
+    /// Live notes for Search (⌘P) in `order`: pinned notes first in pin order (unless the order
+    /// turns that off), then the order's field, then `id`. With a filter, notes whose title matches
+    /// come before text only matches, and each row carries the passage around its first text match.
+    /// Every row carries its word count.
+    public func browse(
+        filter: String? = nil, order: BrowseOrder = BrowseOrder(), limit: Int = defaultListLimit, cursor: String? = nil
+    ) throws -> NotePage {
+        try read { connection in
+            try page(.browse(order), filter: filter, limit: limit, cursor: cursor, on: connection)
+        }
+    }
+
+    enum PageKind {
+        case list
+        case browse(BrowseOrder)
+    }
+
+    /// The runs one page reads, in order, and the scope its cursors carry.
+    ///
+    /// Unfiltered pages compare plain indexed columns in one direction per run, so every page
+    /// seeks a paging index: list reads `notes_list_page`, and browse reads the pinned notes (a
+    /// handful) and then the field's `notes_<field>_page`, forwards or backwards. A filtered
+    /// browse is one run over the matches, ordered by match group, pins, and the field.
+    static func plan(_ kind: PageKind, filtered: Bool, matchGroup: String) -> (scope: String, segments: [PageSegment]) {
+        switch kind {
+        case .list:
+            let keys = ["notes.sort_pin_group", "notes.sort_pin_key", "notes.sort_updated_neg", "notes.id"]
+            return ("l", [PageSegment(predicate: "", keys: keys.map { ($0, false) })])
+        case .browse(let order):
+            let field = [(order.column, order.reversed), ("notes.id", order.reversed)]
+            let scope = [
+                "b", order.field.rawValue, order.direction.rawValue, order.pinnedFirst ? "p" : "a", filtered ? "f" : "u",
+            ].joined(separator: ".")
+            if filtered {
+                let pins = order.pinnedFirst ? [("notes.sort_pin_group", false), ("notes.sort_pin_key", false)] : []
+                return (scope, [PageSegment(predicate: "", keys: [(matchGroup, false)] + pins + field)])
+            }
+            guard order.pinnedFirst else { return (scope, [PageSegment(predicate: "", keys: field)]) }
+            return (
+                scope,
+                [
+                    PageSegment(predicate: "AND notes.pinned IS NOT NULL", keys: [("notes.pinned", false), ("notes.id", false)]),
+                    PageSegment(predicate: "AND +notes.pinned IS NULL", keys: field),
+                ]
+            )
         }
     }
 
     /// One page on `connection`. The caller holds that connection's lock.
     ///
-    /// Ordering is unchanged from the folded LIKE era: pinned by key first, then the kind's
-    /// timestamp descending, then id, with title matches before text only matches in a filtered
-    /// browse. The FTS5 trigram table only narrows the candidate set for terms it can index;
-    /// the folded LIKE predicate is still applied to those candidates, and every other term
-    /// takes the LIKE path unchanged, so matching semantics never depend on the index.
+    /// The FTS5 trigram table only narrows the candidate set for terms it can index; the folded
+    /// LIKE predicate is still applied to those candidates, and every other term takes the LIKE
+    /// path unchanged, so matching semantics never depend on the index.
     private func page(
-        kind: ListCursor.Kind, filter: String?, limit: Int, cursor: String?, on connection: SQLiteDatabase
+        _ kind: PageKind, filter: String?, limit: Int, cursor: String?, on connection: SQLiteDatabase
     ) throws -> NotePage {
-        let after = try cursor.map { try ListCursor.decode($0, kind: kind) }
         let limit = Self.clampLimit(limit)
         let pattern = TextFolding.likePattern(for: filter)
-        let browseFiltered = kind == .browse && pattern != nil
-        // Parameters are numbered in the order they are bound below, and each optional clause
-        // is only present when its parameter is, so SQLite can turn the keyset comparison into
-        // an index seek instead of scanning from the first row behind an OR guard.
-        var values: [SQLValue] = []
-        func placeholder(_ value: SQLValue) -> String {
-            values.append(value)
-            return "?\(values.count)"
+        let term = TextFolding.foldedTerm(for: filter)
+        let browsing: Bool
+        if case .browse = kind { browsing = true } else { browsing = false }
+        let snippetTerm = browsing ? term : nil
+        // Placeholders are numbered in bind order: the pattern, the folded term for snippets,
+        // then each run's cursor keys, limit, and FTS phrase.
+        var shared: [SQLValue] = []
+        func sharedPlaceholder(_ value: String) -> String {
+            shared.append(.text(value))
+            return "?\(shared.count)"
         }
-        let patternPlaceholder = pattern.map { placeholder(.text($0)) } ?? ""
-        // Browse with a filter groups title matches first; every other page has one group.
-        let matchGroup =
-            browseFiltered ? "(CASE WHEN notes.title_fold LIKE \(patternPlaceholder) ESCAPE '\\' THEN 0 ELSE 1 END)" : "0"
-        // The negated timestamp sort columns are the generated columns the paging indexes hold,
-        // so a keyset cursor compares plain indexed columns and SQLite seeks to the page.
-        let negated = kind == .list ? "notes.sort_updated_neg" : "notes.sort_accessed_neg"
-        let pinKeys = "notes.sort_pin_group, notes.sort_pin_key, \(negated), notes.id"
-        let orderKeys = browseFiltered ? "\(matchGroup), \(pinKeys)" : pinKeys
-        let filterClause =
-            pattern == nil
-            ? "" : "AND (notes.title_fold LIKE \(patternPlaceholder) ESCAPE '\\' OR notes.text_fold LIKE \(patternPlaceholder) ESCAPE '\\')"
-        var cursorClause = ""
-        if let after {
-            var tupleValues: [String] = []
-            if browseFiltered { tupleValues.append(placeholder(.int(after.matchGroup))) }
-            tupleValues.append(placeholder(.int(after.pinGroup)))
-            tupleValues.append(placeholder(.double(after.pinKey)))
-            tupleValues.append(placeholder(.int(after.negatedTimestamp)))
-            tupleValues.append(placeholder(.text(after.id)))
-            let tuple = browseFiltered ? "(\(matchGroup), \(pinKeys))" : "(\(pinKeys))"
-            cursorClause = "AND \(tuple) > (\(tupleValues.joined(separator: ", ")))"
-        }
-        let limitPlaceholder = placeholder(.int(Int64(limit + 1)))
-        let ftsPlaceholder = "?\(values.count + 1)"
-        let summary = """
+        let patternPlaceholder = pattern.map(sharedPlaceholder)
+        let termPlaceholder = snippetTerm.map(sharedPlaceholder)
+        let like = { (column: String, placeholder: String) in "notes.\(column) LIKE \(placeholder) ESCAPE '\\'" }
+        let matchGroup = patternPlaceholder.map { "(CASE WHEN \(like("title_fold", $0)) THEN 0 ELSE 1 END)" } ?? "0"
+        let filterClause = patternPlaceholder.map { "AND (\(like("title_fold", $0)) OR \(like("text_fold", $0)))" } ?? ""
+        let (scope, segments) = Self.plan(kind, filtered: pattern != nil, matchGroup: matchGroup)
+        let after = try cursor.map { try PageCursor.decode($0, scope: scope, segments: segments) }
+
+        // Columns 0 to 8 are the summary; browse adds the word count, and a filtered browse the
+        // first text match's position and a window of text around it, cut wide enough that the
+        // fold rule rarely moves the match out of it.
+        var columns = """
             notes.id, notes.title, substr(notes.text, 1, \(NoteSummary.previewLength)), length(notes.text), \
             notes.pinned, notes.created_at, notes.updated_at, notes.deleted_at, notes.last_accessed_at
             """
-        func sql(useFTS: Bool) -> String {
-            let from = useFTS ? "notes_fts CROSS JOIN notes ON notes.id = notes_fts.id" : "notes"
-            let ftsClause = useFTS ? "AND notes_fts MATCH \(ftsPlaceholder)" : ""
-            return """
-                SELECT \(summary),
-                       \(matchGroup) AS mg, notes.sort_pin_group AS g, notes.sort_pin_key AS pk, \(negated) AS nts
-                FROM \(from)
-                WHERE notes.deleted_at IS NULL
-                  \(filterClause)
-                  \(ftsClause)
-                  \(cursorClause)
-                ORDER BY \(orderKeys)
-                LIMIT \(limitPlaceholder)
-                """
+        var keyColumn: Int32 = 9
+        if browsing {
+            columns += ", notes.word_count"
+            keyColumn += 1
         }
-        func run(on connection: SQLiteDatabase, useFTS: Bool) throws -> NotePage {
-            var keys: [ListCursor] = []
-            var values = values
-            if useFTS { values.append(.text(TextFolding.ftsPhrase(for: filter) ?? "")) }
-            var items = try connection.query(
-                sql(useFTS: useFTS), values
-            ) { row -> NoteSummary in
-                let summary = Self.readSummary(row)
-                keys.append(
-                    ListCursor(
-                        kind: kind, matchGroup: row.int(9), pinGroup: row.int(10), pinKey: row.double(11),
-                        negatedTimestamp: row.int(12), id: summary.id))
-                return summary
+        if let termPlaceholder {
+            let position = "instr(notes.text_fold, \(termPlaceholder))"
+            columns += ", \(position), substr(notes.text, max(1, \(position) - \(Self.snippetLead)), \(Self.snippetWindow))"
+            keyColumn += 2
+        }
+
+        func run(useFTS: Bool) throws -> NotePage {
+            var items: [NoteSummary] = []
+            var cursors: [PageCursor] = []
+            var windows: [(position: Int64, text: String)] = []
+            for (index, segment) in segments.enumerated() where index >= (after?.segment ?? 0) {
+                let wanted = limit + 1 - items.count
+                guard wanted > 0 else { break }
+                var values = shared
+                func placeholder(_ value: SQLValue) -> String {
+                    values.append(value)
+                    return "?\(values.count)"
+                }
+                var cursorClause = ""
+                if let after, after.segment == index {
+                    cursorClause = "AND " + segment.after(after.values.map(placeholder))
+                }
+                let limitPlaceholder = placeholder(.int(Int64(wanted)))
+                let ftsClause =
+                    useFTS ? "AND notes_fts MATCH \(placeholder(.text(TextFolding.ftsPhrase(for: filter) ?? "")))" : ""
+                let sql = """
+                    SELECT \(columns), \(segment.keys.map(\.expression).joined(separator: ", "))
+                    FROM \(useFTS ? "notes_fts CROSS JOIN notes ON notes.id = notes_fts.id" : "notes")
+                    WHERE notes.deleted_at IS NULL
+                      \(filterClause)
+                      \(ftsClause)
+                      \(segment.predicate)
+                      \(cursorClause)
+                    ORDER BY \(segment.order)
+                    LIMIT \(limitPlaceholder)
+                    """
+                _ = try connection.query(sql, values) { row in
+                    var summary = Self.readSummary(row)
+                    if browsing { summary.wordCount = Int(row.int(9)) }
+                    if snippetTerm != nil { windows.append((row.int(10), row.text(11))) }
+                    items.append(summary)
+                    cursors.append(
+                        PageCursor(
+                            scope: scope, segment: index, values: segment.keys.indices.map { row.value(keyColumn + Int32($0)) }))
+                }
             }
-            guard items.count > limit else { return NotePage(items: items, nextCursor: nil) }
-            items.removeLast(items.count - limit)
-            return NotePage(items: items, nextCursor: keys[limit - 1].encoded)
+            var nextCursor: String?
+            if items.count > limit {
+                items.removeLast(items.count - limit)
+                nextCursor = cursors[limit - 1].encoded
+            }
+            if let snippetTerm {
+                for index in items.indices {
+                    items[index].snippet = try snippet(windows[index], id: items[index].id, term: snippetTerm, on: connection)
+                }
+            }
+            return NotePage(items: items, nextCursor: nextCursor)
         }
         let useFTS = ftsAvailable && TextFolding.ftsPhrase(for: filter) != nil
         do {
-            return try run(on: connection, useFTS: useFTS)
+            return try run(useFTS: useFTS)
         } catch let error as SQLiteError where useFTS {
             // The index exists but cannot answer (for example a foreign plain table owns
             // the notes_fts name, so every MATCH fails): drop it for this process and keep
@@ -531,8 +585,24 @@ public final class NotesRepository: @unchecked Sendable {
             // Any other error, a lock timeout above all, proves nothing about the index:
             // this query falls back to LIKE, but the index stays in use for the next one.
             if Self.ftsErrorProvesIndexUnusable(error) { ftsAvailable = false }
-            return try run(on: connection, useFTS: false)
+            return try run(useFTS: false)
         }
+    }
+
+    /// Code points of text a filtered browse reads ahead of the first match, and in all.
+    static let snippetLead = 120
+    static let snippetWindow = 480
+
+    /// The snippet for one filtered row from its window, or from the whole text in the rare case
+    /// that folding moved the match outside the window. Nil when only the title matched.
+    private func snippet(
+        _ window: (position: Int64, text: String), id: String, term: String, on connection: SQLiteDatabase
+    ) throws -> String? {
+        guard window.position > 0 else { return nil }
+        let startsNote = window.position - Int64(Self.snippetLead) <= 1
+        if let found = NoteText.snippet(in: window.text, foldedTerm: term, startsNote: startsNote) { return found }
+        let text = try connection.queryFirst("SELECT text FROM notes WHERE id = ?", [.text(id)]) { $0.text(0) } ?? ""
+        return NoteText.snippet(in: text, foldedTerm: term)
     }
 
     /// Whether a failed `MATCH` proves the FTS index itself unusable, as opposed to a
