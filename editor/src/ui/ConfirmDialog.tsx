@@ -12,11 +12,29 @@ export interface ConfirmRequest {
 
 export function ConfirmDialog({ request, onClose }: { request: ConfirmRequest; onClose: () => void }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  // Each request settles exactly once: confirmed, cancelled, or cancelled when it goes away unanswered
+  // (replaced by another request, or the window closing it), so whoever waits on it never hangs.
+  const settled = useRef(false);
   useEffect(() => cancelRef.current?.focus(), []);
-  const cancel = () => {
+  // Checked a microtask later, so StrictMode's dev-only unmount and remount does not count as going away.
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      queueMicrotask(() => {
+        if (!mounted.current && !settled.current) request.onCancel?.();
+      });
+    };
+  }, [request]);
+  const settle = (confirmed: boolean) => {
+    if (settled.current) return;
+    settled.current = true;
     onClose();
-    request.onCancel?.();
+    if (confirmed) request.onConfirm();
+    else request.onCancel?.();
   };
+  const cancel = () => settle(false);
   return (
     <div className="dialog-backdrop" onMouseDown={cancel}>
       <div
@@ -44,10 +62,7 @@ export function ConfirmDialog({ request, onClose }: { request: ConfirmRequest; o
           <button
             type="button"
             className={request.destructive ? "is-destructive" : "is-primary"}
-            onClick={() => {
-              onClose();
-              request.onConfirm();
-            }}
+            onClick={() => settle(true)}
           >
             {request.confirm}
           </button>
