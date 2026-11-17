@@ -61,24 +61,26 @@ test("language picker, auto detection, and copy", async ({ page }) => {
 test("highlighting waits for a pause in typing and ignores edits outside the block", async ({ page }) => {
   const highlight = () =>
     page.evaluate(() => {
-      const view = (
-        window as unknown as {
-          __bnEditor: { state: { plugins: { key: string; getState(s: unknown): { stale: boolean } }[] } };
-        }
-      ).__bnEditor;
-      const plugin = view.state.plugins.find((p) => p.key.startsWith("noteHighlight$"))!;
+      const editor = (window as unknown as { __bnEditor: { storage: { codeBlockHighlight: { stale: boolean } } } })
+        .__bnEditor;
       return {
-        stale: plugin.getState(view.state).stale,
+        stale: editor.storage.codeBlockHighlight.stale,
         tokens: document.querySelectorAll(".code-block [class*=hljs-]").length,
       };
     });
-  // Exactly one highlighter runs: ours, never a stock lowlight plugin next to it.
-  const highlighters = await page.evaluate(() =>
-    (window as unknown as { __bnEditor: { state: { plugins: { key: string }[] } } }).__bnEditor.state.plugins
-      .map((p) => p.key)
-      .filter((key) => /^(lowlight|noteHighlight)\$/.test(key)),
-  );
-  expect(highlighters).toEqual(["noteHighlight$"]);
+  // Exactly one highlighter runs: ours (on Tiptap's Decorations API), never a stock lowlight plugin next to it.
+  const highlighters = await page.evaluate(() => {
+    const editor = (
+      window as unknown as {
+        __bnEditor: { state: { plugins: { key: string }[] }; extensionManager: { extensions: { name: string }[] } };
+      }
+    ).__bnEditor;
+    return {
+      lowlightPlugins: editor.state.plugins.map((p) => p.key).filter((key) => /^lowlight\$/.test(key)),
+      extensions: editor.extensionManager.extensions.map((e) => e.name).filter((n) => /highlight|lowlight/i.test(n)),
+    };
+  });
+  expect(highlighters).toEqual({ lowlightPlugins: [], extensions: ["codeBlockHighlight", "findHighlight"] });
   await page.keyboard.type("```python");
   await page.keyboard.press("Enter");
   await page.keyboard.type("return 1");
