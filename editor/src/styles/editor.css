@@ -484,6 +484,7 @@
   color: var(--bg-panel);
 }
 
+/* Dropcursor draws this bar outside the editor element (in its parent), so it cannot be scoped to .note-editor. */
 .drop-cursor {
   background: var(--cursor);
 }

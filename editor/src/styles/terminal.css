@@ -12,6 +12,8 @@
   top: 100%;
   left: 0;
   right: 0;
+  display: flex;
+  flex-direction: column;
   height: var(--terminal-height);
   box-sizing: border-box;
   border-top: var(--hairline) solid var(--terminal-divider);
@@ -23,11 +25,6 @@
 }
 
 /* The drawer header (board 06): 32 tall, Geist Mono 11 in --text-tertiary, the session on the left, expand and close on the right. */
-.terminal-drawer {
-  display: flex;
-  flex-direction: column;
-}
-
 .terminal-header {
   display: flex;
   flex: none;

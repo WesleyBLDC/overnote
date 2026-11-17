@@ -154,10 +154,6 @@ kbd {
   background: var(--bg-panel);
 }
 
-.toolbar-title {
-  transition: opacity var(--duration-fast) var(--ease-out);
-}
-
 /*
  * Close: a 12 pt dot on the toolbar's 16 pt left inset, on the toolbar's centre line. The button around it
  * meets the hit floor but never reaches into the helper's 10 pt edge zone: --close-pull is how far it
@@ -244,6 +240,7 @@ kbd {
 /* No repeated title while the note shows its own first line; it fades in once that line scrolls away. */
 .toolbar-title {
   margin: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-secondary);
   line-height: var(--topbar-button);
@@ -1369,6 +1366,10 @@ html[data-high-zoom="true"] .find-bar {
 }
 
 .panel-list {
+  /* Room for a focused row's ring inside the scrolling list, without moving the rows. */
+  --ring-room: calc(var(--focus-gap-width) + var(--focus-ring-width));
+  margin: calc(-1 * var(--ring-room));
+  padding: var(--ring-room);
   overflow-y: auto;
   min-height: 0;
   scroll-padding: var(--space-1) 0;
@@ -1523,13 +1524,6 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 
 .panel-row.is-selected .panel-row-leading {
   color: var(--text-secondary);
-}
-
-/* Room for a focused row's ring inside the scrolling list, without moving the rows. */
-.panel-list {
-  --ring-room: calc(var(--focus-gap-width) + var(--focus-ring-width));
-  margin: calc(-1 * var(--ring-room));
-  padding: var(--ring-room);
 }
 
 .panel-skeleton {

@@ -175,6 +175,7 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
 }
 
+/* stylelint-disable-next-line no-duplicate-selectors -- the design's tokens and Overnote's own stay in separate sections. */
 :root {
   --zoom: 1;
 
