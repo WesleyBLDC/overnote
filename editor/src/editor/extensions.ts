@@ -5,10 +5,10 @@ import { Typography, type TypographyOptions } from "@tiptap/extension-typography
 import { CodeBlock } from "@tiptap/extension-code-block";
 import { Dropcursor, Gapcursor, Placeholder } from "@tiptap/extensions";
 import { createCodeBlockView, type CodeBlockViewOptions } from "./codeBlockView";
-import { NoteDomBehavior, linkRangeAt, type DomOptions } from "./domExtensions";
+import { ListSelection, NoteDomBehavior, OrderedMarkers, linkRangeAt, type DomOptions } from "./domExtensions";
 import { BLOCK_LABELS } from "./commands";
 import { FindHighlight } from "./find";
-import { debouncedHighlightPlugin } from "./highlight";
+import { CodeBlockHighlight } from "./highlight";
 import type { NoteLowlight } from "./lowlight";
 import { TitleLine } from "./titleLine";
 import { NoteTriggers, type TriggerOptions } from "./triggers";
@@ -44,19 +44,6 @@ function editorKeymap(options: EditorExtensionOptions) {
           return this.editor.commands.setTextSelection(2);
         },
       };
-    },
-  });
-}
-
-/**
- * Code block syntax highlighting. The stock lowlight highlighter re-runs on every keystroke inside a
- * code block; this one waits for a pause (highlight.ts).
- */
-function codeBlockHighlight(name: string, lowlight: NoteLowlight) {
-  return Extension.create({
-    name: "codeBlockHighlight",
-    addProseMirrorPlugins() {
-      return [debouncedHighlightPlugin({ name, lowlight })];
     },
   });
 }
@@ -114,9 +101,12 @@ export function createEditorExtensions(options: EditorExtensionOptions): AnyExte
     TitleLine,
     Dropcursor.configure({ width: 2, class: "drop-cursor" }),
     Gapcursor,
-    codeBlockHighlight(codeBlock.name, options.lowlight),
+    // Waits for a pause in typing, unlike the stock lowlight highlighter (highlight.ts).
+    CodeBlockHighlight({ name: codeBlock.name, lowlight: options.lowlight }),
     FindHighlight,
     NoteDomBehavior.configure(options),
+    ListSelection,
+    OrderedMarkers,
     NoteTriggers.configure(options.triggers),
     editorKeymap(options),
   ];

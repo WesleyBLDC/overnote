@@ -13,7 +13,7 @@ import {
   taskAt,
   toggleTasks,
 } from "@overnote/core";
-import { Extension } from "@tiptap/core";
+import { Decoration as TiptapDecoration, Extension } from "@tiptap/core";
 import { Fragment, Slice, type Node as PMNode, type Schema } from "@tiptap/pm/model";
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { AttrStep } from "@tiptap/pm/transform";
@@ -140,52 +140,45 @@ function innerTextRange(node: PMNode, pos: number): { start: number; end: number
  * the marker gutter that WebKit leaves blank (see editor.css). A decoration keeps stored content
  * untouched, and it only adds a class, so line boxes and the reported height never change.
  */
-function listSelectionPlugin(): Plugin {
-  return new Plugin({
-    key: new PluginKey("listSelection"),
-    props: {
-      decorations(state) {
+export const ListSelection = Extension.create({
+  name: "listSelection",
+  addDecorations() {
+    return {
+      // Selection-only transactions count too: the marks follow the selection.
+      shouldUpdate: ({ tr }) => tr.docChanged || tr.selectionSet,
+      create: ({ state }) => {
         const { from, to, empty } = state.selection;
-        if (empty) return DecorationSet.empty;
-        const decorations: Decoration[] = [];
+        if (empty) return [];
+        const decorations: TiptapDecoration[] = [];
         state.doc.nodesBetween(from, to, (node, pos) => {
           if (node.type.name !== "list") return true;
           const inner = innerTextRange(node, pos);
           if (from <= inner.start && to >= inner.end)
-            decorations.push(Decoration.node(pos, pos + node.nodeSize, { class: "in-selection" }));
+            decorations.push(TiptapDecoration.Node(pos, pos + node.nodeSize, { class: "in-selection" }));
           return true;
         });
-        return decorations.length ? DecorationSet.create(state.doc, decorations) : DecorationSet.empty;
+        return decorations;
       },
-    },
-  });
-}
+    };
+  },
+});
 
 /**
  * Numbers ordered items with their parent's number path (3, 3.1, 3.1.1), which CSS counters cannot do
  * reliably across flat-list's nesting. The label goes on the item as data-list-marker for the stylesheet
  * to show; it is a decoration, so stored content and copies keep standard 1. numbering.
  */
-function orderedMarkerPlugin(): Plugin {
-  const key = new PluginKey<DecorationSet>("orderedMarkers");
-  const build = (doc: PMNode) => {
-    const decorations: Decoration[] = [];
-    orderedMarkerLabels(doc).forEach((label, pos) => {
-      decorations.push(Decoration.node(pos, pos + doc.nodeAt(pos)!.nodeSize, { "data-list-marker": label }));
-    });
-    return DecorationSet.create(doc, decorations);
-  };
-  return new Plugin<DecorationSet>({
-    key,
-    state: {
-      init: (_config, state) => build(state.doc),
-      apply: (tr, set) => (tr.docChanged ? build(tr.doc) : set),
-    },
-    props: {
-      decorations: (state) => key.getState(state),
-    },
-  });
-}
+export const OrderedMarkers = Extension.create({
+  name: "orderedMarkers",
+  addDecorations() {
+    return {
+      create: ({ state }) =>
+        [...orderedMarkerLabels(state.doc)].map(([pos, label]) =>
+          TiptapDecoration.Node(pos, pos + state.doc.nodeAt(pos)!.nodeSize, { "data-list-marker": label }),
+        ),
+    };
+  },
+});
 
 /** List positions in `tr.doc` whose task went from unchecked to checked in this transaction. */
 function newlyCheckedTasks(tr: Transaction, before: PMNode): number[] {
@@ -219,6 +212,8 @@ function newlyCheckedTasks(tr: Transaction, before: PMNode): number[] {
  * Checking a task re-creates its DOM (the node's attributes change), so a CSS transition cannot run.
  * This marks the items checked by the last edit with just-checked, which plays a one-time check
  * animation; the mark clears on the next edit, and loading a note starts without any.
+ * A plain plugin, not Tiptap's addDecorations: the marks depend on what the transaction changed, and
+ * addDecorations builds from the resulting state alone.
  */
 function taskCheckPlugin(): Plugin {
   const key = new PluginKey<DecorationSet>("taskCheck");
@@ -337,8 +332,6 @@ export const NoteDomBehavior = Extension.create<DomOptions, DomStorage>({
       createSafariInputMethodWorkaroundPlugin(),
       pastePlugin(takePlainPaste),
       copyPlugin(),
-      listSelectionPlugin(),
-      orderedMarkerPlugin(),
       taskCheckPlugin(),
       new Plugin({
         key: new PluginKey("noFileDrop"),
