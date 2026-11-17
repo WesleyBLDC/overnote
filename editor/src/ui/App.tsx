@@ -18,7 +18,7 @@ import type { AnyExtension, Editor } from "@tiptap/core";
 import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Api } from "../bridge/api";
-import { focusEditorNow, runFormat, type FormatId } from "../editor/commands";
+import { BLOCK_LABELS, focusEditorNow, runFormat, type FormatId } from "../editor/commands";
 import { findState, findTransaction } from "../editor/find";
 import { createEditorExtensions } from "../editor/extensions";
 import { createNoteLowlight, loadGrammars } from "../editor/lowlight";
@@ -718,23 +718,54 @@ export function App({ api }: { api: Api }) {
         { id: "underline", title: "Underline", shortcut: "⌘U", section: "Inline", run: () => format("underline") },
         { id: "code", title: "Code", shortcut: "⌘E", section: "Inline", run: () => format("code") },
         { id: "link", title: "Link", shortcut: "⌘L", section: "Inline", run: () => setTimeout(openLink, 0) },
-        { id: "codeBlock", title: "Code Block", shortcut: "⌥⌘C", section: "Block", run: () => format("codeBlock") },
-        { id: "blockquote", title: "Blockquote", shortcut: "⇧⌘B", section: "Block", run: () => format("blockquote") },
-        { id: "ordered", title: "Ordered List", shortcut: "⇧⌘7", section: "List", run: () => format("ordered") },
-        { id: "bullet", title: "Bullet List", shortcut: "⇧⌘8", section: "List", run: () => format("bullet") },
+        // The design's block names (BLOCK_LABELS) in title case; the old names stay findable as keywords.
+        {
+          id: "codeBlock",
+          title: "Code Block",
+          shortcut: "⌥⌘C",
+          section: "Block",
+          keywords: ["pre", "snippet"],
+          run: () => format("codeBlock"),
+        },
+        {
+          id: "blockquote",
+          title: "Quote",
+          shortcut: "⇧⌘B",
+          section: "Block",
+          keywords: ["blockquote"],
+          run: () => format("blockquote"),
+        },
+        { id: "divider", title: "Divider", section: "Block", keywords: ["rule", "line"], run: () => format("divider") },
+        {
+          id: "bullet",
+          title: "Bulleted List",
+          shortcut: "⇧⌘8",
+          section: "List",
+          keywords: ["bullet list", "unordered"],
+          run: () => format("bullet"),
+        },
+        {
+          id: "ordered",
+          title: "Numbered List",
+          shortcut: "⇧⌘7",
+          section: "List",
+          keywords: ["ordered list"],
+          run: () => format("ordered"),
+        },
         {
           id: "task",
-          title: "Task List",
+          title: "Checklist",
           shortcut: "⇧⌘9",
           section: "List",
-          keywords: ["todo", "check"],
+          keywords: ["task list", "todo", "check"],
           run: () => format("task"),
         },
       ],
       heading: [1, 2, 3].map((level) => ({
         id: `h${level}`,
-        title: `Heading ${level}`,
+        title: BLOCK_LABELS[`h${level}` as "h1" | "h2" | "h3"],
         shortcut: `⌥⌘${level}`,
+        keywords: [`heading ${level}`],
         section: "Heading",
         run: () => format(`h${level}` as FormatId),
       })),
@@ -1015,6 +1046,7 @@ export function App({ api }: { api: Api }) {
           ref={slashRef}
           editor={editor}
           items={slashItems}
+          query={slash.query}
           from={slash.from}
           onRun={runSlash}
           onDismiss={() => setSlashDismissed(slash.from)}

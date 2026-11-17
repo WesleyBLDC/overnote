@@ -4,7 +4,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import type { SlashItem } from "../editor/slash";
 import { revealSelected } from "../lib/motion";
 import { useDropdownPlacement } from "./hooks";
-import { Keys } from "./Keys";
+import { Icon } from "./icons";
 
 export interface SlashMenuHandle {
   /** Returns true when the key was used by the menu. */
@@ -14,13 +14,14 @@ export interface SlashMenuHandle {
 interface SlashMenuProps {
   editor: Editor;
   items: SlashItem[];
+  query: string;
   from: number;
   onRun: (item: SlashItem) => void;
   onDismiss: () => void;
 }
 
 export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function SlashMenu(
-  { editor, items, from, onRun, onDismiss },
+  { editor, items, query, from, onRun, onDismiss },
   ref,
 ) {
   const [index, setIndex] = useState(0);
@@ -48,12 +49,15 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
     },
   }));
 
+  // Typing narrows the menu to one ranked group (SPEC §8); "/" alone shows the three sections.
+  const ranked = query.trim() !== "";
   let lastSection = "";
   return (
     <div className="popover slash-menu" role="listbox" data-testid="slash-menu" ref={rootRef}>
       {items.map((item, i) => {
-        const header = item.section !== lastSection ? item.section : null;
-        lastSection = item.section;
+        const section = ranked ? "Best match" : item.section;
+        const header = section !== lastSection ? section : null;
+        lastSection = section;
         return (
           <div key={item.id}>
             {header ? <div className="menu-section">{header}</div> : null}
@@ -67,8 +71,11 @@ export const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(function Sl
               onClick={() => onRun(item)}
               tabIndex={i === selected ? 0 : -1}
             >
+              <span className="menu-tile" aria-hidden="true">
+                {item.glyph === "check" ? <Icon name="check" /> : item.glyph}
+              </span>
               <span className="menu-title">{item.title}</span>
-              <Keys shortcut={item.shortcut} />
+              {item.markdown ? <span className="menu-shortcut">{item.markdown}</span> : null}
             </button>
           </div>
         );

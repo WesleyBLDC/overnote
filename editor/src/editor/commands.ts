@@ -19,7 +19,25 @@ export type FormatId =
   | "ordered"
   | "bullet"
   | "task"
-  | "paragraph";
+  | "paragraph"
+  | "divider";
+
+/**
+ * Each block's one name, as the design spells it (SPEC §8), shared by the slash menu and the format island's menus.
+ * ⌘K's Format items use the same words in title case.
+ */
+export const BLOCK_LABELS = {
+  paragraph: "Text",
+  h1: "Title",
+  h2: "Heading",
+  h3: "Subheading",
+  bullet: "Bulleted list",
+  ordered: "Numbered list",
+  task: "Checklist",
+  blockquote: "Quote",
+  codeBlock: "Code block",
+  divider: "Divider",
+} as const satisfies Partial<Record<FormatId, string>>;
 
 function toggleList(editor: Editor, kind: ListKind): boolean {
   return toggleListKind(kind)(editor.state, editor.view.dispatch, editor.view);
@@ -82,6 +100,8 @@ export function runFormat(editor: Editor, id: FormatId, openLink: () => void): b
     case "link":
       openLink();
       return true;
+    case "divider":
+      return chain.setHorizontalRule().run();
   }
 }
 
@@ -97,6 +117,8 @@ export function isFormatActive(editor: Editor, id: FormatId): boolean {
       return activeListKind(editor) === id;
     case "paragraph":
       return editor.isActive("paragraph");
+    case "divider":
+      return false;
     default:
       return editor.isActive(id);
   }

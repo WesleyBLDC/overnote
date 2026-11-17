@@ -828,11 +828,53 @@ html[data-high-zoom="true"] .format-bar {
   background: var(--border);
 }
 
+/* The slash menu (SPEC §8): Search's menu style, 12 point corners, 30 point rows with icon tiles, Markdown on the right. */
 .slash-menu {
-  width: 20rem;
-  max-height: min(20rem, var(--room-y, 20rem));
+  width: max-content;
+  min-width: calc(210rem / 14);
+  max-width: min(calc(300rem / 14), var(--room-x, 100vw));
   overflow-y: auto;
   padding: var(--space-1);
+  border-radius: var(--radius-menu);
+  box-shadow: var(--shadow-menu);
+}
+
+.slash-menu .menu-item {
+  height: max(calc(30rem / 14), var(--hit-floor));
+  border-radius: calc(7rem / 14);
+}
+
+.slash-menu .menu-item.is-selected {
+  background: var(--row-selected);
+}
+
+/* A small square that holds a row's glyph or icon. */
+.menu-tile {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: calc(20rem / 14);
+  height: calc(20rem / 14);
+  border-radius: calc(5rem / 14);
+  background: var(--tile-fill);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-label);
+  color: var(--text);
+}
+
+.menu-tile svg {
+  width: calc(12rem / 14);
+  height: calc(12rem / 14);
+}
+
+/* A quiet shortcut on the right of a row: plain Geist Mono text, not keycaps. */
+.menu-shortcut {
+  padding-left: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-micro);
+  color: var(--text-tertiary);
+  white-space: pre;
 }
 
 .link-popover {
