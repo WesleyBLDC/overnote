@@ -5,7 +5,7 @@ import Testing
 
 // Unit tests are limited to logic end to end tests cannot reach cheaply (the testing policy in
 // CONTRIBUTING.md): fold rules, search fallbacks and migrations, ordering and cursor math, pins, trash
-// purge, RPC framing, the panel size limits and frame memory, backup retention, app mode, and the
+// purge, RPC framing, the panel size limits, frame memory, and show and height rules, backup retention, app mode, and the
 // security checks on file names, links, and asset paths. Everything else is covered by
 // scripts/smoke-helper.sh, scripts/e2e-update.sh, and the extension's end to end tests against the
 // real binary.
@@ -666,6 +666,57 @@ struct PanelSizeTests {
         #expect(await code(["width": "wide", "height": 200]) == RPCError.badParamsCode)
         #expect(await code(["height": 0], source: .bridge) == RPCError.badParamsCode)
         #expect(host.calls.count == 1)
+    }
+}
+
+@Suite("Panel show and height")
+struct PanelStateTests {
+    /// The height rule order: a temporary growth, then the content (auto-sizing on), then the
+    /// stored height, then the note's own; a temporary growth only grows, keeps the height from
+    /// before its first step, and the next normal report ends it and hands that height back.
+    @Test func heightModeTargetsAndRestores() {
+        func target(_ mode: PanelHeightState, autoSize: Bool, stored: CGFloat? = nil) -> CGFloat {
+            mode.target(
+                autoSize: autoSize, storedHeight: stored, current: 400, beforeFirstReport: 560, minimum: 197, zoom: 1,
+                available: 876)
+        }
+        var mode = PanelHeightState()
+        #expect(target(mode, autoSize: true) == 560)
+        #expect(target(mode, autoSize: false, stored: 500) == 500)
+        #expect(target(mode, autoSize: false) == 400)
+        mode.report(content: 120.4)
+        #expect(target(mode, autoSize: true) == 197)
+        let grows = [(401, 400), (600, 400), (700, 600)].map { wanted, current in
+            mode.growTemporarily(to: CGFloat(wanted), current: CGFloat(current), tolerance: 2)
+        }
+        #expect(grows == [false, true, true])
+        #expect(mode.temporary == PanelHeightState.Temporary(height: 700, before: 400))
+        #expect(target(mode, autoSize: false, stored: 500) == 700)
+        #expect(target(mode, autoSize: true) == 700)
+        let restored = [mode.report(content: 300), mode.report(content: 300)]
+        #expect(restored == [400, nil])
+        #expect(!mode.isTemporary && mode.content == 300)
+    }
+
+    /// A show waits only for a panel off screen with auto-sizing on, an editor, and no height
+    /// known; a waiting show completes on a normal report, a placement, the timeout, or
+    /// auto-sizing going off, and nothing completes a show that is not waiting.
+    @Test func pendingShowRules() {
+        let waiting = PanelShowState(visible: false, awaitingFirstReport: true)
+        #expect(waiting == .awaitingFirstReport)
+        #expect(PanelShowState.hidden.showWaits(autoSize: true, knowsHeight: false, hasEditor: true))
+        #expect(!PanelShowState.visible.showWaits(autoSize: true, knowsHeight: false, hasEditor: true))
+        #expect(!PanelShowState.hidden.showWaits(autoSize: false, knowsHeight: false, hasEditor: true))
+        #expect(!PanelShowState.hidden.showWaits(autoSize: true, knowsHeight: true, hasEditor: true))
+        #expect(!PanelShowState.hidden.showWaits(autoSize: true, knowsHeight: false, hasEditor: false))
+        #expect(waiting.completesShow(on: .heightReport(temporary: false)))
+        #expect(!waiting.completesShow(on: .heightReport(temporary: true)))
+        #expect(waiting.completesShow(on: .placed))
+        #expect(waiting.completesShow(on: .timedOut))
+        #expect(waiting.completesShow(on: .settingsChanged(autoSize: false)))
+        #expect(!waiting.completesShow(on: .settingsChanged(autoSize: true)))
+        #expect(!PanelShowState.hidden.completesShow(on: .placed))
+        #expect(!PanelShowState.visible.completesShow(on: .heightReport(temporary: false)))
     }
 }
 

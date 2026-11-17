@@ -14,6 +14,7 @@ description: Take an Overnote change from a branch to a merged pull request with
    - `docs/architecture.md` for any protocol, path, flag, schema, or bundle change, with a protocol version bump for protocol changes.
    - `docs/architecture/system-design.md` for new parts, flows, or hosts.
 3. `npm run verify` must print `all steps passed`. Treat flaky or failing tests as defects.
+   In a fresh worktree run `npm ci` first: most steps quietly use the main checkout's `node_modules` further up, but `ray build` then fails with "please install the TypeScript compiler".
 4. Commit as `WesleyBLDC <WesleyBLDC@users.noreply.github.com>`, with no co-author trailer.
 5. Publish the branch, then open the PR in a separate command: `gh-axi pr create -R WesleyBLDC/overnote --title "Area: summary" --body-file <file> --head <branch>`.
    Doing both in one command, or passing a base flag, trips the lead guard.
