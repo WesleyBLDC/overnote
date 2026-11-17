@@ -5,7 +5,7 @@
  */
 import type { Editor } from "@tiptap/core";
 import { useState, type ReactNode } from "react";
-import { activeListKind, isFormatActive, runFormat, type FormatId } from "../editor/commands";
+import { activeListKind, BLOCK_LABELS, isFormatActive, runFormat, type FormatId } from "../editor/commands";
 import { Menu, type MenuItem } from "./Menu";
 import { Tooltip } from "./Tooltip";
 
@@ -21,14 +21,14 @@ interface FormatBarProps {
 type MenuName = "heading" | "list" | null;
 
 const HEADINGS: [FormatId, string, string][] = [
-  ["h1", "Heading 1", "⌥⌘1"],
-  ["h2", "Heading 2", "⌥⌘2"],
-  ["h3", "Heading 3", "⌥⌘3"],
+  ["h1", BLOCK_LABELS.h1, "⌥⌘1"],
+  ["h2", BLOCK_LABELS.h2, "⌥⌘2"],
+  ["h3", BLOCK_LABELS.h3, "⌥⌘3"],
 ];
 const LISTS: [FormatId, string, string][] = [
-  ["ordered", "Ordered List", "⇧⌘7"],
-  ["bullet", "Bullet List", "⇧⌘8"],
-  ["task", "Task List", "⇧⌘9"],
+  ["bullet", BLOCK_LABELS.bullet, "⇧⌘8"],
+  ["ordered", BLOCK_LABELS.ordered, "⇧⌘7"],
+  ["task", BLOCK_LABELS.task, "⇧⌘9"],
 ];
 
 export function FormatBar({ editor, openLink, pinned, shown }: FormatBarProps) {

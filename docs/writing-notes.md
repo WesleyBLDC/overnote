@@ -13,7 +13,7 @@ Tables, images, and raw HTML do not render: a table stays as literal `|` text, a
 
 For a clean note:
 
-1. Start with a short, specific title as a `# Title` on the first line.
+1. Start with a short, specific title on the first line: in a new, empty note the first line you type becomes the title by itself (↩ moves to the body), unless it starts a Markdown block such as `-` or `/`.
 2. For a note you keep current, put `As of Oct 21.` on the second line and update it when the note changes.
 3. Group with `##` sections and at most one `###` level below them; don't skip levels.
 4. Leave one blank line between blocks; extra blank lines show as empty space.

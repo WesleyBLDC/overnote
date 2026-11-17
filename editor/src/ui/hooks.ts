@@ -320,8 +320,16 @@ function subtract(rect: rpc.DragRect, hole: rpc.DragRect): rpc.DragRect[] {
  * in points (CSS px, which already include zoom) with a top-left origin at the panel's corner.
  * Edges are rounded outward for controls so a click on a control's edge never starts a drag.
  */
+/** The top bar that drags the window: the full-panel terminal's header while it shows (SPEC §12), else the toolbar. */
+function dragBar(app: HTMLElement): HTMLElement | null {
+  return (
+    app.querySelector<HTMLElement>("[data-expanded] > .terminal-header") ??
+    app.querySelector<HTMLElement>("[data-testid=toolbar]")
+  );
+}
+
 export function computeDragRegions(app: HTMLElement): rpc.DragRect[] {
-  const toolbar = app.querySelector<HTMLElement>("[data-testid=toolbar]");
+  const toolbar = dragBar(app);
   if (!toolbar) return [];
   const origin = app.getBoundingClientRect();
   const box = toolbar.getBoundingClientRect();
@@ -349,7 +357,7 @@ export function computeDragRegions(app: HTMLElement): rpc.DragRect[] {
  * any toolbar part resizes, when zoom changes, and when the hover chrome shows or hides. Identical
  * regions are sent once.
  */
-export function useDragRegions(app: HTMLElement | null, api: Api, zoom: number) {
+export function useDragRegions(app: HTMLElement | null, api: Api, zoom: number, terminalExpanded = false) {
   const last = useRef<string | null>(null);
   useEffect(() => {
     if (!app) return;
@@ -373,10 +381,14 @@ export function useDragRegions(app: HTMLElement | null, api: Api, zoom: number) 
     const observeToolbar = () => {
       observer.disconnect();
       observer.observe(app);
-      const toolbar = app.querySelector("[data-testid=toolbar]");
+      const toolbar = dragBar(app);
       if (!toolbar) return;
       observer.observe(toolbar);
-      for (const part of Array.from(toolbar.querySelectorAll(`${INTERACTIVE}, .toolbar-actions, .toolbar-leading`)))
+      for (const part of Array.from(
+        toolbar.querySelectorAll(
+          `${INTERACTIVE}, .toolbar-actions, .toolbar-leading, .terminal-leading, .terminal-actions`,
+        ),
+      ))
         observer.observe(part);
     };
     observeToolbar();
@@ -407,7 +419,7 @@ export function useDragRegions(app: HTMLElement | null, api: Api, zoom: number) 
       app.removeEventListener("transitionend", schedule);
       window.removeEventListener("resize", schedule);
     };
-  }, [app, api, zoom]);
+  }, [app, api, zoom, terminalExpanded]);
 }
 
 /**

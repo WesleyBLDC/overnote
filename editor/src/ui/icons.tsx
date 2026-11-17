@@ -42,6 +42,9 @@ const paths: Record<string, ReactElement> = {
   fillScreen: <path d="M3 3h10v10H3z" />,
   centre: <path d="M5.5 5.5h5v5h-5zM3 3v2M13 3v2M3 13v-2M13 13v-2" />,
   expand: <path d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3" />,
+  /* The terminal's expand and collapse (design icons expand.svg and collapse.svg on the 16 point grid). */
+  expandDiagonal: <path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5 9 7M2.5 13.5 7 9" />,
+  collapse: <path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M9.5 6.5l4-4M6.5 9.5l-4 4" />,
 };
 
 /** Toolbar icons from the editor board: drawn on a 24 point grid, shown at 17 points with a 1.6 point stroke. */

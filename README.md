@@ -29,7 +29,7 @@ Press it again and it is gone.
 ## Features
 
 - Floating panel over full-screen apps and every Space; typing without stealing focus
-- Markdown as you type, `/` slash menu, emoji picker, a format island you can pin with Aa (⌥⌘,), and a corner count that switches between words and characters
+- Markdown as you type, a `/` block menu (text, lists, quote, code, divider) with each block's Markdown shortcut, emoji picker, a format island you can pin with Aa (⌥⌘,), and a corner count that switches between words and characters
 - Tasks (⌘↩), nested lists, syntax-highlighted code, find and replace (⌘F)
 - Search (⌘P): notes with a live preview and match snippets, a sort menu (last opened, modified, created, title, length), key actions, and every action behind ⌘K or `>`
 - Pins (⇧⌘P, ⌘1–⌘9), history (⌘[ / ⌘])
@@ -88,6 +88,7 @@ Everything saves automatically.
 | ⌃⌥← → ↑ ↓ | Fill left / right / screen / centre |
 | ⌘= / ⌘- / ⌘0 | Zoom |
 | ⌃` | Open or close the terminal drawer |
+| ⇧⌘↩ | Expand the terminal to the whole panel, and back |
 | ⎋ or ⌘W | Hide |
 
 </details>
@@ -100,7 +101,7 @@ Everything saves automatically.
 | ⌘B / ⌘I / ⌘U / ⇧⌘S | Bold / italic / underline / strike |
 | ⌘E / ⌘L | Inline code / link |
 | ⌥⌘1–3 / ⌥⌘C / ⇧⌘B | Heading / code block / quote |
-| ⇧⌘7 / 8 / 9 | Numbered / bullet / task list |
+| ⇧⌘7 / 8 / 9 | Numbered list / bulleted list / checklist |
 | ⌘↩ | Check task; open link; leave code block |
 | Tab / ⇧Tab | Indent / outdent |
 | `/` / `:` | Slash menu / emoji |

@@ -267,9 +267,9 @@ test("the first line renders exactly like body text and still names the note", a
   await expect(page.getByTestId("title")).toHaveText("Say Hello");
   await expect.poll(async () => String((await lastSave(page)).title)).toBe("Say Hello");
 
-  // An empty note shows the placeholder in plain body style and names itself "Untitled".
+  // An empty note shows the ghost title and names itself "Untitled".
   await openHarness(page);
-  await expect(editor(page).locator(":scope > p")).toHaveAttribute("data-placeholder", "Start writing…");
+  await expect(editor(page).locator(":scope > p")).toHaveAttribute("data-placeholder", "Untitled");
   await expect(page.getByTestId("title")).toHaveText("Untitled");
   await page.keyboard.type("T");
   await expect(page.getByTestId("title")).toHaveText("T");
@@ -777,8 +777,8 @@ test("the top bar shows at rest, centred in 46 points, and Close hides the panel
 test("the corner: a words or characters count, only the selection while selecting, Aa, and the format island", async ({
   page,
 }) => {
-  await openHarness(page);
-  await page.keyboard.type("Hello world");
+  await openHarness(page, ["Hello world"]);
+  await page.keyboard.press("Meta+ArrowDown");
   const counter = page.getByTestId("counter");
   const value = counter.locator(".corner-count-value");
   // Words by default; the icon says which, and a click switches and remembers.
@@ -860,7 +860,7 @@ test("the corner: a words or characters count, only the selection while selectin
   await expect(editor(page).locator("code")).toHaveText("Hello world");
   await expect(bar.getByRole("button", { name: "Code (⌘E)" })).toHaveAttribute("aria-pressed", "true");
   await bar.getByRole("button", { name: "List" }).click();
-  await page.getByRole("menuitemcheckbox", { name: /Task List/ }).click();
+  await page.getByRole("menuitemcheckbox", { name: /Checklist/ }).click();
   await expect(bar.getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
   // ⌘K reaches the same toggle.
   await page.keyboard.press("Meta+k");
@@ -877,22 +877,21 @@ test("slash menu and link popover", async ({ page }) => {
   await page.keyboard.type("/");
   const menu = page.getByTestId("slash-menu");
   await expect(menu.getByRole("option")).toHaveText([
-    "Heading 1⌥⌘1",
-    "Heading 2⌥⌘2",
-    "Heading 3⌥⌘3",
-    "Bold⌘B",
-    "Italic⌘I",
-    "Strikethrough⇧⌘S",
-    "Underline⌘U",
-    "Code⌘E",
-    "Code Block⌥⌘C",
-    "Blockquote⇧⌘B",
-    "Ordered List⇧⌘7",
-    "Bullet List⇧⌘8",
-    "Task List⇧⌘9",
+    "TText",
+    "H1Title#",
+    "H2Heading##",
+    "H3Subheading###",
+    "•Bulleted list-",
+    "1.Numbered list1.",
+    "Checklist[ ]",
+    "”Quote>",
+    "{}Code block```",
+    "—Divider---",
   ]);
+  await expect(menu.locator(".menu-section")).toHaveText(["Text", "Lists", "Blocks"]);
   await page.keyboard.type("todo");
-  await expect(menu.getByRole("option").first()).toContainText("Task List");
+  await expect(menu.locator(".menu-section")).toHaveText(["Best match"]);
+  await expect(menu.getByRole("option").first()).toContainText("Checklist");
   await page.keyboard.press("Enter");
   await expect(menu).toHaveCount(0);
   await expect(editor(page).locator("[data-list-kind=task]")).toHaveCount(1);

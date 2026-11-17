@@ -22,7 +22,7 @@ Both are named Overnote, and both open the same database.
 | Editor build | `assets/editor/` (`index.html` plus relative assets; Vite `base: "./"`) |
 | Data dir | `~/Library/Application Support/Overnote/`, shared by the extension and `Overnote.app`; the extension passes it as `--support-dir`, and `OVERNOTE_SUPPORT_DIR` overrides it in the extension (`src/domain/paths.ts`) and in `scripts/update-extension.sh` |
 | Legacy data dir | `environment.supportPath` of the extension, where releases up to helper 0.5.0 kept the database; the extension passes it as `--legacy-support-dir`, and the helper only ever reads it (see [section 9](#9-backups-installs-and-updates)) |
-| App bundle | `dist-app/Overnote.app` from `scripts/build-app.sh`: `Contents/MacOS/Overnote` (the helper binary), `Contents/Resources/editor/` (the editor build), `Contents/Resources/Overnote.icns` (made from the 1024 px logo master `assets/brand/overnote-logo-1024.png`), the menu bar template `Contents/Resources/OvernoteStatusTemplate.png` and its `@2x` (made from the same master by `scripts/make-menubar-icon.swift`), and `Contents/Info.plist` with `CFBundleIdentifier` `com.wesleybldc.overnote`; `npm run app:install` copies it to `/Applications` |
+| App bundle | `dist-app/Overnote.app` from `scripts/build-app.sh`: `Contents/MacOS/Overnote` (the helper binary), `Contents/Resources/editor/` (the editor build), `Contents/Resources/Overnote.icns` (made from the 1024 px logo master `assets/brand/overnote-logo-1024.png`), the menu bar template `Contents/Resources/OvernoteStatusTemplate.png` and its `@2x` (copied from `assets/brand/menubar/`, the logo kit's `png/menubar/overnoteTemplate.png` and `@2x`), and `Contents/Info.plist` with `CFBundleIdentifier` `com.wesleybldc.overnote`; `npm run app:install` copies it to `/Applications` |
 | Database | `<support-dir>/notes.sqlite` (WAL) |
 | Socket | `/tmp/overnote-<uid>/helper.sock`; the directory is created with mode 0700 by whoever starts first |
 | PID file | `/tmp/overnote-<uid>/helper.pid` |
@@ -355,13 +355,17 @@ Purge rule: on startup, and every 24 h while running, notes with `deletedAt` str
 - A drawer under the note, the panel's width, sized to 24 rows at the current zoom (fewer when that would take more than half the screen, never fewer than 8), so a full screen program such as an agent keeps its header in view, drawn by xterm.js inside the editor's web view (loaded lazily, in its own chunk, also preloaded 1.5 s after boot).
   The toolbar's Terminal button, Search's Terminal key action (or Open Terminal and Close Terminal by name), and ⌃` toggle it; from the note ⌃` opens the drawer (or focuses an open one) and focuses the terminal, and from the terminal it closes the drawer and puts the caret back in the note.
   The open state is the `terminal.open` setting, so the drawer comes back after a reload or restart, without taking focus from the note.
+- Header: a 32 pt row above the terminal with a status dot (bright while a program runs), the session's name (the last folder of the title the program sets with OSC 0 or 2, else "Herdr" or "Terminal"), the backend, and Expand and Close buttons.
+  Its height counts in the drawer's height, and the drawer sends its height again whenever its chrome changes size, so it keeps its rows.
+- Full-panel view: Expand or ⇧⌘↩ makes the same drawer fill the web view over the note, its header becoming the top bar (Close, a "‹ note title" back pill, the session centred, Collapse), which also becomes the window's drag region.
+  Back, Collapse, or ⇧⌘↩ returns to the note with the drawer still open; the panel's size, the session, and xterm.js never change, and closing the drawer ends the view.
 - Geometry: `window.setDrawer` grows the panel down by the drawer, or up when that would leave the screen, and shrinks it back on close.
   Every frame the helper remembers or computes is the note's: the saved `panelFrame`, auto-sizing and its 860 pt cap, the minimum size, and placements, which use the visible frame minus the drawer, so Fill, Left, and Right take the drawer's space from the note.
   `window.place` returns the note's frame.
   Closing puts the note back where it was before the drawer opened, unless the person moved or resized the panel meanwhile.
   The editor sends the height before it shows the drawer and hides the drawer before it sends 0, so the note never squeezes; while the drawer shows, the note gives up its height at the bottom of the page and the drawer draws below it.
   A page load (reload or new build) closes the helper's terminal and sets the drawer to 0 until the page asks again.
-- Keys: while the terminal has focus, every key goes to the shell, Esc and ⌃X included, except ⌃`, ⌘K, ⌘N, ⌘W, ⌘C, ⌘V, ⌘Q, and the four placements (⌃⌥ arrows).
+- Keys: while the terminal has focus, every key goes to the shell, Esc and ⌃X included, except ⌃`, ⇧⌘↩, ⌘K, ⌘N, ⌘W, ⌘C, ⌘V, ⌘Q, and the four placements (⌃⌥ arrows).
   ⌥ types characters (not Meta), and ⌘Z never undoes the note.
 - What runs: with Herdr's `hc` installed, a kept Herdr terminal named `overnote-drawer` (label `app=overnote`), created on first use in the home folder with `hc run --bg --keep --no-parent --no-notify`, then `hc attach overnote-drawer --history 500` in a pseudo terminal the helper owns.
   The name is unique among live terminals, so two opens cannot create two.

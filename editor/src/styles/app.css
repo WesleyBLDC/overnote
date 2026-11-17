@@ -828,11 +828,53 @@ html[data-high-zoom="true"] .format-bar {
   background: var(--border);
 }
 
+/* The slash menu (SPEC §8): Search's menu style, 12 point corners, 30 point rows with icon tiles, Markdown on the right. */
 .slash-menu {
-  width: 20rem;
-  max-height: min(20rem, var(--room-y, 20rem));
+  width: max-content;
+  min-width: calc(210rem / 14);
+  max-width: min(calc(300rem / 14), var(--room-x, 100vw));
   overflow-y: auto;
   padding: var(--space-1);
+  border-radius: var(--radius-menu);
+  box-shadow: var(--shadow-menu);
+}
+
+.slash-menu .menu-item {
+  height: max(calc(30rem / 14), var(--hit-floor));
+  border-radius: calc(7rem / 14);
+}
+
+.slash-menu .menu-item.is-selected {
+  background: var(--row-selected);
+}
+
+/* A small square that holds a row's glyph or icon. */
+.menu-tile {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: calc(20rem / 14);
+  height: calc(20rem / 14);
+  border-radius: calc(5rem / 14);
+  background: var(--tile-fill);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-label);
+  color: var(--text);
+}
+
+.menu-tile svg {
+  width: calc(12rem / 14);
+  height: calc(12rem / 14);
+}
+
+/* A quiet shortcut on the right of a row: plain Geist Mono text, not keycaps. */
+.menu-shortcut {
+  padding-left: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-micro);
+  color: var(--text-tertiary);
+  white-space: pre;
 }
 
 .link-popover {
@@ -1905,22 +1947,57 @@ html[data-scrollbars="legacy"] .app:has(.popover, .menu) .content::-webkit-scrol
   position: relative;
 }
 
-.empty-hints {
+/* The empty note (SPEC §9): one muted line under the ghost title, and keycap hints along the bottom left. */
+.empty-hint {
   position: absolute;
   left: 0;
   right: 0;
-  top: 2.4em;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--font-size-secondary);
+  top: calc(var(--font-size-title) * var(--line-height-title) + var(--space-2));
+  margin: 0;
+  font-size: var(--font-size-body);
   color: var(--text-tertiary);
   pointer-events: none;
   user-select: none;
 }
 
-.empty-hints p {
-  margin: 0;
+.footer-hints {
+  position: absolute;
+  left: var(--note-padding-x);
+  bottom: calc(16rem / 14);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--font-size-small);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.footer-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Hints fade once and never return for the note; the format island takes the row when it shows. */
+:is(.empty-hint, .footer-hints) {
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+:is(.empty-hint, .footer-hints)[data-faded],
+.footer:has(.format-bar[data-shown="true"]) .footer-hints,
+.app[data-near-bottom] .footer-hints {
+  opacity: 0;
+}
+
+/* A quiet keycap: a 1 point outline instead of a fill. */
+.keycap.is-outline {
+  height: auto;
+  padding: calc(1rem / 14) calc(5rem / 14);
+  background: none;
+  box-shadow: inset 0 0 0 var(--hairline) var(--border-strong);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-micro);
+  color: var(--text-tertiary);
 }
 
 .boot-status {

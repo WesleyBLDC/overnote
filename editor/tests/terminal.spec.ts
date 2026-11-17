@@ -176,8 +176,9 @@ test("an open drawer comes back after a reload without taking focus from the not
 });
 
 test("zooming keeps 24 rows: the drawer grows with the text instead of cutting rows", async ({ page }) => {
+  // At 110% the 24 rows, header, and padding still fit the half screen cap of the test browser's screen.
   await page.goto(
-    `/?seed=${encodeURIComponent(JSON.stringify(["Note"]))}&settings=${encodeURIComponent('{"zoom":1.2,"terminal":{"open":true}}')}`,
+    `/?seed=${encodeURIComponent(JSON.stringify(["Note"]))}&settings=${encodeURIComponent('{"zoom":1.1,"terminal":{"open":true}}')}`,
   );
   await expect(page.getByTestId("app")).toHaveAttribute("data-ready", "true");
   await expect(page.locator(".terminal-drawer .xterm-rows")).toContainText("overnote-mock $");
@@ -218,4 +219,32 @@ test("an exit says so, and the next key starts the shell again", async ({ page }
   await expect.poll(async () => (await terminalMock(page)).opens).toBe(2);
   // The key that restarted it is not typed into the new shell.
   expect((await terminalMock(page)).written).toBe("");
+});
+
+test("the header names the session, and expand fills the panel until back returns to the note", async ({ page }) => {
+  await openHarness(page, ["Weekend project"]);
+  await openWithButton(page);
+  await expect(page.getByTestId("terminal-session")).toContainText("shell");
+  await expect(page.locator(".terminal-status")).toHaveAttribute("data-status", "live");
+
+  // ⇧⌘↩ from inside the terminal reaches Overnote and fills the panel; the session keeps running.
+  await page.keyboard.press("Meta+Shift+Enter");
+  await expect(drawer(page)).toHaveAttribute("data-expanded", "true");
+  const box = await drawer(page).boundingBox();
+  const viewport = page.viewportSize();
+  expect([box?.x, box?.y, box?.width, box?.height]).toEqual([0, 0, viewport?.width, viewport?.height]);
+  await expect(page.getByTestId("terminal-back")).toHaveText("Weekend project");
+  // The full-panel bar drags the window, with holes for its controls.
+  await expect
+    .poll(async () => {
+      const rects = ((await calls(page, "window.setDragRegions")).at(-1)?.params.rects ?? []) as { y: number }[];
+      return rects.length > 1 && rects.every((rect) => rect.y >= 0);
+    })
+    .toBe(true);
+  expect(await calls(page, "term.close")).toHaveLength(0);
+
+  await page.getByTestId("terminal-back").click();
+  await expect(drawer(page)).not.toHaveAttribute("data-expanded", "true");
+  await expect(drawer(page)).toBeVisible();
+  expect(await calls(page, "term.close")).toHaveLength(0);
 });

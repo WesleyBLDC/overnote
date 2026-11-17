@@ -18,7 +18,7 @@ import type { AnyExtension, Editor } from "@tiptap/core";
 import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Api } from "../bridge/api";
-import { focusEditorNow, runFormat, type FormatId } from "../editor/commands";
+import { activeListKind, BLOCK_LABELS, focusEditorNow, runFormat, type FormatId } from "../editor/commands";
 import { findState, findTransaction } from "../editor/find";
 import { createEditorExtensions } from "../editor/extensions";
 import { createNoteLowlight, loadGrammars } from "../editor/lowlight";
@@ -51,7 +51,7 @@ import { Notices } from "./Notices";
 import { SlashMenu, type SlashMenuHandle } from "./SlashMenu";
 import { Toolbar } from "./Toolbar";
 import { TerminalDrawer, useTerminalDrawer } from "../terminal/TerminalDrawer";
-import { inTerminal, reachesOvernote, TOGGLE_TERMINAL } from "../terminal/keys";
+import { EXPAND_TERMINAL, inTerminal, reachesOvernote, TOGGLE_TERMINAL } from "../terminal/keys";
 
 type ExportFormat = "md" | "html" | "txt";
 
@@ -363,7 +363,6 @@ export function App({ api }: { api: Api }) {
   useMinimumSizeReporter(app, api);
   useNearBottom(app);
   useResizeReporter(app, api, { autoSize: settings.windowAutoSize, overlayRem });
-  useDragRegions(app, api, settings.zoom);
   useScrollEdges(app);
 
   // ---- the terminal drawer ----
@@ -377,6 +376,7 @@ export function App({ api }: { api: Api }) {
     zoom: settings.zoom,
     focusNote,
   });
+  useDragRegions(app, api, settings.zoom, terminal.expanded);
 
   // ---- actions ----
 
@@ -718,23 +718,54 @@ export function App({ api }: { api: Api }) {
         { id: "underline", title: "Underline", shortcut: "⌘U", section: "Inline", run: () => format("underline") },
         { id: "code", title: "Code", shortcut: "⌘E", section: "Inline", run: () => format("code") },
         { id: "link", title: "Link", shortcut: "⌘L", section: "Inline", run: () => setTimeout(openLink, 0) },
-        { id: "codeBlock", title: "Code Block", shortcut: "⌥⌘C", section: "Block", run: () => format("codeBlock") },
-        { id: "blockquote", title: "Blockquote", shortcut: "⇧⌘B", section: "Block", run: () => format("blockquote") },
-        { id: "ordered", title: "Ordered List", shortcut: "⇧⌘7", section: "List", run: () => format("ordered") },
-        { id: "bullet", title: "Bullet List", shortcut: "⇧⌘8", section: "List", run: () => format("bullet") },
+        // The design's block names (BLOCK_LABELS) in title case; the old names stay findable as keywords.
+        {
+          id: "codeBlock",
+          title: "Code Block",
+          shortcut: "⌥⌘C",
+          section: "Block",
+          keywords: ["pre", "snippet"],
+          run: () => format("codeBlock"),
+        },
+        {
+          id: "blockquote",
+          title: "Quote",
+          shortcut: "⇧⌘B",
+          section: "Block",
+          keywords: ["blockquote"],
+          run: () => format("blockquote"),
+        },
+        { id: "divider", title: "Divider", section: "Block", keywords: ["rule", "line"], run: () => format("divider") },
+        {
+          id: "bullet",
+          title: "Bulleted List",
+          shortcut: "⇧⌘8",
+          section: "List",
+          keywords: ["bullet list", "unordered"],
+          run: () => format("bullet"),
+        },
+        {
+          id: "ordered",
+          title: "Numbered List",
+          shortcut: "⇧⌘7",
+          section: "List",
+          keywords: ["ordered list"],
+          run: () => format("ordered"),
+        },
         {
           id: "task",
-          title: "Task List",
+          title: "Checklist",
           shortcut: "⇧⌘9",
           section: "List",
-          keywords: ["todo", "check"],
+          keywords: ["task list", "todo", "check"],
           run: () => format("task"),
         },
       ],
       heading: [1, 2, 3].map((level) => ({
         id: `h${level}`,
-        title: `Heading ${level}`,
+        title: BLOCK_LABELS[`h${level}` as "h1" | "h2" | "h3"],
         shortcut: `⌥⌘${level}`,
+        keywords: [`heading ${level}`],
         section: "Heading",
         run: () => format(`h${level}` as FormatId),
       })),
@@ -814,6 +845,12 @@ export function App({ api }: { api: Api }) {
         fn();
       };
       if (matches(event, TOGGLE_TERMINAL)) return run(() => h.terminal.toggleFromKeys(fromTerminal));
+      // ⇧⌘↩ is contextual like ⌘↩: on a task in the note it checks the task with its subtasks (the list keymap);
+      // anywhere else, from the terminal, or in the full-panel view, it expands or collapses the terminal.
+      if (matches(event, EXPAND_TERMINAL)) {
+        const onTask = !fromTerminal && !h.terminal.expanded && editor.isFocused && activeListKind(editor) === "task";
+        if (!onTask) return run(h.terminal.toggleExpanded);
+      }
       if (matches(event, { code: "KeyK", meta: true })) return run(() => setPanel(h.panel ? null : "root"));
       if (matches(event, { code: "KeyP", meta: true }))
         return run(() => setPanel(h.panel === "browse" ? null : "browse"));
@@ -914,6 +951,18 @@ export function App({ api }: { api: Api }) {
     setLinkTarget(null);
   }
 
+  // The empty note hints (SPEC §9) show on a note that opens entirely empty, fade on its first keystroke, and stay
+  // gone for that note even if it is emptied again. One small state per shown note, set during render with the switch.
+  const [hints, setHints] = useState<{ id: NoteId | null; phase: "none" | "shown" | "faded" }>({
+    id: null,
+    phase: "none",
+  });
+  if (state.ready && !preview) {
+    if (hints.id !== currentId) setHints({ id: currentId, phase: entirelyEmpty ? "shown" : "none" });
+    else if (hints.phase === "shown" && !entirelyEmpty) setHints({ id: currentId, phase: "faded" });
+  }
+  const hintsPhase = state.ready && !preview && hints.id === currentId ? hints.phase : "none";
+
   const runSlash = (item: SlashItem) => {
     if (!slash) return;
     focusEditorNow(editor);
@@ -991,12 +1040,10 @@ export function App({ api }: { api: Api }) {
       >
         <div className="content-inner">
           <EditorContent editor={editor} />
-          {entirelyEmpty && state.ready ? (
-            <div className="empty-hints" data-testid="empty-hints">
-              <p>Type / to insert a block</p>
-              <p>Press ⌘K for actions</p>
-              <p>Press the panel hotkey again to hide</p>
-            </div>
+          {hintsPhase !== "none" ? (
+            <p className="empty-hint" data-testid="empty-hint" data-faded={hintsPhase === "faded" || undefined}>
+              Start with a title, or just write.
+            </p>
           ) : null}
         </div>
       </main>
@@ -1009,12 +1056,14 @@ export function App({ api }: { api: Api }) {
         onToggleCount={() => updateSettings({ countMode: settings.countMode === "words" ? "characters" : "words" })}
         onToggleFormatBar={() => updateSettings({ showFormatBar: !settings.showFormatBar })}
         openLink={openLink}
+        hints={hintsPhase === "none" ? null : hintsPhase}
       />
       {slash && slashItems.length ? (
         <SlashMenu
           ref={slashRef}
           editor={editor}
           items={slashItems}
+          query={slash.query}
           from={slash.from}
           onRun={runSlash}
           onDismiss={() => setSlashDismissed(slash.from)}
@@ -1116,7 +1165,7 @@ export function App({ api }: { api: Api }) {
       />
       {confirm ? <ConfirmDialog key={confirmKey(confirm)} request={confirm} onClose={() => setConfirm(null)} /> : null}
       <Notices notices={notices} onExited={dismissNotice} onDismiss={dismiss} />
-      <TerminalDrawer visible={terminal.visible} setHost={terminal.controller.setHost} />
+      <TerminalDrawer terminal={terminal} noteTitle={title} onHide={hide} setHost={terminal.controller.setHost} />
     </div>
   );
 }

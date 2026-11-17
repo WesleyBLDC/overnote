@@ -273,6 +273,8 @@
   --terminal-cursor: var(--cursor);
   --terminal-selection: var(--selection);
   --terminal-divider: var(--border-strong);
+  --terminal-header-height: calc(32rem / 14);
+  --terminal-button: calc(22rem / 14);
   /* The drawer's height: 24 rows at the current zoom, set by terminal/controller.ts before the drawer shows. */
   --terminal-height: 360px;
 
@@ -289,6 +291,10 @@
   --radius-search-chip: calc(9rem / 14);
   --radius-search-row: calc(10rem / 14);
   --search-chip-fill: rgba(24, 24, 27, 0.05);
+  /* The square behind a menu row's glyph (slash menu). */
+  --tile-fill: rgba(24, 24, 27, 0.06);
+  /* The empty note's ghost title "Untitled" (SPEC §9). */
+  --text-ghost: #b4b5ba;
   --edge-zone: 10px;
   /* Dropdowns keep this far from the panel's sides and bottom: clear of the edge zones, and never touching. */
   --dropdown-inset: max(var(--edge-zone), var(--space-2));
@@ -337,6 +343,8 @@
     --panel-shadow: 0 14px 40px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(255, 255, 255, 0.14);
     --shadow-island: 0 6px 18px rgba(0, 0, 0, 0.35), 0 0 0 0.5px var(--border-strong);
     --search-chip-fill: rgba(255, 255, 255, 0.07);
+    --tile-fill: rgba(255, 255, 255, 0.08);
+    --text-ghost: #5a5a60;
 
     --harness-backdrop: linear-gradient(135deg, #34343a, #111113);
     --harness-material: rgba(52, 52, 56, 0.62);
