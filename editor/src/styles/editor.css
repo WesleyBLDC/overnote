@@ -477,9 +477,8 @@
 }
 
 .note-editor .find-match.is-active {
-  background: var(--find-active);
-  outline: 1px solid var(--find-active-outline);
-  outline-offset: 0;
+  background: var(--find-current);
+  color: var(--bg-panel);
 }
 
 .drop-cursor {

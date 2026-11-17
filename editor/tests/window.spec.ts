@@ -399,7 +399,7 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
     });
   });
 
-  // A notice stays for NOTICE_MS (2 s), is marked as leaving, and is removed when its fade
+  // A toast stays for --duration-toast (2.5 s), is marked as leaving, and is removed when its fade
   // (--duration-slide) ends: the paused clock holds the fallback timer, so the transition end does it.
   await page.keyboard.press("Meta+Shift+d");
   await page.clock.runFor(10);
@@ -407,7 +407,7 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   await expect(notice).toHaveText("Copied deeplink");
   expect(await notice.evaluate((el) => getComputedStyle(el).animationDelay)).toBe("0s");
   expect(await notice.evaluate((el) => getComputedStyle(el).transitionDuration)).toBe("0.18s, 0.18s");
-  await page.clock.runFor(1980);
+  await page.clock.runFor(2480);
   await expect(notice).not.toHaveAttribute("data-leaving");
   // The fade runs on real time and can remove the notice before a poll sees it leaving, so record
   // the mark as it lands.
@@ -454,7 +454,7 @@ test("motion: short ease-out transitions, a fading panel exit, and none with red
   await page.keyboard.press("Meta+Shift+d");
   await page.clock.runFor(10);
   await expect(notice).toHaveText("Copied deeplink");
-  await page.clock.runFor(1980);
+  await page.clock.runFor(2480);
   await expect(notice).toHaveCount(1);
   await page.clock.runFor(20);
   await expect(notice).toHaveCount(0);

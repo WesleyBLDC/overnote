@@ -14,8 +14,8 @@ describe("noticesReducer", () => {
     expect(run(leaving, { type: "remove", id: 1 })).toEqual([]);
   });
 
-  it("keeps the newest three", () => {
-    expect(run([], add(1), add(2), add(3), add(4)).map((notice) => notice.id)).toEqual([2, 3, 4]);
+  it("shows one at a time: a new toast replaces the one showing", () => {
+    expect(run([], add(1), add(2)).map((notice) => notice.id)).toEqual([2]);
   });
 
   it("a double dismiss or a late removal returns the same list, so nothing re-renders", () => {

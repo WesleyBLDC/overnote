@@ -2,12 +2,10 @@
 import { DEFAULT_SETTINGS, type rpc, type Settings } from "@overnote/core";
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
 import type { Api } from "../bridge/api";
-import { exitFallbackMs } from "../lib/motion";
+import { exitFallbackMs, tokenMs } from "../lib/motion";
 import { placeDropdown, type Box, type PlacementOptions } from "../lib/placement";
-import { noticesReducer, type NoticeKind } from "./noticeState";
-
-/** How long a polite notice stays before it starts to leave. Error notices stay until dismissed. */
-export const NOTICE_MS = 2000;
+import type { NoticeAction, NoticeKind } from "../lib/notice";
+import { noticesReducer } from "./noticeState";
 
 /**
  * Notices: noticesReducer (noticeState.ts) holds the lifecycle, and this hook owns its timers. JS decides
@@ -53,12 +51,27 @@ export function useNotices() {
     [schedule],
   );
   const notify = useCallback(
-    (message: string, kind: NoticeKind = "info") => {
+    (message: string, kind: NoticeKind = "info", action?: NoticeAction) => {
       const id = next.current++;
-      dispatch({ type: "add", id, message, kind });
-      if (kind !== "error") schedule(id, false, NOTICE_MS, () => dismiss(id));
+      dispatch({ type: "add", id, message, kind, action });
+      // A toast stays --duration-toast (2.5 s), or --duration-toast-action (6 s) with an action; errors stay until dismissed.
+      if (kind !== "error") {
+        const ms = tokenMs(action ? "--duration-toast-action" : "--duration-toast");
+        schedule(id, false, ms, () => dismiss(id));
+      }
     },
     [schedule, dismiss],
+  );
+  /** Runs a toast's action, then lets the toast leave. */
+  const act = useCallback(
+    (id: number) => {
+      const notice = notices.find((item) => item.id === id && !item.leaving);
+      if (!notice?.action) return false;
+      dismiss(id);
+      notice.action.run();
+      return true;
+    },
+    [notices, dismiss],
   );
   // A notice pushed out by a newer one drops its timer; unmounting drops them all.
   useEffect(() => {
@@ -72,7 +85,7 @@ export function useNotices() {
       pending.clear();
     };
   }, []);
-  return { notices, notify, remove, dismiss };
+  return { notices, notify, remove, dismiss, act };
 }
 
 /** Settings from system.ready and settings.changed, with optimistic local updates. */

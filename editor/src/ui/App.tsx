@@ -11,7 +11,7 @@ import {
   type JSONContent,
   type NoteId,
   type PanelPlacement,
-  type rpc,
+  rpc,
 } from "@overnote/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { AnyExtension, Editor } from "@tiptap/core";
@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { Api } from "../bridge/api";
 import { activeListKind, BLOCK_LABELS, focusEditorNow, runFormat, type FormatId } from "../editor/commands";
 import { findState, findTransaction } from "../editor/find";
+import { undoDepth } from "@tiptap/pm/history";
 import { createEditorExtensions } from "../editor/extensions";
 import { createNoteLowlight, loadGrammars } from "../editor/lowlight";
 import { chooseLinkTarget, type LinkTarget } from "../editor/linkRange";
@@ -118,7 +119,7 @@ function sliceJSON(editor: Editor): JSONContent | null {
 }
 
 export function App({ api }: { api: Api }) {
-  const { notices, notify, remove: dismissNotice, dismiss } = useNotices();
+  const { notices, notify, remove: dismissNotice, dismiss, act } = useNotices();
   /** Runs a panel action; a failure shows an error notice, and the promise always settles. */
   const attempt = useCallback(
     async (what: string, work: () => Promise<void>) => {
@@ -231,7 +232,7 @@ export function App({ api }: { api: Api }) {
       replace: (doc) => replaceInEditor(editor, doc),
       setEditable: (editable) => editor.setEditable(editable, false),
     };
-    return new NoteSession({ api, editor: port, notice: (message, kind) => notify(message, kind) });
+    return new NoteSession({ api, editor: port, notice: notify });
   }, [api, notify, editor]);
   const state = useSyncExternalStore(session.subscribe, session.getState);
 
@@ -419,15 +420,23 @@ export function App({ api }: { api: Api }) {
     [copyText, editor, notify],
   );
 
+  /** Delete All asks first, naming how many notes, and works only once DELETE is typed (SPEC §11). */
   const deleteAll = useCallback(() => {
-    setConfirm({
-      title: "Delete All Notes?",
-      message: "All notes will move to Recently Deleted, where they can be restored.",
-      confirm: "Delete",
-      destructive: true,
-      onConfirm: () => void session.deleteAll(),
-    });
-  }, [session]);
+    void api.notes
+      .count()
+      .catch(() => null)
+      .then((result) => {
+        const count = result?.count;
+        setConfirm({
+          title: count === undefined ? "Delete all notes?" : `Delete all ${count} ${count === 1 ? "note" : "notes"}?`,
+          message: `They move to Recently Deleted for ${rpc.TRASH_RETENTION_DAYS} days. Type DELETE to confirm.`,
+          confirm: "Delete all",
+          destructive: true,
+          typeToConfirm: "DELETE",
+          onConfirm: () => void session.deleteAll(),
+        });
+      });
+  }, [api, session]);
 
   const hide = useCallback(() => {
     session.saveInBackground();
@@ -552,7 +561,7 @@ export function App({ api }: { api: Api }) {
           run: () =>
             currentNote &&
             void copyText(noteDeeplink(currentNote.id)).then(
-              () => notify("Copied deeplink"),
+              () => notify("Copied deeplink", "success"),
               () => undefined,
             ),
         },
@@ -831,6 +840,8 @@ export function App({ api }: { api: Api }) {
     preview,
     exitPreview,
     terminal,
+    notices,
+    act,
   });
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -850,6 +861,12 @@ export function App({ api }: { api: Api }) {
       if (matches(event, EXPAND_TERMINAL)) {
         const onTask = !fromTerminal && !h.terminal.expanded && editor.isFocused && activeListKind(editor) === "task";
         if (!onTask) return run(h.terminal.toggleExpanded);
+      }
+      // ⌘Z undoes a delete while its toast shows, but only when the note itself has nothing to undo: a note opened
+      // by the delete starts with an empty history, so text undo is never taken away.
+      if (matches(event, { code: "KeyZ", meta: true }) && !fromTerminal && !h.panel && undoDepth(editor.state) === 0) {
+        const undo = h.notices.find((notice) => !notice.leaving && notice.action?.shortcut === "⌘Z");
+        if (undo) return run(() => h.act(undo.id));
       }
       if (matches(event, { code: "KeyK", meta: true })) return run(() => setPanel(h.panel ? null : "root"));
       if (matches(event, { code: "KeyP", meta: true }))
@@ -1115,7 +1132,10 @@ export function App({ api }: { api: Api }) {
             attempt(pin ? "pin the note" : "unpin the note", async () => {
               if (pin) await api.notes.pin(id);
               else await api.notes.unpin(id);
-              notify(pin ? "Note pinned" : "Note unpinned");
+              notify(pin ? "Note pinned" : "Note unpinned", "info", {
+                label: pin ? "Unpin" : "Pin",
+                run: () => void (pin ? api.notes.unpin(id) : api.notes.pin(id)).then(() => session.refresh()),
+              });
               await session.refresh();
             })
           }
@@ -1125,7 +1145,7 @@ export function App({ api }: { api: Api }) {
               else {
                 await api.notes.delete(id);
                 session.history.remove(id);
-                notify("Note deleted");
+                notify("Note deleted", "info", session.undoDelete(id));
                 await session.refresh();
               }
             })
@@ -1133,7 +1153,7 @@ export function App({ api }: { api: Api }) {
           onRecover={(id) =>
             attempt("restore the note", async () => {
               await api.notes.recover(id);
-              notify("Note restored");
+              notify("Note restored", "success");
               await session.refresh();
             })
           }
@@ -1164,7 +1184,7 @@ export function App({ api }: { api: Api }) {
         token="--duration-pop"
       />
       {confirm ? <ConfirmDialog key={confirmKey(confirm)} request={confirm} onClose={() => setConfirm(null)} /> : null}
-      <Notices notices={notices} onExited={dismissNotice} onDismiss={dismiss} />
+      <Notices notices={notices} onExited={dismissNotice} onDismiss={dismiss} onAction={act} />
       <TerminalDrawer terminal={terminal} noteTitle={title} onHide={hide} setHost={terminal.controller.setHost} />
     </div>
   );

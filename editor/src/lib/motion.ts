@@ -11,6 +11,11 @@ export function prefersReducedMotion(): boolean {
  * stylesheet sets every token to 0ms, or when the token is missing.
  */
 export function motionMs(token: MotionToken): number {
+  return tokenMs(token);
+}
+
+/** Any duration token (theme.css) in milliseconds, 0 when it is missing; toast durations stay under reduced motion. */
+export function tokenMs(token: MotionToken | "--duration-toast" | "--duration-toast-action"): number {
   if (typeof getComputedStyle !== "function") return 0;
   const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
   const amount = parseFloat(value);

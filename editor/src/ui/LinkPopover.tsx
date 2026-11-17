@@ -1,4 +1,5 @@
 /** The link popover in view and edit modes. */
+import type { Notify } from "../lib/notice";
 import { normalizeLinkHref } from "@overnote/core";
 import type { Editor } from "@tiptap/core";
 import { useEffect, useRef, useState } from "react";
@@ -11,7 +12,7 @@ interface LinkPopoverProps {
   editor: Editor;
   target: LinkTarget;
   onClose: () => void;
-  notify: (message: string, kind?: "info" | "error") => void;
+  notify: Notify;
   openUrl: (href: string) => void;
   copy: (text: string) => Promise<unknown>;
 }
@@ -108,7 +109,7 @@ export function LinkPopover({ editor, target, onClose, notify, openUrl, copy }: 
             title="Copy"
             aria-label="Copy"
             onClick={() => {
-              void copy(target.href).then(() => notify("Link copied to clipboard"));
+              void copy(target.href).then(() => notify("Link copied", "success"));
               close();
             }}
           >

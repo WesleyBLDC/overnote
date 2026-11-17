@@ -16,6 +16,7 @@ import {
 } from "@overnote/core";
 import type { rpc } from "@overnote/core";
 import type { Api } from "../bridge/api";
+import type { NoticeAction, Notify } from "../lib/notice";
 import { NoteHistory } from "./history";
 
 export const SAVE_DEBOUNCE_MS = 300;
@@ -50,8 +51,6 @@ export interface EditorPort {
   setEditable(editable: boolean): void;
 }
 
-export type NoticeKind = "info" | "error";
-
 /** What the editor shows: the current note (edits tracked and saved), or a deleted note read only. */
 export type SessionMode = { kind: "editing" } | { kind: "preview"; item: rpc.DeletedItem };
 
@@ -71,7 +70,7 @@ export interface SessionState {
 export interface SessionOptions {
   api: Api;
   editor: EditorPort;
-  notice?: (message: string, kind: NoticeKind) => void;
+  notice?: Notify;
   now?: () => number;
   debounceMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
@@ -99,7 +98,7 @@ export class NoteSession {
   private readonly listeners = new Set<() => void>();
   private readonly api: Api;
   private readonly editor: EditorPort;
-  private readonly notify: (message: string, kind: NoticeKind) => void;
+  private readonly notify: Notify;
   private readonly now: () => number;
   private readonly debounceMs: number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
@@ -430,7 +429,7 @@ export class NoteSession {
     return this.guard("restore the note", async () => {
       await this.api.notes.recover(mode.item.id);
       if (!(await this.switchToNow(mode.item.id, this.visitCommit))) return false;
-      this.notify("Note restored", "info");
+      this.notify("Note restored", "success");
       return true;
     });
   }
@@ -584,7 +583,7 @@ export class NoteSession {
     this.apply({ ...windowData, current: windowData.current ?? copy }, true);
     // notes.duplicate leaves the persisted current note alone.
     void this.api.notes.setCurrentNote(copy.id).catch(() => undefined);
-    this.notify("Note duplicated", "info");
+    this.notify("Note duplicated", "success");
     return true;
   }
 
@@ -603,8 +602,21 @@ export class NoteSession {
     this.history.remove(note.id);
     // Deleted either way; what shows next is decided only if nothing else was opened meanwhile.
     await this.showAfterDelete(nextNoteId ?? previousNoteId, live);
-    this.notify("Note deleted", "info");
+    this.notify("Note deleted", "info", this.undoDelete(note.id));
     return true;
+  }
+
+  /** The Undo on a delete's toast: restores the note from Recently Deleted and opens it again. */
+  undoDelete(id: NoteId): NoticeAction {
+    return {
+      label: "Undo",
+      shortcut: "⌘Z",
+      run: () =>
+        void this.guard("restore the note", async () => {
+          await this.api.notes.recover(id);
+          return this.switchToNow(id, this.visitCommit);
+        }),
+    };
   }
 
   private async showAfterDelete(target: NoteId | null, live: () => boolean): Promise<void> {
@@ -647,7 +659,10 @@ export class NoteSession {
     if (pinned) await this.api.notes.pin(note.id);
     else await this.api.notes.unpin(note.id);
     await this.refresh();
-    this.notify(pinned ? "Note pinned" : "Note unpinned", "info");
+    this.notify(pinned ? "Note pinned" : "Note unpinned", "info", {
+      label: pinned ? "Unpin" : "Pin",
+      run: () => void this.togglePin(),
+    });
     return true;
   }
 

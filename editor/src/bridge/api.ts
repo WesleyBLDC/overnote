@@ -48,6 +48,7 @@ export function createApi(client: BridgeClient) {
       unpin: (id: string) => call(M.NotesUnpin, { id }),
       browse: (params: P<"notes.browse"> = {}) => call(M.NotesBrowse, params),
       listDeleted: () => call(M.NotesListDeleted, {}),
+      count: () => call(M.NotesCount, {}),
       setCurrentNote: (noteId: string) => call(M.NotesSetCurrentNote, { noteId }),
       touchAccessed: (id: string) => call(M.NotesTouchAccessed, { id }),
       windowData: (params: P<"notes.windowData"> = {}) => call(M.NotesWindowData, params),
