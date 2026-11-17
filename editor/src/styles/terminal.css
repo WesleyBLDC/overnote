@@ -22,9 +22,161 @@
   display: none;
 }
 
+/* The drawer header (board 06): 32 tall, Geist Mono 11 in --text-tertiary, the session on the left, expand and close on the right. */
+.terminal-drawer {
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--terminal-header-height);
+  padding: 0 max(var(--edge-zone), var(--space-3));
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  color: var(--text-tertiary);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.terminal-session {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.terminal-status {
+  width: calc(6rem / 14);
+  height: calc(6rem / 14);
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.terminal-status[data-status="live"] {
+  background: var(--text);
+}
+
+.terminal-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.terminal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+/* Header buttons: a hit floor box with a 22 point face; expand is outlined (SPEC §12). */
+.terminal-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit-floor);
+  height: var(--hit-floor);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-tertiary);
+}
+
+.terminal-button::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--hit-floor) - var(--terminal-button)) / 2);
+  border-radius: var(--radius-xs);
+}
+
+.terminal-button.is-outlined::before {
+  box-shadow: inset 0 0 0 var(--hairline) var(--border-strong);
+}
+
+.terminal-button:hover {
+  color: var(--text);
+}
+
+.terminal-button svg {
+  position: relative;
+  width: calc(12rem / 14);
+  height: calc(12rem / 14);
+}
+
+/*
+ * The full-panel view: the same drawer fills the panel over the note, and its header becomes the top bar (Close,
+ * the "‹ note title" back pill, the session centred, collapse). The note and its drawer space stay as they were, so
+ * going back is instant and the session keeps running.
+ */
+.terminal-drawer[data-expanded] {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  height: auto;
+  border-top: 0;
+}
+
+.terminal-drawer[data-expanded] .terminal-header {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, auto) 1fr;
+  height: var(--topbar-height);
+  padding: 0 var(--topbar-inset-right) 0 var(--topbar-inset-left);
+  border-bottom: var(--hairline) solid var(--terminal-divider);
+}
+
+.terminal-leading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.terminal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  height: var(--hit-floor);
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: var(--tile-fill);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-secondary);
+  color: var(--text);
+}
+
+.terminal-back svg {
+  flex: none;
+  width: calc(14rem / 14);
+  height: calc(14rem / 14);
+}
+
+.terminal-back-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.terminal-drawer[data-expanded] .terminal-session {
+  justify-self: center;
+}
+
+.terminal-drawer[data-expanded] .terminal-actions {
+  justify-self: end;
+}
+
 .terminal-host {
   box-sizing: border-box;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   /* Clear of the helper's 10 pt resize zones along the bottom and side edges. */
   padding: var(--space-2) max(var(--edge-zone), var(--space-3)) max(var(--edge-zone), var(--space-2));
 }

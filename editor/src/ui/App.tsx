@@ -18,7 +18,7 @@ import type { AnyExtension, Editor } from "@tiptap/core";
 import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Api } from "../bridge/api";
-import { BLOCK_LABELS, focusEditorNow, runFormat, type FormatId } from "../editor/commands";
+import { activeListKind, BLOCK_LABELS, focusEditorNow, runFormat, type FormatId } from "../editor/commands";
 import { findState, findTransaction } from "../editor/find";
 import { createEditorExtensions } from "../editor/extensions";
 import { createNoteLowlight, loadGrammars } from "../editor/lowlight";
@@ -51,7 +51,7 @@ import { Notices } from "./Notices";
 import { SlashMenu, type SlashMenuHandle } from "./SlashMenu";
 import { Toolbar } from "./Toolbar";
 import { TerminalDrawer, useTerminalDrawer } from "../terminal/TerminalDrawer";
-import { inTerminal, reachesOvernote, TOGGLE_TERMINAL } from "../terminal/keys";
+import { EXPAND_TERMINAL, inTerminal, reachesOvernote, TOGGLE_TERMINAL } from "../terminal/keys";
 
 type ExportFormat = "md" | "html" | "txt";
 
@@ -363,7 +363,6 @@ export function App({ api }: { api: Api }) {
   useMinimumSizeReporter(app, api);
   useNearBottom(app);
   useResizeReporter(app, api, { autoSize: settings.windowAutoSize, overlayRem });
-  useDragRegions(app, api, settings.zoom);
   useScrollEdges(app);
 
   // ---- the terminal drawer ----
@@ -377,6 +376,7 @@ export function App({ api }: { api: Api }) {
     zoom: settings.zoom,
     focusNote,
   });
+  useDragRegions(app, api, settings.zoom, terminal.expanded);
 
   // ---- actions ----
 
@@ -845,6 +845,12 @@ export function App({ api }: { api: Api }) {
         fn();
       };
       if (matches(event, TOGGLE_TERMINAL)) return run(() => h.terminal.toggleFromKeys(fromTerminal));
+      // ⇧⌘↩ is contextual like ⌘↩: on a task in the note it checks the task with its subtasks (the list keymap);
+      // anywhere else, from the terminal, or in the full-panel view, it expands or collapses the terminal.
+      if (matches(event, EXPAND_TERMINAL)) {
+        const onTask = !fromTerminal && !h.terminal.expanded && editor.isFocused && activeListKind(editor) === "task";
+        if (!onTask) return run(h.terminal.toggleExpanded);
+      }
       if (matches(event, { code: "KeyK", meta: true })) return run(() => setPanel(h.panel ? null : "root"));
       if (matches(event, { code: "KeyP", meta: true }))
         return run(() => setPanel(h.panel === "browse" ? null : "browse"));
@@ -1159,7 +1165,7 @@ export function App({ api }: { api: Api }) {
       />
       {confirm ? <ConfirmDialog key={confirmKey(confirm)} request={confirm} onClose={() => setConfirm(null)} /> : null}
       <Notices notices={notices} onExited={dismissNotice} onDismiss={dismiss} />
-      <TerminalDrawer visible={terminal.visible} setHost={terminal.controller.setHost} />
+      <TerminalDrawer terminal={terminal} noteTitle={title} onHide={hide} setHost={terminal.controller.setHost} />
     </div>
   );
 }
