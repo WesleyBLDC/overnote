@@ -124,11 +124,16 @@ export interface MockStoreOptions {
   emit?: (event: rpc.EventName, payload: unknown) => void;
 }
 
+/** Where the helper keeps its data (docs/architecture.md section 3), with a stand-in home folder. */
+const MOCK_DATA_DIR = "/Users/you/Library/Application Support/Overnote";
+
 export class MockStore {
   notes = new Map<NoteId, Note>();
   settings: Settings = { ...DEFAULT_SETTINGS };
   currentNoteId: NoteId | null = null;
   visible = true;
+  /** Backups the page wrote with `system.backup`, newest first. */
+  backups: rpc.BackupInfo[] = [];
   /** Every `window.place` placement, in order. */
   placeCalls: PanelPlacement[] = [];
   /** Set by the bridge before each `window.place` from the page and the harness panel. */
@@ -287,8 +292,25 @@ export class MockStore {
     "system.ready": () => ({ settings: { ...this.settings }, windowData: this.windowData() }),
     // Socket-only on the real helper, so the bridge refuses them the same way.
     "system.status": () => socketOnly("system.status"),
-    "system.backup": () => socketOnly("system.backup"),
-    "system.listBackups": () => socketOnly("system.listBackups"),
+    "system.backup": () => {
+      const at = this.now();
+      const name = `notes-${new Date(at).toISOString().replace(/[-:.]/g, "")}-v0.0.0-manual.sqlite`;
+      const info: rpc.BackupInfo = {
+        path: `${MOCK_DATA_DIR}/backups/${name}`,
+        name,
+        createdAt: at,
+        version: "0.0.0",
+        reason: "manual",
+        sizeBytes: 4096,
+      };
+      this.backups.unshift(info);
+      return info;
+    },
+    "system.listBackups": () => ({
+      directory: `${MOCK_DATA_DIR}/backups`,
+      dataDirectory: MOCK_DATA_DIR,
+      items: [...this.backups],
+    }),
     "system.restoreBackup": () => socketOnly("system.restoreBackup"),
     "system.dismissRestoreOffer": () => socketOnly("system.dismissRestoreOffer"),
     "system.importLegacy": () => socketOnly("system.importLegacy"),
@@ -321,6 +343,7 @@ export class MockStore {
     "term.close": () => ({}),
     "clipboard.copy": () => ({}),
     "app.openURL": () => ({}),
+    "app.revealDataFolder": () => ({}),
     "file.saveAs": (params) => ({ saved: true, path: `/tmp/${params.suggestedName}` }),
     "notes.create": (params) => {
       const at = this.now();

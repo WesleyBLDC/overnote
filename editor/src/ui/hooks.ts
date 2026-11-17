@@ -336,6 +336,7 @@ function subtract(rect: rpc.DragRect, hole: rpc.DragRect): rpc.DragRect[] {
 /** The top bar that drags the window: the full-panel terminal's header while it shows (SPEC §12), else the toolbar. */
 function dragBar(app: HTMLElement): HTMLElement | null {
   return (
+    app.querySelector<HTMLElement>(".settings-page > .settings-header") ??
     app.querySelector<HTMLElement>("[data-expanded] > .terminal-header") ??
     app.querySelector<HTMLElement>("[data-testid=toolbar]")
   );

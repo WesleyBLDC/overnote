@@ -28,7 +28,6 @@ async function caretAtEndOfFirstLine(page: Page) {
 }
 
 const DROPDOWNS: { name: string; selector: string; open(page: Page): Promise<void> }[] = [
-  { name: "settings", selector: "[data-testid=command-panel]", open: (page) => page.keyboard.press("Meta+Comma") },
   { name: "actions", selector: "[data-testid=command-panel]", open: (page) => page.keyboard.press("Meta+k") },
   {
     name: "format menu",
@@ -175,10 +174,10 @@ test("a dropdown near the bottom of a short panel opens upward and scrolls to it
 test("at the minimum size the command panels show at least two settings or notes rows and three actions", async ({
   page,
 }) => {
-  for (const [shortcut, rows] of [
-    ["Meta+Comma", 2],
-    ["Meta+k", 3],
-    ["Meta+p", 2],
+  for (const [shortcut, rows, list, row] of [
+    ["Meta+Comma", 2, ".settings-body", ".settings-row"],
+    ["Meta+k", 3, ".panel-list", ".panel-row"],
+    ["Meta+p", 2, ".panel-list", ".panel-row"],
   ] as const) {
     await openHarness(page, ["One", "Two", NOTE]);
     await page.evaluate(() =>
@@ -187,15 +186,15 @@ test("at the minimum size the command panels show at least two settings or notes
       ).__overnoteMock.setPanelSize(405, 197),
     );
     await page.keyboard.press(shortcut);
-    await expect(page.locator(".panel-list")).toBeVisible();
+    await expect(page.locator(list)).toBeVisible();
     await settle(page);
-    const visible = await page.locator(".panel-list").evaluate((list) => {
-      const box = list.getBoundingClientRect();
-      return Array.from(list.querySelectorAll(".panel-row")).filter((row) => {
+    const visible = await page.locator(list).evaluate((el, rowSelector) => {
+      const box = el.getBoundingClientRect();
+      return Array.from(el.querySelectorAll(rowSelector)).filter((row) => {
         const r = row.getBoundingClientRect();
         return r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5;
       }).length;
-    });
+    }, row);
     expect(visible, shortcut).toBeGreaterThanOrEqual(rows);
   }
 });

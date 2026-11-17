@@ -1553,63 +1553,210 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 
 /* ---- Settings view (⌘,) ---- */
 
-.panel[data-view="settings"] {
-  width: min(25rem, calc(100% - 1.5rem));
+/* ---- Settings (board 08, SPEC §10): a page over the note, with its own header as the drag bar ---- */
+
+.settings-page {
+  position: absolute;
+  inset: 0;
+  /* Over the note and its toasts' layer, under Search and dialogs (40). */
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  border-radius: inherit;
+  background: var(--bg-panel);
+  animation: fade-in var(--duration-fast) var(--ease-out);
 }
 
-.setting-row {
+.settings-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--settings-header-height);
+  padding: 0 var(--topbar-inset-right) 0 var(--topbar-inset-left);
+  border-bottom: var(--hairline) solid var(--border);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* A shortcut beside a row's title is plain tertiary text, as on the board, not keycaps. */
+.settings-shortcut {
+  font-size: var(--font-size-small);
+  color: var(--text-tertiary);
+  letter-spacing: 0.06em;
+}
+
+.settings-back {
+  color: var(--text-secondary);
+}
+
+.settings-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-strong);
+  color: var(--text);
+}
+
+.settings-search {
+  display: flex;
+  flex: 0 1 calc(180rem / 14);
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  height: max(calc(26rem / 14), var(--hit-floor));
+  padding: 0 var(--space-2);
+  border-radius: calc(7rem / 14);
+  background: var(--bg-sunken);
+  color: var(--text-tertiary);
+}
+
+.settings-search svg {
+  flex: none;
+  width: calc(12rem / 14);
+  height: calc(12rem / 14);
+}
+
+.settings-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-small);
+  color: var(--text);
+  outline: none;
+}
+
+.settings-search input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-2) 0 var(--space-4);
+}
+
+.settings-group-label {
+  padding: var(--space-4) var(--settings-gutter) var(--space-1);
+  font-size: calc(10.5rem / 14);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: max(var(--settings-row-height), var(--hit-floor));
+  margin: 0 calc(var(--settings-gutter) - var(--space-2));
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-s);
+  font-size: var(--font-size-secondary);
+  color: var(--text);
   cursor: default;
 }
 
-.switch {
+/* Hairline dividers between the rows of a group, inset to the text. */
+.settings-row + .settings-row {
+  box-shadow: inset 0 var(--hairline) 0 var(--border);
+}
+
+.settings-row.is-selected {
+  background: var(--row-selected);
+  box-shadow: none;
+}
+
+.settings-row.is-selected + .settings-row {
+  box-shadow: none;
+}
+
+.settings-row-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.settings-row.is-danger .settings-row-title {
+  color: var(--text-secondary);
+}
+
+.settings-row-detail {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-small);
+  color: var(--text-tertiary);
+}
+
+/* The control sits at the row's right edge. */
+.settings-row > :is(.toggle, .segmented, .stepper, .settings-menu, .settings-button) {
+  margin-left: auto;
+}
+
+.settings-empty {
+  padding: var(--space-6) var(--settings-gutter);
+  font-size: var(--font-size-secondary);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+/* Toggle: 30 x 18 with a 14 point knob; on is the accent track with a panel-coloured knob. */
+.toggle {
   position: relative;
   flex: none;
-  width: 2.15rem;
-  height: 1.25rem;
+  width: calc(30rem / 14);
+  height: calc(18rem / 14);
   border-radius: var(--radius-full);
-  background: var(--border-strong);
+  background: var(--toggle-off-track);
   transition: background-color var(--duration-fast) var(--ease-out);
 }
 
-.switch::after {
+.toggle::after {
   content: "";
   position: absolute;
-  top: 0.125rem;
-  left: 0.125rem;
-  width: 1rem;
-  height: 1rem;
+  top: calc(2rem / 14);
+  left: calc(2rem / 14);
+  width: calc(14rem / 14);
+  height: calc(14rem / 14);
   border-radius: 50%;
-  background: var(--switch-knob);
-  box-shadow: var(--switch-knob-shadow);
+  background: var(--toggle-off-knob);
+  box-shadow: var(--toggle-knob-shadow);
   transition:
     transform var(--duration-slide) var(--ease-out),
     background-color var(--duration-fast) var(--ease-out);
 }
 
-.switch.is-on {
+.toggle.is-on {
   background: var(--accent);
 }
 
-.switch.is-on::after {
-  transform: translateX(0.9rem);
-  background: var(--on-accent);
+.toggle.is-on::after {
+  transform: translateX(calc(12rem / 14));
+  background: var(--bg-panel);
 }
 
 .segmented {
   display: inline-flex;
   flex: none;
-  padding: var(--space-0);
-  border-radius: var(--radius-s);
+  padding: calc(2rem / 14);
+  border-radius: calc(7rem / 14);
   background: var(--bg-sunken);
 }
 
 .segmented button {
-  height: max(1.45rem, var(--hit-floor));
-  padding: 0 var(--space-2);
+  height: max(calc(24rem / 14), var(--hit-floor));
+  padding: 0 calc(10rem / 14);
   border: 0;
-  border-radius: calc(var(--radius-s) - var(--space-0));
+  border-radius: calc(5rem / 14);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-size: var(--font-size-small);
   transition:
     background-color var(--duration-pop) var(--ease-out),
@@ -1617,43 +1764,75 @@ html[data-high-zoom="true"] .panel-row-subtitle {
 }
 
 .segmented button.is-on {
-  background: var(--bg-raised);
+  background: var(--segment-selected);
   color: var(--text);
-  box-shadow: var(--shadow-small);
+  box-shadow: var(--segment-selected-shadow);
+}
+
+/* The Font menu: a native popup, drawn as a quiet chip with a chevron. */
+.settings-menu {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--text);
+}
+
+.settings-menu select {
+  height: max(calc(26rem / 14), var(--hit-floor));
+  padding: 0 calc(24rem / 14) 0 calc(10rem / 14);
+  border: 0;
+  border-radius: calc(7rem / 14);
+  background: var(--bg-sunken);
+  font: inherit;
+  font-size: var(--font-size-small);
+  color: inherit;
+  appearance: none;
+}
+
+.settings-menu svg {
+  position: absolute;
+  right: calc(8rem / 14);
+  width: calc(10rem / 14);
+  height: calc(10rem / 14);
+  pointer-events: none;
+  color: var(--text-tertiary);
 }
 
 .stepper {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 0.1rem;
+  border-radius: calc(7rem / 14);
+  background: var(--bg-sunken);
+}
+
+.stepper .icon-button {
+  color: var(--text-secondary);
 }
 
 .stepper-value {
-  min-width: 2.9rem;
-  font-size: var(--font-size-secondary);
+  min-width: calc(44rem / 14);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
-.stepper-reset {
-  margin-left: var(--space-1);
-  height: max(1.6rem, var(--hit-floor));
+.settings-button {
+  height: max(calc(26rem / 14), var(--hit-floor));
   font-size: var(--font-size-small);
 }
 
-/* The Reset All Settings row: the whole row is the button, the label only shows what it does. */
-.setting-action {
-  display: inline-flex;
-  align-items: center;
-  height: max(1.6rem, var(--hit-floor));
-  font-size: var(--font-size-small);
-  color: var(--text-secondary);
+/* Delete…: outlined in the danger colour, never filled, so it reads as a warning rather than the default. */
+.settings-button.is-danger {
+  background: none;
+  box-shadow: inset 0 0 0 var(--hairline) var(--danger);
+  color: var(--danger);
 }
 
-.setting-row.is-selected .setting-action {
-  background: var(--accent-soft);
-  color: var(--text);
+.settings-button.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 
 .panel-banner {

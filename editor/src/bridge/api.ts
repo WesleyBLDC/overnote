@@ -10,6 +10,8 @@ export function createApi(client: BridgeClient) {
   return {
     system: {
       ready: () => call(M.SystemReady, {}),
+      backup: () => call(M.SystemBackup, {}),
+      listBackups: () => call(M.SystemListBackups, {}),
     },
     window: {
       hide: () => call(M.WindowHide, {}),
@@ -31,6 +33,7 @@ export function createApi(client: BridgeClient) {
     },
     app: {
       openURL: (url: string) => call(M.AppOpenURL, { url }),
+      revealDataFolder: () => call(M.AppRevealDataFolder, {}),
     },
     file: {
       saveAs: (params: P<"file.saveAs">) => call(M.FileSaveAs, params),

@@ -1,6 +1,7 @@
 /** The editor's extension list: core's headless extensions plus DOM-only behavior. */
 import { createHeadlessExtensions } from "@overnote/core";
-import { Extension, type AnyExtension, type Editor } from "@tiptap/core";
+import { Extension, InputRule, type AnyExtension, type Editor } from "@tiptap/core";
+import { Typography, type TypographyOptions } from "@tiptap/extension-typography";
 import { CodeBlock } from "@tiptap/extension-code-block";
 import { Dropcursor, Gapcursor, Placeholder } from "@tiptap/extensions";
 import { createCodeBlockView, type CodeBlockViewOptions } from "./codeBlockView";
@@ -57,6 +58,32 @@ function codeBlockHighlight(name: string, lowlight: NoteLowlight) {
   });
 }
 
+/**
+ * The stock Typography rules (curly quotes, dashes, ellipses) behind the "Smart quotes and dashes" setting.
+ * A rule whose handler returns null leaves the typed text as it is.
+ */
+const SmartTypography = Typography.extend<TypographyOptions, { enabled: boolean }>({
+  addStorage() {
+    return { enabled: true };
+  },
+  addInputRules() {
+    const storage = this.storage;
+    return (this.parent?.() ?? []).map(
+      (rule) =>
+        new InputRule({
+          find: rule.find,
+          undoable: rule.undoable,
+          handler: (props) => (storage.enabled ? rule.handler(props) : null),
+        }),
+    );
+  },
+});
+
+/** Turns the Smart quotes and dashes rules on or off (Settings, v3.8). */
+export function setSmartTypography(editor: Editor, enabled: boolean): void {
+  (editor.storage as unknown as Record<string, { enabled: boolean }>)[SmartTypography.name]!.enabled = enabled;
+}
+
 export function createEditorExtensions(options: EditorExtensionOptions): AnyExtension[] {
   // The stock code block (the same node and schema CodeBlockLowlight extends) with our chrome. Highlighting
   // comes from a separate extension, so no inherited highlighter has to be found and removed.
@@ -66,7 +93,7 @@ export function createEditorExtensions(options: EditorExtensionOptions): AnyExte
     },
   });
   return [
-    ...createHeadlessExtensions({ codeBlock }),
+    ...createHeadlessExtensions({ codeBlock, typography: SmartTypography }),
     Placeholder.configure({
       showOnlyWhenEditable: true,
       showOnlyCurrent: true,

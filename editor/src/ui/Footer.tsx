@@ -39,11 +39,12 @@ const keep = (event: React.MouseEvent) => event.preventDefault();
  * island floats in the middle while text is selected, the pointer is near the bottom, or it is pinned.
  */
 export function Footer(props: FooterProps) {
-  const mode = props.countMode;
+  // "off" hides the count; the corner keeps Aa.
+  const mode = props.countMode === "off" ? null : props.countMode;
   const of = (counts: Counts) => (mode === "words" ? counts.words : counts.characters);
   // With a selection the corner shows only the selected count, never "7/1,244".
   const shown = props.selected ? of(props.selected) : of(props.counts);
-  const label = props.selected ? `${countLabel(shown, mode)} selected` : countLabel(shown, mode);
+  const label = mode ? (props.selected ? `${countLabel(shown, mode)} selected` : countLabel(shown, mode)) : "";
   const pinned = props.showFormatBar;
   return (
     <footer className="footer" data-testid="footer">
@@ -66,19 +67,21 @@ export function Footer(props: FooterProps) {
         <FormatBar editor={props.editor} openLink={props.openLink} pinned={pinned} shown={pinned || !!props.selected} />
       ) : null}
       <div className="corner" data-testid="corner">
-        <button
-          type="button"
-          className={`corner-chip corner-count has-tooltip${props.selected ? " is-selection" : ""}`}
-          data-testid="counter"
-          aria-label={label}
-          onMouseDown={keep}
-          onClick={props.onToggleCount}
-          tabIndex={-1}
-        >
-          <span className="corner-count-value">{formatCount(shown)}</span>
-          <Icon name={mode === "words" ? "words" : "characters"} />
-          <Tooltip label={label} placement="above" />
-        </button>
+        {mode ? (
+          <button
+            type="button"
+            className={`corner-chip corner-count has-tooltip${props.selected ? " is-selection" : ""}`}
+            data-testid="counter"
+            aria-label={label}
+            onMouseDown={keep}
+            onClick={props.onToggleCount}
+            tabIndex={-1}
+          >
+            <span className="corner-count-value">{formatCount(shown)}</span>
+            <Icon name={mode === "words" ? "words" : "characters"} />
+            <Tooltip label={label} placement="above" />
+          </button>
+        ) : null}
         <button
           type="button"
           className={`corner-chip corner-aa has-tooltip${pinned ? " is-active" : ""}`}

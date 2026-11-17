@@ -322,75 +322,112 @@ test("⌘, opens Settings: controls write through settings.set and follow settin
   await openHarness(page, ["Settings note"]);
   await clearCalls(page);
   const sets = async () => (await calls(page, "settings.set")).map((c) => c.params);
-  const panel = page.getByTestId("command-panel");
+  const last = async () => (await sets()).at(-1);
+  const settingsPage = page.getByTestId("settings");
   const sw = (id: string) => page.getByTestId(`setting-${id}`).getByRole("switch");
 
+  // Board 08: a page over the note in four groups, its header the drag bar, focus in its search field.
   await page.keyboard.press("Meta+Comma");
-  await expect(panel).toHaveAttribute("data-view", "settings");
-  for (const id of ["escapeLosesFocus", "windowAutoSize", "hideWhileScreenSharing", "showFormatBar"]) {
+  await expect(settingsPage).toBeVisible();
+  await expect(settingsPage.getByRole("group")).toHaveText([/^Window/, /^Display/, /^Editor/, /^Data/]);
+  await expect(page.getByTestId("settings-search")).toBeFocused();
+  for (const id of ["floatOnTop", "allSpaces", "spellcheck", "smartTypography"])
+    await expect(sw(id)).toHaveAttribute("aria-checked", "true");
+  for (const id of ["escapeLosesFocus", "windowAutoSize", "hideWhileScreenSharing", "showFormatBar"])
     await expect(sw(id)).toHaveAttribute("aria-checked", "false");
-  }
 
   // Clicks toggle and the UI follows at once.
   await page.getByTestId("setting-hideWhileScreenSharing").click();
   await expect.poll(sets).toEqual([{ hideWhileScreenSharing: true }]);
   await expect(sw("hideWhileScreenSharing")).toHaveAttribute("aria-checked", "true");
   await page.getByTestId("setting-showFormatBar").click();
-  await expect.poll(async () => (await sets()).at(-1)).toEqual({ showFormatBar: true });
-  await expect(page.getByTestId("format-bar")).toBeVisible();
+  await expect.poll(last).toEqual({ showFormatBar: true });
+  await page.getByTestId("appearance-dark").click();
+  await expect.poll(last).toEqual({ appearance: "dark" });
 
-  // Keyboard: search filters, Enter toggles, arrows step the zoom and pick the counter.
+  // Keyboard: search filters and hides empty groups, Enter toggles, arrows step the zoom and the choices.
   await page.keyboard.type("escape");
+  await expect(settingsPage.getByRole("group")).toHaveText([/^Window/]);
   await page.keyboard.press("Enter");
-  await expect.poll(async () => (await sets()).at(-1)).toEqual({ escapeLosesFocus: true });
+  await expect.poll(last).toEqual({ escapeLosesFocus: true });
   await page.keyboard.press("Meta+a");
   await page.keyboard.type("zoom");
   await page.keyboard.press("ArrowRight");
-  await expect.poll(async () => (await sets()).at(-1)).toEqual({ zoom: 1.05 });
+  await expect.poll(last).toEqual({ zoom: 1.05 });
   await expect(page.getByTestId("zoom-value")).toHaveText("105%");
-  await page.getByTestId("zoom-reset").click();
-  await expect.poll(async () => (await sets()).at(-1)).toEqual({ zoom: 1 });
-  await expect(page.getByTestId("zoom-reset")).toBeDisabled();
   await page.keyboard.press("Meta+a");
-  await page.keyboard.type("counter");
+  await page.keyboard.type("corner count");
   await page.keyboard.press("ArrowRight");
-  await expect.poll(async () => (await sets()).at(-1)).toEqual({ countMode: "words" });
-  await expect(page.getByTestId("count-words")).toHaveAttribute("aria-checked", "true");
+  await expect.poll(last).toEqual({ countMode: "characters" });
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(last).toEqual({ countMode: "off" });
+  await expect(page.getByTestId("countMode-off")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("counter")).toHaveCount(0);
 
-  // A change from elsewhere (settings.changed) shows up in the open view.
+  // A change from elsewhere (settings.changed) shows up in the open page.
   const current = await page.evaluate(
     () => (window as unknown as { __overnoteMock: { store: { settings: object } } }).__overnoteMock.store.settings,
   );
-  await page.keyboard.press("Meta+a");
-  await page.keyboard.press("Backspace");
-  await emit(page, "settings.changed", { ...current, windowAutoSize: true, zoom: 1.5, countMode: "characters" });
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("settings-search")).toHaveValue("");
+  await emit(page, "settings.changed", { ...current, windowAutoSize: true, zoom: 1.5, countMode: "words" });
   await expect(sw("windowAutoSize")).toHaveAttribute("aria-checked", "true");
   await expect(page.getByTestId("zoom-value")).toHaveText("150%");
-  await expect(page.getByTestId("count-characters")).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByTestId("countMode-words")).toHaveAttribute("aria-checked", "true");
 
-  // Reset All Settings (search, then Enter) puts every option back and says so.
-  await page.keyboard.type("reset");
-  await page.keyboard.press("Enter");
+  // Reset all settings puts every option back and says so.
+  await page.getByTestId("run-reset").click();
   await expect.poll(async () => (await calls(page, "settings.reset")).length).toBe(1);
-  await page.keyboard.press("Meta+a");
-  await page.keyboard.press("Backspace");
-  for (const id of ["escapeLosesFocus", "windowAutoSize", "hideWhileScreenSharing", "showFormatBar"]) {
+  for (const id of ["escapeLosesFocus", "windowAutoSize", "hideWhileScreenSharing", "showFormatBar"])
     await expect(sw(id)).toHaveAttribute("aria-checked", "false");
-  }
-  await expect(page.getByTestId("format-bar")).toBeHidden();
   await expect(page.getByRole("status").getByText("Settings reset to defaults")).toBeVisible();
   await expect(page.getByTestId("zoom-value")).toHaveText("100%");
 
-  // Escape clears the search, then closes; ⌘K lists Settings… and pushes the same view.
+  // Escape with an empty search goes back to the note; ⌘K lists Settings…, which opens the same page; ‹ goes back.
   await page.keyboard.press("Escape");
-  await expect(panel).toHaveCount(0);
+  await expect(settingsPage).toHaveCount(0);
   await page.keyboard.press("Meta+k");
   await page.keyboard.type("settings");
-  await expect(page.getByTestId("action-settings")).toHaveText("Settings…");
+  await expect(page.getByTestId("action-settings")).toHaveText("Settings…⌘,");
   await page.keyboard.press("Enter");
-  await expect(panel).toHaveAttribute("data-view", "settings");
+  await expect(settingsPage).toBeVisible();
+  await expect(page.getByTestId("command-panel")).toHaveCount(0);
+  await page.getByTestId("settings-back").click();
+  await expect(settingsPage).toHaveCount(0);
+});
+
+test("Settings' Editor and Data rows: font, spellcheck, smart quotes, backups, the notes folder, and Delete all", async ({
+  page,
+}) => {
+  await openHarness(page, ["Data note"]);
+  await expect(editor(page)).toHaveAttribute("spellcheck", "true");
+  await page.keyboard.press("Meta+Comma");
+  await page.getByTestId("choice-font").selectOption("system");
+  await expect(page.locator("html")).toHaveAttribute("data-font", "system");
+  await page.getByTestId("setting-spellcheck").click();
+  await page.getByTestId("setting-smartTypography").click();
+
+  await expect(page.getByTestId("setting-backup")).toContainText("None yet");
+  await page.getByTestId("run-backup").click();
+  await expect(page.getByTestId("setting-backup")).toContainText(/Last: today \d+:\d\d/);
+  await expect(page.getByTestId("setting-revealFolder")).toContainText("~/Library/Application Support/Overnote");
+  await page.getByTestId("run-revealFolder").click();
+  await expect.poll(async () => (await calls(page, "app.revealDataFolder")).length).toBe(1);
+
+  // Delete… opens the type DELETE confirmation over the page.
+  await page.getByTestId("run-deleteAll").click();
+  await expect(page.getByTestId("confirm-dialog")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(panel).toHaveAttribute("data-view", "root");
+  await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+  await expect(page.getByTestId("settings")).toBeVisible();
+
+  // Back in the note, spelling is not checked and "--" stays as typed.
+  await page.getByTestId("settings-back").click();
+  await expect(editor(page)).toHaveAttribute("spellcheck", "false");
+  await editor(page).click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" a -- b");
+  await expect(editor(page)).toContainText("a -- b");
 });
 
 test("an export waits for the save panel longer than the usual request timeout", async ({ page }) => {

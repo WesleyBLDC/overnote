@@ -35,7 +35,6 @@ import { currentView, initialSearch, searchReducer } from "../search/state";
 import { useNoteBrowse } from "../search/useNoteBrowse";
 import { useOrderedQuery } from "../search/useOrderedQuery";
 import { Icon, type IconName } from "./icons";
-import { adjustSetting, filterSettings, SettingsList } from "./SettingsView";
 import { Keys } from "./Keys";
 import { Menu, type MenuItem } from "./Menu";
 
@@ -53,7 +52,7 @@ export interface PanelAction {
   push?: PanelViewName;
 }
 
-export type PanelViewName = "root" | "format" | "heading" | "copyAs" | "export" | "browse" | "deleted" | "settings";
+export type PanelViewName = "root" | "format" | "heading" | "copyAs" | "export" | "browse" | "deleted";
 
 interface CommandPanelProps {
   initial: PanelViewName;
@@ -62,7 +61,6 @@ interface CommandPanelProps {
   currentId: NoteId | null;
   settings: Settings;
   onSettings: (patch: Partial<Settings>) => void;
-  onResetSettings: () => void;
   onClose: () => void;
   onOpenNote: (id: NoteId) => void;
   onTogglePin: (id: NoteId, pinned: boolean) => Promise<void>;
@@ -102,7 +100,6 @@ const PLACEHOLDERS: Record<PanelViewName, string> = {
   export: "Export as…",
   browse: "Search notes or type > for actions",
   deleted: "Search",
-  settings: "Search settings…",
 };
 
 function filterActions(actions: PanelAction[], query: string): PanelAction[] {
@@ -219,7 +216,7 @@ export function CommandPanel(props: CommandPanelProps) {
           : { kind: "submenu", entry },
       );
     }
-    if (view === "deleted" || view === "settings") return [];
+    if (view === "deleted") return [];
     return filterActions(props.lists[view], filter).map((action) => ({ kind: "action", action }));
   }, [view, filter, notes.items, leaves, props.lists]);
 
@@ -229,11 +226,9 @@ export function CommandPanel(props: CommandPanelProps) {
     return q ? deleted.items.filter((n) => `${n.title}\n${n.preview}`.toLocaleLowerCase().includes(q)) : deleted.items;
   }, [deleted.items, deleted.status, filter]);
 
-  const settingRows = useMemo(() => (view === "settings" ? filterSettings(query) : []), [view, query]);
-
-  const rowCount = view === "deleted" ? deletedRows.length : view === "settings" ? settingRows.length : rows.length;
+  const rowCount = view === "deleted" ? deletedRows.length : rows.length;
   const selected = Math.min(state.index, Math.max(0, rowCount - 1));
-  const selectedRow = view === "deleted" || view === "settings" ? undefined : rows[selected];
+  const selectedRow = view === "deleted" ? undefined : rows[selected];
   const submenu = selectedRow?.kind === "submenu" ? selectedRow.entry : null;
   const subSelected = submenu ? Math.min(state.submenu.index, Math.max(0, submenu.children.length - 1)) : 0;
   const setIndex = (index: number) => dispatch({ type: "select", index });
@@ -305,21 +300,7 @@ export function CommandPanel(props: CommandPanelProps) {
         : dispatch({ type: "move", delta, count: rowCount });
     if (event.key === "ArrowDown") step(1);
     else if (event.key === "ArrowUp") step(-1);
-    else if (
-      view === "settings" &&
-      (event.key === "Enter" || event.key === "ArrowLeft" || event.key === "ArrowRight")
-    ) {
-      const row = settingRows[selected];
-      const direction = event.key === "Enter" ? 0 : event.key === "ArrowLeft" ? -1 : 1;
-      if (row?.kind === "action") {
-        if (direction === 0) props.onResetSettings();
-        return;
-      }
-      const patch = row ? adjustSetting(row, props.settings, direction) : null;
-      // Arrows on a row they do not adjust keep moving the caret in the search field.
-      if (!patch && direction !== 0) return;
-      if (patch) props.onSettings(patch);
-    } else if (event.key === "ArrowRight" && submenu && !inSubmenu) dispatch({ type: "enterSubmenu" });
+    else if (event.key === "ArrowRight" && submenu && !inSubmenu) dispatch({ type: "enterSubmenu" });
     else if (event.key === "ArrowLeft" && inSubmenu) dispatch({ type: "leaveSubmenu" });
     else if (event.key === "Enter" && event.metaKey && view === "browse") {
       if (filter) createNote();
@@ -624,7 +605,7 @@ export function CommandPanel(props: CommandPanelProps) {
             {view === "browse" && !browse.items.length && browseStatus === "loaded" && !q ? (
               <EmptyState icon="search" title="No Notes Yet" hint="Notes you write show up here." />
             ) : null}
-            {view !== "deleted" && view !== "settings" ? rows.map(renderRow) : null}
+            {view !== "deleted" ? rows.map(renderRow) : null}
             {view === "deleted" ? (
               <>
                 {deleted.status === "loading" && !deletedRows.length ? <SkeletonRows /> : null}
@@ -700,22 +681,8 @@ export function CommandPanel(props: CommandPanelProps) {
                 ))}
               </>
             ) : null}
-            {view === "settings" ? (
-              <SettingsList
-                rows={settingRows}
-                settings={props.settings}
-                selected={selected}
-                grouped={!query.trim()}
-                onHover={setIndex}
-                onChange={props.onSettings}
-                onReset={props.onResetSettings}
-              />
-            ) : null}
-            {view !== "browse" && view !== "deleted" && view !== "settings" && !rows.length ? (
+            {view !== "browse" && view !== "deleted" && !rows.length ? (
               <EmptyState icon="search" title="No Matching Actions" />
-            ) : null}
-            {view === "settings" && !settingRows.length ? (
-              <EmptyState icon="search" title="No Matching Settings" />
             ) : null}
           </div>
           {split ? <div className="search-side">{side()}</div> : null}

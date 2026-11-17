@@ -233,11 +233,14 @@ test("roving tabindex: one tabbable row, no tabbable row buttons, Tab reaches th
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
 
+  // Settings keeps focus in its search field, which names the picked row as its active descendant.
   await page.keyboard.press("Meta+Comma");
-  await expect(page.getByTestId("command-panel")).toHaveAttribute("data-view", "settings");
-  expect(await tabbable(page)).toEqual({ options: 1, selectedIsTabbable: true, rowButtons: 0 });
+  const settingsSearch = page.getByTestId("settings-search");
+  await expect(settingsSearch).toBeFocused();
+  await expect(page.getByTestId("settings").locator("[tabindex='0']")).toHaveCount(0);
   await page.keyboard.press("ArrowDown");
-  expect(await tabbable(page)).toEqual({ options: 1, selectedIsTabbable: true, rowButtons: 0 });
+  await expect(settingsSearch).toHaveAttribute("aria-activedescendant", "setting-row-floatOnTop");
+  await expect(page.locator("#setting-row-floatOnTop")).toHaveAttribute("aria-selected", "true");
 });
 
 test("roving tabindex in the format menu, slash menu, and emoji picker", async ({ page }) => {

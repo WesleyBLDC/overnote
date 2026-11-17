@@ -44,6 +44,26 @@ function ToolbarButton({ icon, label, shortcut, onClick, anchor, testId, active 
   );
 }
 
+/** The window's red close dot, shared by the top bar and the Settings page header. */
+export function CloseButton({ onClose }: { onClose: () => void }) {
+  return (
+    <button
+      type="button"
+      className="close-button"
+      title="Close"
+      aria-label="Close"
+      data-testid="close"
+      onMouseDown={keep}
+      onClick={onClose}
+      tabIndex={-1}
+    >
+      <span className="close-dot" data-testid="close-dot">
+        <Icon name="close" />
+      </span>
+    </button>
+  );
+}
+
 /**
  * Top bar: Close on the left, an empty middle that drags the window, and the icon buttons on the right, always shown.
  * The title fades into the middle only once the note's first line has scrolled away (useScrollEdges).
@@ -52,20 +72,7 @@ export function Toolbar({ title, onClose, onActions, onBrowse, onNew, terminalOp
   return (
     <header className="toolbar" data-testid="toolbar">
       <div className="toolbar-leading">
-        <button
-          type="button"
-          className="close-button"
-          title="Close"
-          aria-label="Close"
-          data-testid="close"
-          onMouseDown={keep}
-          onClick={onClose}
-          tabIndex={-1}
-        >
-          <span className="close-dot" data-testid="close-dot">
-            <Icon name="close" />
-          </span>
-        </button>
+        <CloseButton onClose={onClose} />
       </div>
       <h1 className="toolbar-title" data-testid="title" title={title}>
         {title}

@@ -30,6 +30,8 @@ export type {
   NoteId,
   Millis,
   CountMode,
+  Appearance,
+  InterfaceFont,
   PanelFrame,
   PanelPlacement,
   PanelPoint,

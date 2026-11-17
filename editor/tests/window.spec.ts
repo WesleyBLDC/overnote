@@ -331,11 +331,15 @@ test("decorations, chrome, and panels never churn window.resize reports", async 
   await openHarness(page, ["First line\n\nSecond line"]);
   await settle(page);
   const roomy = await count();
-  for (const keys of ["Meta+k", "Meta+p", "Meta+Comma"]) {
+  for (const [keys, testId] of [
+    ["Meta+k", "command-panel"],
+    ["Meta+p", "command-panel"],
+    ["Meta+Comma", "settings"],
+  ] as const) {
     await page.keyboard.press(keys);
-    await expect(page.getByTestId("command-panel")).toBeVisible();
+    await expect(page.getByTestId(testId)).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByTestId("command-panel")).toHaveCount(0);
+    await expect(page.getByTestId(testId)).toHaveCount(0);
   }
   await settle(page);
   expect(await count()).toBe(roomy);

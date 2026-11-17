@@ -113,6 +113,21 @@ public struct PanelFrame: Equatable, Sendable {
 public enum CountMode: String, Sendable, CaseIterable {
     case characters
     case words
+    /// Hides the corner count (v3.8).
+    case off
+}
+
+/// The panel's appearance (v3.8): follow the system, or force light or dark.
+public enum Appearance: String, Sendable, CaseIterable {
+    case auto
+    case light
+    case dark
+}
+
+/// The interface font (v3.8): the bundled Geist, or the system font.
+public enum InterfaceFont: String, Sendable, CaseIterable {
+    case geist
+    case system
 }
 
 public struct Settings: Equatable, Sendable {
@@ -121,6 +136,14 @@ public struct Settings: Equatable, Sendable {
     public var zoom = 1.0
     public var showFormatBar = false
     public var countMode = CountMode.words
+    public var appearance = Appearance.auto
+    /// On by default: the panel floats above other apps' windows.
+    public var floatOnTop = true
+    /// On by default: the panel shows on every Space.
+    public var allSpaces = true
+    public var font = InterfaceFont.geist
+    public var spellcheck = true
+    public var smartTypography = true
     /// Off by default: the first open uses a roomy fixed size instead.
     public var windowAutoSize = false
     public var panelFrame: PanelFrame?
@@ -137,8 +160,8 @@ public struct Settings: Equatable, Sendable {
 
     /// Every key, in the order used for storage and JSON.
     public static let keys = [
-        "escapeLosesFocus", "hideWhileScreenSharing", "zoom", "showFormatBar", "countMode", "windowAutoSize", "panelFrame",
-        "terminal", "searchSort",
+        "escapeLosesFocus", "hideWhileScreenSharing", "zoom", "showFormatBar", "countMode", "appearance", "floatOnTop",
+        "allSpaces", "font", "spellcheck", "smartTypography", "windowAutoSize", "panelFrame", "terminal", "searchSort",
     ]
 
     public var json: JSONValue {
@@ -152,6 +175,12 @@ public struct Settings: Equatable, Sendable {
         case "zoom": return .double(zoom)
         case "showFormatBar": return .bool(showFormatBar)
         case "countMode": return .string(countMode.rawValue)
+        case "appearance": return .string(appearance.rawValue)
+        case "floatOnTop": return .bool(floatOnTop)
+        case "allSpaces": return .bool(allSpaces)
+        case "font": return .string(font.rawValue)
+        case "spellcheck": return .bool(spellcheck)
+        case "smartTypography": return .bool(smartTypography)
         case "windowAutoSize": return .bool(windowAutoSize)
         case "panelFrame": return .optional(panelFrame) { $0.json }
         case "terminal": return ["open": .bool(terminalOpen)]
@@ -172,6 +201,13 @@ public struct Settings: Equatable, Sendable {
             guard let result = value.boolValue else { throw RPCError.badParams("\(key) must be a boolean") }
             return result
         }
+        func choice<T: RawRepresentable & CaseIterable>(_: T.Type) throws -> T where T.RawValue == String {
+            guard let raw = value.stringValue, let result = T(rawValue: raw) else {
+                let names = T.allCases.map { "\"\($0.rawValue)\"" }.joined(separator: ", ")
+                throw RPCError.badParams("\(key) must be one of \(names)")
+            }
+            return result
+        }
         switch key {
         case "escapeLosesFocus":
             escapeLosesFocus = try bool()
@@ -187,10 +223,19 @@ public struct Settings: Equatable, Sendable {
             }
             zoom = Settings.normalizedZoom(number)
         case "countMode":
-            guard let raw = value.stringValue, let mode = CountMode(rawValue: raw) else {
-                throw RPCError.badParams("countMode must be \"characters\" or \"words\"")
-            }
-            countMode = mode
+            countMode = try choice(CountMode.self)
+        case "appearance":
+            appearance = try choice(Appearance.self)
+        case "font":
+            font = try choice(InterfaceFont.self)
+        case "floatOnTop":
+            floatOnTop = try bool()
+        case "allSpaces":
+            allSpaces = try bool()
+        case "spellcheck":
+            spellcheck = try bool()
+        case "smartTypography":
+            smartTypography = try bool()
         case "panelFrame":
             panelFrame = value.isNull ? nil : try PanelFrame(json: value)
         case "terminal":
