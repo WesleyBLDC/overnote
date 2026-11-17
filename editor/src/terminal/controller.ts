@@ -3,10 +3,12 @@
  * with the helper (term.open, term.resize, term.close), output with acks, and the drawer's visibility.
  *
  * Opening asks the helper to grow the panel (window.setDrawer) and shows the drawer once the frame has landed;
- * closing hides it first and then shrinks the panel, so the note never squeezes. Closing keeps xterm.js and the
- * session alive; only after IDLE_CLOSE_MS closed does the drawer end its attach, so quick toggles are instant.
+ * closing hides it first and then shrinks the panel, so the note never squeezes (the machine is in drawer.ts).
+ * Closing keeps xterm.js and the session alive; only after IDLE_CLOSE_MS closed does the drawer end its attach, so
+ * quick toggles are instant. Each async step checks that its open call or attach is still the current one.
  */
 import type { Api } from "../bridge/api";
+import { drawerReducer, initialDrawer, type DrawerEvent } from "./drawer";
 import { binaryBytes, decodeBase64, encodeBase64, postTerm } from "./channel";
 import { reachesOvernote } from "./keys";
 import { terminalFont, terminalTheme } from "./theme";
@@ -48,14 +50,14 @@ export class TerminalController {
   private fit: FitAddon | null = null;
   private creating: Promise<void> | null = null;
   private session: Session = "none";
+  /** Bumped by every term.open and by ending the attach, so a stale open's answer is ignored. */
+  private attachSeq = 0;
   private backend: "herdr" | "shell" | null = null;
   private queued: Uint8Array[] = [];
   private size = { cols: 80, rows: 15 };
   private idle: ReturnType<typeof setTimeout> | null = null;
-  private wanted = false;
-  private sentHeight = 0;
+  private drawer = initialDrawer;
   private zoom = 1;
-  private visible = false;
   private readonly listeners = new Set<() => void>();
   private readonly offs: (() => void)[] = [];
   private resizes: ResizeObserver | null = null;
@@ -71,43 +73,47 @@ export class TerminalController {
   };
 
   /** Whether the drawer is shown: true once the panel has grown for it. */
-  getVisible = (): boolean => this.visible;
+  getVisible = (): boolean => this.drawer.phase === "shown";
 
-  private setVisible(visible: boolean): void {
-    if (visible === this.visible) return;
-    this.visible = visible;
-    for (const listener of [...this.listeners]) listener();
+  /** Moves the drawer's machine, and tells React only when the drawer showed or hid. */
+  private dispatch(event: DrawerEvent): void {
+    const wasVisible = this.getVisible();
+    this.drawer = drawerReducer(this.drawer, event);
+    if (this.getVisible() !== wasVisible) for (const listener of [...this.listeners]) listener();
   }
 
   setHost = (host: HTMLElement | null): void => {
     this.host = host;
+    // An open that found no host drew nothing: finish it now that there is one.
+    if (host && !this.term && !this.creating && this.drawer.phase !== "closed") void this.setOpen(true, false);
   };
 
   // ---- opening and closing ----
 
   /** Opens or closes the drawer; `focus` moves the caret into the terminal once it is there. */
   async setOpen(open: boolean, focus: boolean): Promise<void> {
-    this.wanted = open;
+    this.dispatch({ type: open ? "open" : "close" });
+    const seq = this.drawer.seq;
+    const current = () => this.drawer.seq === seq;
+    if (this.idle) clearTimeout(this.idle);
+    this.idle = null;
     if (open) {
-      if (this.idle) clearTimeout(this.idle);
-      this.idle = null;
       await this.sendHeight(this.drawerHeight());
-      if (!this.wanted) return;
-      this.setVisible(true);
+      if (!current()) return;
+      this.dispatch({ type: "grown", seq });
       await this.ensureTerminal();
-      if (!this.wanted) return;
+      if (!current()) return;
       // The first open sized the drawer from an estimated row height; now the real one is known.
       await this.sendHeight(this.drawerHeight());
-      if (!this.wanted) return;
+      if (!current()) return;
       this.refit();
       this.ensureSession();
       if (focus) this.term?.focus();
       return;
     }
     this.term?.blur();
-    this.setVisible(false);
     await this.sendHeight(0);
-    if (this.idle) clearTimeout(this.idle);
+    if (!current()) return;
     this.idle = setTimeout(() => this.endSession(), IDLE_CLOSE_MS);
   }
 
@@ -116,12 +122,12 @@ export class TerminalController {
    * before the note gives up the space, and shrinking hands it back first, so the note never squeezes.
    */
   private async sendHeight(height: number): Promise<void> {
-    if (height === this.sentHeight) return;
-    const growing = height > this.sentHeight;
-    this.sentHeight = height;
-    if (!growing && height > 0) setDrawerVar(height);
+    const from = this.drawer.height;
+    if (height === from) return;
+    this.dispatch({ type: "height", height });
+    if (height < from && height > 0) setDrawerVar(height);
     await this.api.window.setDrawer(height).catch(() => undefined);
-    if (growing && this.sentHeight === height) setDrawerVar(height);
+    if (height > from && this.drawer.height === height) setDrawerVar(height);
   }
 
   /** The height of DRAWER_ROWS rows plus the drawer's padding and divider, at most MAX_SCREEN_SHARE of the screen. */
@@ -154,14 +160,17 @@ export class TerminalController {
     if (!this.term) return;
     this.term.options.fontSize = Math.round(FONT_SIZE * zoom);
     // The rows grew or shrank with the font: resize the drawer so it still shows DRAWER_ROWS of them.
-    if (this.wanted && this.visible) void this.sendHeight(this.drawerHeight()).then(() => this.refit());
+    if (this.getVisible()) void this.sendHeight(this.drawerHeight()).then(() => this.refit());
     else this.refit();
   }
 
   // ---- xterm.js ----
 
+  /** Creates xterm.js once; an attempt that drew nothing (no host yet, or the chunk failed) is tried again. */
   private ensureTerminal(): Promise<void> {
-    this.creating ??= this.createTerminal();
+    this.creating ??= this.createTerminal().finally(() => {
+      if (!this.term) this.creating = null;
+    });
     return this.creating;
   }
 
@@ -211,7 +220,7 @@ export class TerminalController {
 
   /** Fits the grid to the drawer and tells the helper when the size changed. */
   private refit(): void {
-    if (!this.visible || !this.fit || !this.term) return;
+    if (!this.getVisible() || !this.fit || !this.term) return;
     const proposed = this.fit.proposeDimensions();
     if (!proposed || !Number.isFinite(proposed.cols) || !Number.isFinite(proposed.rows)) return;
     const cols = Math.max(2, proposed.cols);
@@ -229,9 +238,10 @@ export class TerminalController {
     if (this.session === "live" || this.session === "starting" || !this.term) return;
     if (this.session === "exited") this.term.reset();
     this.session = "starting";
+    const attach = ++this.attachSeq;
     this.api.term.open({ ...this.size }).then(
       ({ backend }) => {
-        if (this.session !== "starting") return;
+        if (attach !== this.attachSeq) return;
         this.session = "live";
         if (backend === "shell" && this.backend !== "shell") {
           this.term?.write("\x1b[2mHerdr is not installed, so this shell ends when Overnote quits.\x1b[0m\r\n");
@@ -240,6 +250,7 @@ export class TerminalController {
         for (const bytes of this.queued.splice(0)) postTerm({ type: "write", data: encodeBase64(bytes) });
       },
       (error: unknown) => {
+        if (attach !== this.attachSeq) return;
         this.session = "exited";
         this.queued = [];
         this.term?.write(
@@ -275,8 +286,9 @@ export class TerminalController {
   /** Ends the attach after the drawer stayed closed; the next open attaches again with fresh history. */
   private endSession(): void {
     this.idle = null;
-    if (this.wanted) return;
+    if (this.drawer.phase !== "closed") return;
     if (this.session === "live" || this.session === "starting") void this.api.term.close().catch(() => undefined);
+    this.attachSeq++;
     this.session = "none";
     this.queued = [];
     this.term?.reset();

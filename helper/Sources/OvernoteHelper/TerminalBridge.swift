@@ -17,7 +17,8 @@ final class TerminalBridge: NSObject, WKScriptMessageHandler {
     private let environment: [String: String]
     private var session: TerminalSession?
     private var backend: TerminalBackend = .shell
-    /// Bumped for every new session, so a closed session's late output and exit are ignored.
+    /// Bumped for every new session and every close, so a closed session's late output and exit are
+    /// ignored, and an open still waiting for its lookup when a close arrives starts nothing.
     private var generation = 0
     private var pending = Data()
     private var inFlight = 0
@@ -43,6 +44,7 @@ final class TerminalBridge: NSObject, WKScriptMessageHandler {
             return backend
         }
         let environment = self.environment
+        let ticket = generation
         let lookup = herdrLookup ?? Task.detached { TerminalLauncher.findHC(environment: environment) }
         herdrLookup = lookup
         let hc = await lookup.value
@@ -51,6 +53,8 @@ final class TerminalBridge: NSObject, WKScriptMessageHandler {
             session.resize(cols: cols, rows: rows)
             return backend
         }
+        // The page closed the terminal while the lookup ran: starting now would leave an orphan program.
+        guard generation == ticket else { throw RPCError.internal("The terminal was closed before it started") }
         let (command, backend) = TerminalLauncher.command(hc: hc, environment: environment)
         let session = try TerminalSession(command: command, cols: cols, rows: rows)
         generation += 1
@@ -76,9 +80,10 @@ final class TerminalBridge: NSObject, WKScriptMessageHandler {
 
     /// Ends the program in the drawer: for Herdr that is only the attach, and the shell keeps running.
     func close() {
+        // Bumped even with no session yet, so an open waiting for its lookup sees the close.
+        generation += 1
         guard let session else { return }
         self.session = nil
-        generation += 1
         pending = Data()
         exitCode = nil
         session.close()
