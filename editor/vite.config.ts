@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
-import { HARNESS_PORT, PREVIEW_PORT } from "./tests/ports";
+import { HARNESS_PORT, PREVIEW_PORT } from "./tests/ports.ts";
 
 /**
  * The bundle goes to assets/editor, which a running helper started with --watch-editor reloads.
