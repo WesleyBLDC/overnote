@@ -116,7 +116,8 @@ Details are in "App mode and handover" in [`../architecture.md`](../architecture
 3. Writes go through `NotesWriter` (`src/helper/notes-writer.ts`) over the helper socket, after the trust check.
    Content writes first fetch the note with `notes.get`, compose the change on the stored document with the bundled `@overnote/core` (`src/markdown/convert.ts`), and send `notes.update` with `expectedUpdatedAt`.
 4. The helper emits `notes.changed`, so an open editor reloads or merges the change into unsaved typing.
-5. When the helper is not running, writes fail with `HELPER_NOT_RUNNING`, and `overnote-axi open` starts Overnote through its Raycast deeplink (`raycast://extensions/wesleybldc/overnote/open-notes`), which runs the extension, which launches the helper.
+5. When the helper is not running, writes fail with `HELPER_NOT_RUNNING`, and `overnote-axi open` starts Overnote: it launches `Overnote.app` when it is installed and shows the note with `window.show` once the helper answers, else it opens the extension's Raycast deeplink (`raycast://extensions/wesleybldc/overnote/open-notes`), which runs the extension, which launches the helper.
+   With a helper already running, `open` sends `window.show` on the socket, whichever host runs it.
 
 ## 4. Persistence
 
@@ -187,14 +188,14 @@ flowchart TB
   github["GitHub Releases<br/>[External]<br/>Release zips and API"]
   axi["overnote-axi<br/>[Software system]<br/>Agent CLI"]
 
-  person -->|"hotkey, commands"| raycast
-  person -->|"types in panel"| overnote
+  person -->|"hotkey, menu bar, typing"| overnote
+  person -->|"commands"| raycast
   raycast -->|"runs extension"| overnote
   overnote -->|"panel, files, links"| macos
   overnote -->|"update check"| github
   agent -->|"runs"| axi
   axi -->|"reads, writes"| overnote
-  axi -->|"open deeplink"| raycast
+  axi -->|"fallback open deeplink"| raycast
 
   classDef person fill:#1F3A5F,stroke:#8AB4F8,color:#F2F2F5
   classDef system fill:#1E4D3A,stroke:#7ED6A8,color:#F2F2F5
@@ -204,8 +205,8 @@ flowchart TB
   class raycast,macos,github external
 ```
 
-The person works in Overnote's panel and reaches it through Raycast, which runs the extension that starts and drives the helper.
-Agents reach the same notes through overnote-axi, which reads the database and writes through the helper, and which uses a Raycast deeplink to start Overnote when it is closed.
+The person works in Overnote's panel and reaches it with `Overnote.app`'s hotkey and menu bar, or optionally through Raycast, which runs the extension that starts and drives the helper.
+Agents reach the same notes through overnote-axi, which reads the database and writes through the helper; to start Overnote when it is closed, it launches `Overnote.app`, or uses a Raycast deeplink when only the extension is installed.
 Overnote's only outbound call is the update check against GitHub releases.
 
 ### Level 2: Containers
