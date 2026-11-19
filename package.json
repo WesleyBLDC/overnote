@@ -124,14 +124,14 @@
   ],
   "dependencies": {
     "@overnote/core": "*",
-    "@raycast/api": "^2.8.0",
+    "@raycast/api": "^2.13.1",
     "@raycast/utils": "^2.3.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@raycast/eslint-config": "^2.2.0",
     "@types/node": "22.19.17",
-    "@types/react": "19.0.10",
+    "@types/react": "19.3.0",
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
