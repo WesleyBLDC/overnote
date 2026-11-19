@@ -80,6 +80,7 @@ ALL_STEPS=(
   "Check: version"
   "Check: schema copies"
   "Check: theme tokens"
+  "Check: React versions"
   "Typecheck: extension"
   "Typecheck: editor"
   "Typecheck: core"
@@ -106,6 +107,7 @@ ALL_STEPS=(
 FAST_STEPS=(
   "Check: schema copies"
   "Check: theme tokens"
+  "Check: React versions"
   "Typecheck: extension"
   "Typecheck: editor"
   "Typecheck: core"
@@ -123,6 +125,7 @@ step_body() {
     "Check: version") bash scripts/check-version.sh "$(tr -d '[:space:]' <helper/VERSION)" ;;
     "Check: schema copies") node scripts/check-schema-copies.mjs ;;
     "Check: theme tokens") node scripts/check-theme-tokens.mjs ;;
+    "Check: React versions") node scripts/check-react-versions.mjs ;;
     "Typecheck: extension") npx tsc --noEmit ;;
     "Typecheck: editor") npx tsc --noEmit -p editor ;;
     "Typecheck: core") npx tsc --noEmit -p packages/core ;;
