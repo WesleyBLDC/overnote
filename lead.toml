@@ -1,6 +1,0 @@
-name = "overnote"
-repo = "WesleyBLDC/overnote"
-done = "npm run verify"
-pass_line = "all steps passed"
-github_account = "WesleyBLDC"
-include = "../overnote-private"
