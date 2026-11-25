@@ -49,4 +49,3 @@ Turn every mistake or better way into a durable fix, so the next agent does not 
 
 ## Lead sessions
 
-A lead session reads `lead.toml` and the rules it names; workers can ignore it.
